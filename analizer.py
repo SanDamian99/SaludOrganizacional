@@ -59,7 +59,7 @@ class RateLimiter:
         self.call_times.append(time.time())
 
 # Cargar el archivo CSV
-ruta_csv = 'ruta/a/tu/archivo.xlsx'  # Reemplaza con la ruta real del archivo
+ruta_csv = 'Resultados Indicadores de Bienestar y Salud Mental en el Mundo del Trabajo.xlsx'  # Reemplaza con la ruta real del archivo
 df = pd.read_excel(ruta_csv)
 
 # Extraer información de las columnas y tipos de datos
