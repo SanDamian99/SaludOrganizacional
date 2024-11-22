@@ -15,7 +15,7 @@ import base64
 import google.generativeai as genai
 
 # Configurar la API de Gemini
-YOUR_API_KEY = "AIzaSyC5oc1_9Zp0xb37z2u7M1v3ov4Js1DyUSk"  # Reemplaza con tu clave de API de Gemini
+YOUR_API_KEY = st.secrets["YOUR_API_KEY"]   # Reemplaza con tu clave de API de Gemini
 genai.configure(api_key=YOUR_API_KEY)
 
 # Configuración de generación
