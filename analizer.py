@@ -106,7 +106,7 @@ def enviar_prompt(prompt):
     while retries < max_retries:
         try:
             rate_limiter.wait()
-            response = model.generate_text(prompt)
+            response = model.generate_content([prompt])
             if response and response.text:
                 return response.text.strip()
             else:
