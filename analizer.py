@@ -800,7 +800,7 @@ def mostrar_resumen_base_datos():
     resumen = """
 Esta aplicación está diseñada para ayudarte a explorar y analizar datos relacionados con el bienestar laboral y la salud mental en el entorno de trabajo. Utiliza una base de datos rica en información sociodemográfica, laboral y en diversas dimensiones de bienestar y salud mental para proporcionarte análisis personalizados y valiosos insights.
 
-#¿Cómo utilizar la aplicación?
+¿Cómo utilizar la aplicación?
 1. Formula tu pregunta de investigación:
 
     Ingresa en el campo correspondiente una pregunta relacionada con el bienestar laboral o la salud mental que desees investigar.
@@ -822,11 +822,11 @@ Esta aplicación está diseñada para ayudarte a explorar y analizar datos relac
     Puedes descargar un informe completo en PDF que incluye una introducción, metodología, resultados y recomendaciones.
 
 
-#**Resumen de la Base de Datos:**
+**Resumen de la Base de Datos:**
 
 La base de datos contiene información sobre salud psicológica en el trabajo, incluyendo variables sociodemográficas, laborales y varias dimensiones relacionadas con el bienestar laboral y salud mental.
 
-##**Principales categorías y variables:**
+**Principales categorías y variables:**
 
 1. **Variables Sociodemográficas:**
    - **Edad** (Continua): Edad de los participantes entre 18 y 70 años o más.
@@ -864,7 +864,7 @@ La base de datos contiene información sobre salud psicológica en el trabajo, i
    - **Conflicto Familia-Trabajo**: Interferencia entre demandas familiares y laborales.
    - **Síntomas de Burnout**: Indicadores de agotamiento emocional y físico.
 
-##**Ejemplos de preguntas que se pueden resolver con esta información:**
+**Ejemplos de preguntas que se pueden resolver con esta información:**
 
 1. **¿Cuál es la distribución del nivel de estrés laboral entre empleados de diferentes sectores económicos?**
    - *Análisis de la relación entre el sector económico y variables relacionadas con el estrés o burnout.*
