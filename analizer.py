@@ -965,7 +965,10 @@ Por favor, utiliza esta información para contextualizar y explicar los hallazgo
     # Conclusiones y Recomendaciones
     pdf.chapter_title('Conclusiones y Recomendaciones')
     # Generar el texto de conclusiones usando Gemini
-   prompt_conclusiones = f"""
+    # Conclusiones y Recomendaciones
+    pdf.chapter_title('Conclusiones y Recomendaciones')
+    # Generar el texto de conclusiones usando Gemini
+    prompt_conclusiones = f"""
 Basándote en los resultados obtenidos:
 
 {resultados}
@@ -975,7 +978,9 @@ Utilizando el siguiente diccionario de datos para interpretar correctamente los 
 {data_dictionary}
 
 Por favor, proporciona conclusiones y recomendaciones que puedan ser útiles para la empresa, asegurándote de interpretar correctamente los valores de las variables y los hallazgos del análisis según su significado.
-    """
+"""
+    conclusiones = enviar_prompt(prompt_conclusiones)
+    pdf.chapter_body(conclusiones)
     conclusiones = enviar_prompt(prompt_conclusiones)
     pdf.chapter_body(conclusiones)
 
