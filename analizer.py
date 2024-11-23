@@ -59,7 +59,474 @@ class RateLimiter:
         self.call_times.append(time.time())
 
 # Cargar el archivo CSV
-ruta_csv = 'Resultados Indicadores de Bienestar y Salud Mental en el Mundo del Trabajo.xlsx'  # Reemplaza con la ruta real del archivo
+ruta_csv = 'Resultados Indicadores de Bienestar y Salud Mental en el Mundo del Trabajo.xlsx'
+
+# Data Dictionary
+data_dictionary = {
+    "Variables Sociodemográficas": {
+        "Edad": {
+            "Tipo": "Continua",
+            "Valores": "18 a 70 o más (en el análisis se agrupan por criterios)"
+        },
+        "Sexo": {
+            "Tipo": "Categórica",
+            "Valores": ["Hombre", "Mujer", "Otro"]
+        },
+        "Estado Civil": {
+            "Tipo": "Categórica",
+            "Valores": ["Soltero", "Casado", "Separado", "Unión Libre", "Viudo"]
+        },
+        "Número de Hijos": {
+            "Tipo": "Continua",
+            "Valores": "0 a 10"
+        },
+        "Nivel Educativo": {
+            "Tipo": "Categórica",
+            "Valores": ["Bachiller", "Técnico", "Tecnológico", "Profesional", "Posgrado"]
+        },
+        "Municipio": {
+            "Tipo": "Categórica",
+            "Valores": "Departamento y Municipio (lista desplegable)"
+        },
+        "Zona de Vivienda": {
+            "Tipo": "Categórica",
+            "Valores": ["Urbana", "Rural"]
+        },
+        "Estrato Socioeconómico": {
+            "Tipo": "Categórica",
+            "Valores": [1, 2, 3, 4, 5, 6]
+        }
+    },
+    "Variables Laborales": {
+        "Sector Económico": {
+            "Tipo": "Categórica",
+            "Valores": "Sectores económicos representativos (lista desplegable)"
+        },
+        "Sector Empresa": {
+            "Tipo": "Categórica",
+            "Valores": ["Público", "Privado", "Mixto"]
+        },
+        "Tamaño Empresa": {
+            "Tipo": "Categórica",
+            "Valores": [
+                "Menos de 10 empleados",
+                "Entre 10 y 50 empleados",
+                "Entre 50 y 200 empleados",
+                "Entre 200 y 500 empleados",
+                "Más de 500 empleados"
+            ]
+        },
+        "Trabajo por Turnos": {
+            "Tipo": "Categórica",
+            "Valores": ["Sí", "No"]
+        },
+        "Tipo de Contrato": {
+            "Tipo": "Categórica",
+            "Valores": [
+                "Indefinido",
+                "Término Fijo",
+                "Obra o Labor",
+                "Aprendizaje",
+                "Prestación de Servicios"
+            ]
+        },
+        "Número horas trabajo semanal": {
+            "Tipo": "Continua",
+            "Valores": "1 a 60 horas (agrupado por criterios en análisis)"
+        },
+        "Ingreso Salarial Mensual": {
+            "Tipo": "Categórica",
+            "Valores": [
+                "Menos de 1 SMLV",
+                "Entre 1 y 3 SMLV",
+                "Entre 3 y 5 SMLV",
+                "Entre 5 y 10 SMLV",
+                "Más de 10 SMLV"
+            ]
+        },
+        "Nivel Cargo": {
+            "Tipo": "Categórica",
+            "Valores": ["Operativo", "Administrativo", "Directivo"]
+        },
+        "Personas a cargo en el trabajo": {
+            "Tipo": "Categórica",
+            "Valores": ["Sí", "No"]
+        },
+        "Años Experiencia Laboral": {
+            "Tipo": "Continua",
+            "Valores": "1 a 60 años (agrupado por criterios en análisis)"
+        },
+        "Antigüedad en el cargo/labor actual": {
+            "Tipo": "Categórica",
+            "Valores": [
+                "Menos de 1 año",
+                "Entre 1 y 3 años",
+                "Entre 3 y 7 años",
+                "Entre 7 y 10 años",
+                "Más de 10 años"
+            ]
+        },
+        "Tipo de Modalidad de Trabajo": {
+            "Tipo": "Categórica",
+            "Valores": ["Presencial", "Híbrido", "Remoto", "Teletrabajo"]
+        },
+        "Tiempo promedio de traslado al trabajo/casa al día": {
+            "Tipo": "Categórica",
+            "Valores": [
+                "Menos de 1 hora",
+                "Entre 1 y 2 horas",
+                "Entre 2 y 3 horas",
+                "Más de 3 horas"
+            ]
+        },
+        "Horas de formación recibidas (último año)": {
+            "Tipo": "Continua",
+            "Valores": "1 a 100 horas (agrupado por criterios en análisis)"
+        }
+    },
+    "Dimensiones de Bienestar y Salud Mental": {
+        "Control del Tiempo": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Rara vez",
+                3: "Alguna vez",
+                4: "Algunas veces",
+                5: "A menudo",
+                6: "Frecuentemente",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Tengo la opción de decidir qué hago en mi trabajo.",
+                "Tengo algo que decir sobre la forma en que hago mi trabajo.",
+                "Tengo voz y voto sobre mi propio ritmo de trabajo.",
+                "Me presionan para que trabaje muchas horas.",
+                "Tengo algunos plazos de entrega inalcanzables.",
+                "Tengo presiones de tiempo poco realistas.",
+                "Tengo que descuidar algunas tareas porque tengo mucho que hacer."
+            ]
+        },
+        "Compromiso del Líder": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Rara vez",
+                3: "Alguna vez",
+                4: "Algunas veces",
+                5: "A menudo",
+                6: "Frecuentemente",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Puedo confiar en mi líder para que me ayude con un problema laboral.",
+                "Si el trabajo se pone difícil, mi líder me ayudará.",
+                "Recibo la ayuda y el apoyo que necesito de mi líder.",
+                "Mi líder está dispuesto a escuchar mis problemas relacionados con el trabajo.",
+                "Siento que mi líder valora mis contribuciones a esta organización.",
+                "Mi líder me da suficiente crédito por mi trabajo duro.",
+                "Mi líder me anima en mi trabajo con elogios y agradecimientos."
+            ]
+        },
+        "Apoyo del Grupo": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Rara vez",
+                3: "Alguna vez",
+                4: "Algunas veces",
+                5: "A menudo",
+                6: "Frecuentemente",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Si el trabajo se pone difícil, mis compañeros de trabajo me ayudarán.",
+                "Recibo la ayuda y el apoyo que necesito de mis compañeros de trabajo.",
+                "Mis compañeros de trabajo están dispuestos a escuchar mis problemas laborales."
+            ]
+        },
+        "Claridad de Rol": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Rara vez",
+                3: "Alguna vez",
+                4: "Algunas veces",
+                5: "A menudo",
+                6: "Frecuentemente",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Tengo claro lo que se espera de mí en el trabajo.",
+                "Sé cómo hacer mi trabajo.",
+                "Tengo claro cuáles son mis deberes y responsabilidades.",
+                "Entiendo cómo mi trabajo encaja en el objetivo general de la organización.",
+                "Diferentes grupos en el trabajo me exigen cosas que son difíciles de hacer al mismo tiempo.",
+                "Diferentes personas en el trabajo esperan de mí cosas contradictorias.",
+                "Recibo solicitudes incompatibles de dos o más personas."
+            ]
+        },
+        "Cambio Organizacional": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Rara vez",
+                3: "Alguna vez",
+                4: "Algunas veces",
+                5: "A menudo",
+                6: "Frecuentemente",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Me consultan sobre cambios propuestos en el trabajo.",
+                "Cuando se realizan cambios en el trabajo, tengo claro cómo funcionarán en la práctica.",
+                "Estoy claramente informado sobre la naturaleza de los cambios que se producen en esta organización.",
+                "Puedo expresar inquietudes sobre cambios que afectan mi trabajo."
+            ]
+        },
+        "Responsabilidad Organizacional": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Rara vez",
+                3: "Alguna vez",
+                4: "Algunas veces",
+                5: "A menudo",
+                6: "Frecuentemente",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "En mi lugar de trabajo la salud física y mental es una prioridad de los líderes.",
+                "En mi lugar de trabajo se hacen mediciones periódicas de los niveles de salud mental de las personas.",
+                "En mi lugar de trabajo existen recursos accesibles y fáciles de usar para las necesidades relacionadas con la salud mental de las personas.",
+                "Recibo entrenamiento periódico sobre pautas para el cuidado de mi salud mental en el trabajo.",
+                "En mi lugar de trabajo se comunican claramente los resultados de las acciones implementadas para el cuidado de la salud mental de las personas."
+            ]
+        },
+        "Conflicto Familia-Trabajo": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Totalmente en desacuerdo",
+                2: "Muy en desacuerdo",
+                3: "Algo en desacuerdo",
+                4: "Ni de acuerdo ni en desacuerdo",
+                5: "Algo de acuerdo",
+                6: "Muy de acuerdo",
+                7: "Totalmente de acuerdo"
+            },
+            "Preguntas": [
+                "Las demandas de mi familia o cónyuge/pareja interfieren con las actividades relacionadas con el trabajo.",
+                "Tengo que posponer las tareas en el trabajo debido a las exigencias de mi tiempo en casa.",
+                "Las cosas que quiero hacer en el trabajo no se hacen debido a las demandas de mi familia o mi cónyuge/pareja.",
+                "Mi vida hogareña interfiere con mis responsabilidades en el trabajo, como llegar al trabajo a tiempo, realizar las tareas diarias y trabajar.",
+                "La tensión relacionada con la familia interfiere con mi capacidad para realizar tareas relacionadas con el trabajo.",
+                "Las exigencias de mi trabajo interfieren con mi hogar y mi vida familiar.",
+                "La cantidad de tiempo que ocupa mi trabajo dificulta el cumplimiento de las responsabilidades familiares.",
+                "Las cosas que quiero hacer en casa no se hacen debido a las exigencias que me impone mi trabajo.",
+                "Mi trabajo produce tensión que dificulta el cumplimiento de los deberes familiares.",
+                "Debido a deberes relacionados con el trabajo, tengo que hacer cambios en mis planes para las actividades familiares."
+            ]
+        },
+        "Síntomas de Burnout": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                2: "Raramente",
+                3: "Algunas veces",
+                4: "A menudo",
+                5: "Siempre"
+            },
+            "Preguntas": [
+                "En mi trabajo, me siento agotado/a emocionalmente.",
+                "Al final del día de trabajo, me resulta difícil recuperar mi energía.",
+                "Me siento físicamente agotado/a en mi trabajo.",
+                "Me cuesta encontrar entusiasmo por mi trabajo.",
+                "Siento una fuerte aversión hacia mi trabajo.",
+                "Soy cínico sobre lo que mi trabajo significa para los demás.",
+                "Tengo problemas para mantenerme enfocado en mi trabajo.",
+                "Cuando estoy trabajando, tengo dificultades para concentrarme.",
+                "Cometo errores en mi trabajo porque tengo mi mente en otras cosas.",
+                "En mi trabajo, me siento incapaz de controlar mis emociones.",
+                "No me reconozco en la forma que reacciono en el trabajo.",
+                "Puedo reaccionar exageradamente sin querer."
+            ]
+        },
+        "Compromiso": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Muy en desacuerdo",
+                2: "Moderadamente en desacuerdo",
+                3: "Ligeramente en desacuerdo",
+                4: "Ligeramente de acuerdo",
+                5: "Moderadamente de acuerdo",
+                6: "Muy de acuerdo"
+            },
+            "Preguntas": [
+                "Mi labor contribuye a la misión y visión de la empresa para la que laboro.",
+                "Me siento entusiasmado por mi trabajo.",
+                "Cuando me levanto en la mañana tengo ganas de ir a trabajar."
+            ]
+        },
+        "Defensa de la Organización": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Muy en desacuerdo",
+                2: "Moderadamente en desacuerdo",
+                3: "Ligeramente en desacuerdo",
+                4: "Ligeramente de acuerdo",
+                5: "Moderadamente de acuerdo",
+                6: "Muy de acuerdo"
+            },
+            "Preguntas": [
+                "Me siento orgulloso de la empresa en la que laboro.",
+                "Recomendaría ampliamente a otros trabajar en la empresa en la que laboro.",
+                "Me molesta que otros hablen mal de la empresa en la que laboro."
+            ]
+        },
+        "Satisfacción": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Muy en desacuerdo",
+                2: "Moderadamente en desacuerdo",
+                3: "Ligeramente en desacuerdo",
+                4: "Ligeramente de acuerdo",
+                5: "Moderadamente de acuerdo",
+                6: "Muy de acuerdo"
+            },
+            "Preguntas": [
+                "Considero mi trabajo significativo.",
+                "Me gusta hacer las tareas y actividades de mi trabajo.",
+                "Me siento satisfecho por el salario y los beneficios que recibo en mi trabajo."
+            ]
+        },
+        "Intención de Retiro": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Muy en desacuerdo",
+                2: "Moderadamente en desacuerdo",
+                3: "Ligeramente en desacuerdo",
+                4: "Ligeramente de acuerdo",
+                5: "Moderadamente de acuerdo",
+                6: "Muy de acuerdo"
+            },
+            "Preguntas": [
+                "Me veo trabajando en este lugar en el próximo año.",
+                "A menudo considero seriamente dejar mi trabajo actual.",
+                "Tengo la intención de dejar mi trabajo actual en los próximos 3 a 6 meses.",
+                "He empezado a buscar activamente otro trabajo."
+            ]
+        },
+        "Bienestar Psicosocial (Escala de Afectos)": {
+            "Tipo": "Diferencial Semántico",
+            "Escala": {
+                1: "Insatisfecho",
+                7: "Satisfecho"
+            },
+            "Pares de Adjetivos": [
+                "Insatisfecho - Satisfecho",
+                "Inseguridad - Seguridad",
+                "Intranquilidad - Tranquilidad",
+                "Impotencia - Potencia",
+                "Malestar - Bienestar",
+                "Desconfianza - Confianza",
+                "Incertidumbre - Certidumbre",
+                "Confusión - Claridad",
+                "Desesperanza - Esperanza",
+                "Dificultad - Facilidad"
+            ]
+        },
+        "Bienestar Psicosocial (Escala de Competencias)": {
+            "Tipo": "Diferencial Semántico",
+            "Escala": {
+                1: "Insensibilidad",
+                7: "Sensibilidad"
+            },
+            "Pares de Adjetivos": [
+                "Insensibilidad - Sensibilidad",
+                "Irracionalidad - Racionalidad",
+                "Incompetencia - Competencia",
+                "Inmoralidad - Moralidad",
+                "Maldad - Bondad",
+                "Fracaso - Éxito",
+                "Incapacidad - Capacidad",
+                "Pesimismo - Optimismo",
+                "Ineficacia - Eficacia",
+                "Inutilidad - Utilidad"
+            ]
+        },
+        "Bienestar Psicosocial (Escala de Expectativas)": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Bajando",
+                7: "Subiendo"
+            },
+            "Preguntas": [
+                "Mi motivación por el trabajo.",
+                "Mi identificación con los valores de la organización.",
+                "Mi rendimiento profesional.",
+                "Mi capacidad para responder a mi carga de trabajo.",
+                "La calidad de mis condiciones de trabajo.",
+                "Mi autoestima profesional.",
+                "La cordialidad en mi ambiente social de trabajo.",
+                "El equilibrio entre mi trabajo y mi vida privada.",
+                "Mi confianza en mi futuro profesional.",
+                "Mi calidad de vida laboral.",
+                "El sentido de mi trabajo.",
+                "Mi cumplimiento de las normas de la dirección.",
+                "Mi estado de ánimo laboral.",
+                "Mis oportunidades de promoción laboral.",
+                "Mi sensación de seguridad en el trabajo.",
+                "Mi participación en las decisiones de la organización.",
+                "Mi satisfacción con el trabajo.",
+                "Mi relación profesional.",
+                "El nivel de excelencia de mi organización.",
+                "Mi eficacia profesional.",
+                "Mi compromiso con el trabajo.",
+                "Mis competencias profesionales."
+            ]
+        },
+        "Factores de Efectos Colaterales (Escala de Somatización)": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Trastornos digestivos.",
+                "Dolores de cabeza.",
+                "Alteraciones de sueño.",
+                "Dolores de espalda.",
+                "Tensiones musculares."
+            ]
+        },
+        "Factores de Efectos Colaterales (Escala de Desgaste)": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Sobrecarga de trabajo.",
+                "Desgaste emocional.",
+                "Agotamiento físico.",
+                "Cansancio mental."
+            ]
+        },
+        "Factores de Efectos Colaterales (Escala de Alienación)": {
+            "Tipo": "Likert",
+            "Escala": {
+                1: "Nunca",
+                7: "Siempre"
+            },
+            "Preguntas": [
+                "Mal humor.",
+                "Baja realización personal.",
+                "Trato distante.",
+                "Frustración."
+            ]
+        }
+    }
+}
+
 df = pd.read_excel(ruta_csv)
 
 # Extraer información de las columnas y tipos de datos
@@ -132,6 +599,7 @@ def procesar_pregunta(pregunta_usuario):
 Utilizando la información de los datos proporcionados y las opciones de análisis disponibles:
 
 {informacion_datos}
+{data_dictionary}
 
 Opciones de análisis:
 
@@ -187,6 +655,10 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
     # Utilizar Gemini para extraer variables relevantes de la pregunta del usuario
     def obtener_variables_relevantes(pregunta, tipo_variable):
         prompt_variables = f"""
+        Tieniendo una base de datos con esta información: 
+
+        {data_dictionary}
+
         Basado en la siguiente pregunta:
 
         "{pregunta}"
@@ -195,7 +667,10 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
 
         {informacion_datos}
 
-        Identifica las variables que son de tipo '{tipo_variable}' y que son relevantes para responder la pregunta. Proporciona una lista de variables separadas por comas, sin explicaciones adicionales.
+        Identifica las variables que son de tipo '{tipo_variable}' y que son relevantes para responder la pregunta.
+        
+        Proporciona una lista de variables separadas por comas, sin explicaciones adicionales.
+
         """
         respuesta = enviar_prompt(prompt_variables)
         # Limpiar y procesar la respuesta de Gemini
@@ -408,19 +883,35 @@ def main():
             href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_analisis_datos.pdf">Descargar Informe en PDF</a>'
             st.markdown(href, unsafe_allow_html=True)
 
-# Función para generar el informe en PDF
 def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf = PDFReport()
 
+    # Extract relevant variables
+    variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'todas')
+    data_dictionary_relevante = {}
+    for categoria, variables in data_dictionary.items():
+        variables_relevantes_categoria = {}
+        for variable in variables:
+            if variable in variables_relevantes:
+                variables_relevantes_categoria[variable] = variables[variable]
+        if variables_relevantes_categoria:
+            data_dictionary_relevante[categoria] = variables_relevantes_categoria
+
     # Introducción
     pdf.chapter_title('Introducción')
-    # Generar el texto de la introducción usando Gemini
+
     prompt_introduccion = f"""
 Utilizando la siguiente pregunta de investigación:
 
 "{pregunta_usuario}"
 
 Y el método de análisis correspondiente a la opción {opcion_analisis}, por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
+
+Para interpretar correctamente los resultados del análisis, aquí tienes un diccionario de datos de las variables relevantes:
+
+{data_dictionary_relevante}
+
+Por favor, utiliza esta información para contextualizar y explicar los hallazgos en la introducción, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
 """
     introduccion = enviar_prompt(prompt_introduccion)
     pdf.chapter_body(introduccion)
@@ -450,12 +941,16 @@ Y el método de análisis correspondiente a la opción {opcion_analisis}, por fa
     # Conclusiones y Recomendaciones
     pdf.chapter_title('Conclusiones y Recomendaciones')
     # Generar el texto de conclusiones usando Gemini
-    prompt_conclusiones = f"""
+   prompt_conclusiones = f"""
 Basándote en los resultados obtenidos:
 
 {resultados}
 
-Por favor, proporciona conclusiones y recomendaciones que puedan ser útiles para la empresa.
+Utilizando el siguiente diccionario de datos para interpretar correctamente los valores:
+
+{data_dictionary}
+
+Por favor, proporciona conclusiones y recomendaciones que puedan ser útiles para la empresa, asegurándote de interpretar correctamente los valores de las variables y los hallazgos del análisis según su significado.
 """
     conclusiones = enviar_prompt(prompt_conclusiones)
     pdf.chapter_body(conclusiones)
