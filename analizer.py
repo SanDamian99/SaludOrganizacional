@@ -134,7 +134,7 @@ data_dictionary = {
             "Tipo": "Continua",
             "Valores": "1 a 60 horas (agrupado por criterios en análisis)"
         },
-        "Ingreso Salarial Mensual": {
+        "Ingreso SalUnicode font Mensual": {
             "Tipo": "Categórica",
             "Valores": [
                 "Menos de 1 SMLV",
@@ -1038,7 +1038,7 @@ La base de datos contiene información sobre salud psicológica en el trabajo, i
    - **Trabajo por Turnos** (Categórica): Sí, No.
    - **Tipo de Contrato** (Categórica): Indefinido, Término Fijo, Obra o Labor, Aprendizaje, Prestación de Servicios.
    - **Número de horas de trabajo semanal** (Continua): De 1 a 60 horas.
-   - **Ingreso Salarial Mensual** (Categórica): Rangos desde menos de 1 SMLV hasta más de 10 SMLV.
+   - **Ingreso SalUnicode font Mensual** (Categórica): Rangos desde menos de 1 SMLV hasta más de 10 SMLV.
    - **Nivel Cargo** (Categórica): Operativo, Administrativo, Directivo.
    - **Personas a cargo en el trabajo** (Categórica): Sí, No.
    - **Años de Experiencia Laboral** (Continua): De 1 a 60 años.
@@ -1235,23 +1235,23 @@ class PDFReport(FPDF):
         super().__init__()
         self.add_page()
         self.set_auto_page_break(auto=True, margin=15)
-        self.set_font('Arial', '', 12)
+        self.set_font('Unicode font', '', 12)
 
     def header(self):
         # Encabezado del documento
-        self.set_font('Arial', 'B', 16)
+        self.set_font('Unicode font', 'B', 16)
         self.cell(0, 10, 'Informe de Análisis de Datos', ln=True, align='C')
         self.ln(10)
 
     def chapter_title(self, label):
         # Título de cada sección
-        self.set_font('Arial', 'B', 14)
+        self.set_font('Unicode font', 'B', 14)
         self.cell(0, 10, label, ln=True)
         self.ln(5)
 
     def chapter_body(self, text):
         # Cuerpo de texto de cada sección
-        self.set_font('Arial', '', 12)
+        self.set_font('Unicode font', '', 12)
         self.multi_cell(0, 10, text)
         self.ln()
 
