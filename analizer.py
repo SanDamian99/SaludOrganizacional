@@ -614,6 +614,31 @@ Por favor, decide cuál de las opciones de análisis (1-6) es más adecuada para
     respuesta = enviar_prompt(prompt_pregunta)
     return respuesta.strip()
 
+# Utilizar Gemini para extraer variables relevantes de la pregunta del usuario
+def obtener_variables_relevantes(pregunta, tipo_variable):
+    prompt_variables = f"""
+    Tieniendo una base de datos con esta información: 
+
+    {data_dictionary}
+
+    Basado en la siguiente pregunta:
+
+    "{pregunta}"
+
+    Y teniendo en cuenta las columnas y tipos de datos del DataFrame:
+
+    {informacion_datos}
+
+    Identifica las variables que son de tipo '{tipo_variable}' y que son relevantes para responder la pregunta.
+    
+    Proporciona una lista de variables separadas por comas, sin explicaciones adicionales.
+
+    """
+    respuesta = enviar_prompt(prompt_variables)
+    # Limpiar y procesar la respuesta de Gemini
+    variables = [var.strip() for var in respuesta.split(',') if var.strip() in df.columns]
+    return variables
+
 # Función para procesar filtros en lenguaje natural utilizando Gemini
 def procesar_filtros(filtro_natural):
     if not filtro_natural.strip():
@@ -651,31 +676,6 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
             df_filtrado = df
     else:
         df_filtrado = df
-
-    # Utilizar Gemini para extraer variables relevantes de la pregunta del usuario
-    def obtener_variables_relevantes(pregunta, tipo_variable):
-        prompt_variables = f"""
-        Tieniendo una base de datos con esta información: 
-
-        {data_dictionary}
-
-        Basado en la siguiente pregunta:
-
-        "{pregunta}"
-
-        Y teniendo en cuenta las columnas y tipos de datos del DataFrame:
-
-        {informacion_datos}
-
-        Identifica las variables que son de tipo '{tipo_variable}' y que son relevantes para responder la pregunta.
-        
-        Proporciona una lista de variables separadas por comas, sin explicaciones adicionales.
-
-        """
-        respuesta = enviar_prompt(prompt_variables)
-        # Limpiar y procesar la respuesta de Gemini
-        variables = [var.strip() for var in respuesta.split(',') if var.strip() in df.columns]
-        return variables
 
     if opcion == '1':
         # Mostrar distribución de una variable categórica
