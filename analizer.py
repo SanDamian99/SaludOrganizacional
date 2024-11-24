@@ -663,7 +663,6 @@ def procesar_filtros(filtro_natural):
     filtro_pandas = filtro_pandas.strip().split('Filtro pandas:')[-1].strip()
     return filtro_pandas
 
-# Modificar la función realizar_analisis para capturar resultados y figuras
 def realizar_analisis(opcion, pregunta_usuario, filtros=None):
     resultados = ""
     figuras = []
@@ -673,9 +672,16 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
             df_filtrado = df.query(filtros)
         except Exception as e:
             st.write(f"Error al aplicar el filtro: {e}")
-            df_filtrado = df
+            df_filtrado = df.copy()
     else:
-        df_filtrado = df
+        df_filtrado = df.copy()
+
+    # Función para obtener información de la variable desde el diccionario de datos
+    def get_variable_info(variable_name):
+        for category, variables in data_dictionary.items():
+            if variable_name in variables:
+                return variables[variable_name]
+        return None
 
     if opcion == '1':
         # Mostrar distribución de una variable categórica
@@ -683,11 +689,52 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
         if variables_relevantes:
             variable = st.selectbox("Selecciona una variable categórica para analizar:", variables_relevantes)
             conteo = df_filtrado[variable].value_counts()
-            resultados += f"Distribución de {variable}:\n{conteo.to_string()}\n"
-            fig, ax = plt.subplots()
-            conteo.plot(kind='bar', ax=ax, title=f'Distribución de {variable}')
-            st.pyplot(fig)
-            figuras.append(fig)
+            resultados += f"Frecuencias de {variable}:\n{conteo.to_string()}\n"
+
+            # Obtener información de la variable desde el diccionario de datos
+            variable_info = get_variable_info(variable)
+            if variable_info and 'Valores' in variable_info:
+                valores = variable_info['Valores']
+                if isinstance(valores, list):
+                    # Mapear valores si es necesario
+                    mapping = {i: v for i, v in enumerate(valores)}
+                    df_filtrado[variable] = df_filtrado[variable].map(mapping).fillna(df_filtrado[variable])
+                    conteo = df_filtrado[variable].value_counts()
+
+            # Primera visualización: Gráfico de barras
+            try:
+                fig1, ax1 = plt.subplots()
+                conteo.plot(kind='bar', ax=ax1)
+                ax1.set_title(f'Distribución de {variable}')
+                ax1.set_xlabel(variable)
+                ax1.set_ylabel('Frecuencia')
+                st.pyplot(fig1)
+                figuras.append(fig1)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de barras: {e}")
+
+            # Segunda visualización: Gráfico de pastel
+            try:
+                fig2, ax2 = plt.subplots()
+                conteo.plot(kind='pie', ax=ax2, autopct='%1.1f%%')
+                ax2.set_ylabel('')
+                ax2.set_title(f'Distribución de {variable}')
+                st.pyplot(fig2)
+                figuras.append(fig2)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de pastel: {e}")
+
+            # Tercera visualización: Gráfico de barras horizontal
+            try:
+                fig3, ax3 = plt.subplots()
+                conteo.plot(kind='barh', ax=ax3)
+                ax3.set_title(f'Distribución de {variable}')
+                ax3.set_xlabel('Frecuencia')
+                ax3.set_ylabel(variable)
+                st.pyplot(fig3)
+                figuras.append(fig3)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de barras horizontal: {e}")
         else:
             resultados += "No se encontraron variables categóricas relevantes para la pregunta.\n"
 
@@ -698,11 +745,39 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
             variable = st.selectbox("Selecciona una variable numérica para analizar:", variables_relevantes)
             estadisticas = df_filtrado[variable].describe()
             resultados += f"Estadísticas descriptivas de {variable}:\n{estadisticas.to_string()}\n"
-            fig, ax = plt.subplots()
-            df_filtrado[variable].hist(bins=10, grid=False, ax=ax)
-            ax.set_title(f'Histograma de {variable}')
-            st.pyplot(fig)
-            figuras.append(fig)
+
+            # Primera visualización: Histograma
+            try:
+                fig1, ax1 = plt.subplots()
+                df_filtrado[variable].hist(bins=10, grid=False, ax=ax1)
+                ax1.set_title(f'Histograma de {variable}')
+                ax1.set_xlabel(variable)
+                ax1.set_ylabel('Frecuencia')
+                st.pyplot(fig1)
+                figuras.append(fig1)
+            except Exception as e:
+                st.write(f"No se pudo generar el histograma: {e}")
+
+            # Segunda visualización: Boxplot
+            try:
+                fig2, ax2 = plt.subplots()
+                df_filtrado.boxplot(column=variable, ax=ax2)
+                ax2.set_title(f'Boxplot de {variable}')
+                st.pyplot(fig2)
+                figuras.append(fig2)
+            except Exception as e:
+                st.write(f"No se pudo generar el boxplot: {e}")
+
+            # Tercera visualización: Gráfico de densidad
+            try:
+                fig3, ax3 = plt.subplots()
+                df_filtrado[variable].plot(kind='kde', ax=ax3)
+                ax3.set_title(f'Densidad de {variable}')
+                ax3.set_xlabel(variable)
+                st.pyplot(fig3)
+                figuras.append(fig3)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de densidad: {e}")
         else:
             resultados += "No se encontraron variables numéricas relevantes para la pregunta.\n"
 
@@ -712,11 +787,45 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
         if len(variables_relevantes) >= 2:
             variable_x = st.selectbox("Selecciona la variable para el eje X:", variables_relevantes)
             variable_y = st.selectbox("Selecciona la variable para el eje Y:", variables_relevantes)
-            resultados += f"Visualizando relación entre {variable_x} y {variable_y}.\n"
-            fig, ax = plt.subplots()
-            df_filtrado.plot.scatter(x=variable_x, y=variable_y, ax=ax, title=f'Relación entre {variable_x} y {variable_y}')
-            st.pyplot(fig)
-            figuras.append(fig)
+            resultados += f"Analizando la relación entre {variable_x} y {variable_y}.\n"
+
+            # Primera visualización: Gráfico de dispersión
+            try:
+                fig1, ax1 = plt.subplots()
+                df_filtrado.plot.scatter(x=variable_x, y=variable_y, ax=ax1)
+                ax1.set_title(f'Dispersión entre {variable_x} y {variable_y}')
+                st.pyplot(fig1)
+                figuras.append(fig1)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de dispersión: {e}")
+
+            # Segunda visualización: Gráfico de hexágonos
+            try:
+                fig2, ax2 = plt.subplots()
+                df_filtrado.plot.hexbin(x=variable_x, y=variable_y, gridsize=25, ax=ax2)
+                ax2.set_title(f'Hexbin entre {variable_x} y {variable_y}')
+                st.pyplot(fig2)
+                figuras.append(fig2)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico hexbin: {e}")
+
+            # Tercera visualización: Gráfico de densidad conjunta
+            try:
+                import seaborn as sns
+                fig3, ax3 = plt.subplots()
+                sns.kdeplot(data=df_filtrado, x=variable_x, y=variable_y, ax=ax3)
+                ax3.set_title(f'Densidad conjunta entre {variable_x} y {variable_y}')
+                st.pyplot(fig3)
+                figuras.append(fig3)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de densidad conjunta: {e}")
+
+            # Cálculo de la correlación
+            try:
+                correlacion = df_filtrado[[variable_x, variable_y]].corr().iloc[0,1]
+                resultados += f"Correlación entre {variable_x} y {variable_y}: {correlacion}\n"
+            except Exception as e:
+                st.write(f"No se pudo calcular la correlación: {e}")
         else:
             resultados += "No se encontraron suficientes variables numéricas relevantes para la pregunta.\n"
 
@@ -729,13 +838,41 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
             variable = st.selectbox("Selecciona una variable numérica para estadísticas descriptivas:", variables_relevantes)
             estadisticas = df_filtrado[variable].describe()
             resultados += f"Estadísticas descriptivas de {variable} después de aplicar filtros:\n{estadisticas.to_string()}\n"
-            fig, ax = plt.subplots()
-            df_filtrado[variable].hist(bins=10, grid=False, ax=ax)
-            ax.set_title(f'Histograma de {variable} después de filtros')
-            st.pyplot(fig)
-            figuras.append(fig)
+
+            # Primera visualización: Histograma
+            try:
+                fig1, ax1 = plt.subplots()
+                df_filtrado[variable].hist(bins=10, grid=False, ax=ax1)
+                ax1.set_title(f'Histograma de {variable} después de filtros')
+                ax1.set_xlabel(variable)
+                ax1.set_ylabel('Frecuencia')
+                st.pyplot(fig1)
+                figuras.append(fig1)
+            except Exception as e:
+                st.write(f"No se pudo generar el histograma: {e}")
+
+            # Segunda visualización: Boxplot
+            try:
+                fig2, ax2 = plt.subplots()
+                df_filtrado.boxplot(column=variable, ax=ax2)
+                ax2.set_title(f'Boxplot de {variable} después de filtros')
+                st.pyplot(fig2)
+                figuras.append(fig2)
+            except Exception as e:
+                st.write(f"No se pudo generar el boxplot: {e}")
+
+            # Tercera visualización: Gráfico de densidad
+            try:
+                fig3, ax3 = plt.subplots()
+                df_filtrado[variable].plot(kind='kde', ax=ax3)
+                ax3.set_title(f'Densidad de {variable} después de filtros')
+                ax3.set_xlabel(variable)
+                st.pyplot(fig3)
+                figuras.append(fig3)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de densidad: {e}")
         else:
-            resultados += "No se encontraron variables numéricas relevantes para la pregunta.\n"
+            resultados += "No se encontraron variables numéricas relevantes para mostrar después de aplicar los filtros.\n"
 
     elif opcion == '5':
         # Mostrar correlación entre variables numéricas
@@ -746,19 +883,46 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
                 correlacion = df_filtrado[variables_seleccionadas].corr()
                 resultados += "Matriz de correlación:\n"
                 resultados += correlacion.to_string() + "\n"
-                fig, ax = plt.subplots()
-                cax = ax.matshow(correlacion, cmap='coolwarm')
-                fig.colorbar(cax)
-                ax.set_xticks(range(len(variables_seleccionadas)))
-                ax.set_xticklabels(variables_seleccionadas, rotation=90)
-                ax.set_yticks(range(len(variables_seleccionadas)))
-                ax.set_yticklabels(variables_seleccionadas)
-                st.pyplot(fig)
-                figuras.append(fig)
+
+                # Primera visualización: Heatmap de correlación
+                try:
+                    import seaborn as sns
+                    fig1, ax1 = plt.subplots()
+                    sns.heatmap(correlacion, annot=True, fmt='.2f', cmap='coolwarm', ax=ax1)
+                    ax1.set_title('Mapa de calor de la correlación')
+                    st.pyplot(fig1)
+                    figuras.append(fig1)
+                except Exception as e:
+                    st.write(f"No se pudo generar el heatmap: {e}")
+
+                # Segunda visualización: Matriz de dispersión
+                try:
+                    import seaborn as sns
+                    fig2 = sns.pairplot(df_filtrado[variables_seleccionadas])
+                    st.pyplot(fig2)
+                    figuras.append(fig2)
+                except Exception as e:
+                    st.write(f"No se pudo generar la matriz de dispersión: {e}")
+
+                # Tercera visualización: Gráfico de correlación con valores
+                try:
+                    fig3, ax3 = plt.subplots()
+                    cax = ax3.matshow(correlacion, cmap='coolwarm')
+                    fig3.colorbar(cax)
+                    ax3.set_xticks(range(len(variables_seleccionadas)))
+                    ax3.set_xticklabels(variables_seleccionadas, rotation=90)
+                    ax3.set_yticks(range(len(variables_seleccionadas)))
+                    ax3.set_yticklabels(variables_seleccionadas)
+                    for (i, j), z in np.ndenumerate(correlacion):
+                        ax3.text(j, i, '{:0.2f}'.format(z), ha='center', va='center')
+                    st.pyplot(fig3)
+                    figuras.append(fig3)
+                except Exception as e:
+                    st.write(f"No se pudo generar el gráfico de correlación: {e}")
             else:
                 resultados += "Debes seleccionar al menos dos variables.\n"
         else:
-            resultados += "No se encontraron suficientes variables numéricas relevantes para la pregunta.\n"
+            resultados += "No se encontraron suficientes variables numéricas para calcular la correlación.\n"
 
     elif opcion == '6':
         # Realizar análisis de regresión simple
@@ -779,17 +943,46 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None):
             resultados += f"Coeficiente de determinación (R^2): {r_sq}\n"
             resultados += f"Intercepto: {modelo.intercept_}\n"
             resultados += f"Coeficiente: {modelo.coef_[0]}\n"
-            # Graficar la regresión
-            fig, ax = plt.subplots()
-            ax.scatter(X, y, color='blue')
-            ax.plot(X, modelo.predict(X), color='red')
-            ax.set_title(f'Regresión lineal entre {variable_x} y {variable_y}')
-            ax.set_xlabel(variable_x)
-            ax.set_ylabel(variable_y)
-            st.pyplot(fig)
-            figuras.append(fig)
+
+            # Primera visualización: Gráfico de dispersión con línea de regresión
+            try:
+                fig1, ax1 = plt.subplots()
+                ax1.scatter(X, y, color='blue')
+                ax1.plot(X, modelo.predict(X), color='red')
+                ax1.set_title(f'Regresión lineal entre {variable_x} y {variable_y}')
+                ax1.set_xlabel(variable_x)
+                ax1.set_ylabel(variable_y)
+                st.pyplot(fig1)
+                figuras.append(fig1)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de regresión: {e}")
+
+            # Segunda visualización: Residuales
+            try:
+                residuales = y - modelo.predict(X)
+                fig2, ax2 = plt.subplots()
+                ax2.scatter(modelo.predict(X), residuales)
+                ax2.hlines(y=0, xmin=modelo.predict(X).min(), xmax=modelo.predict(X).max(), colors='red')
+                ax2.set_title('Gráfico de residuales')
+                ax2.set_xlabel('Valores predichos')
+                ax2.set_ylabel('Residuales')
+                st.pyplot(fig2)
+                figuras.append(fig2)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de residuales: {e}")
+
+            # Tercera visualización: Distribución de los residuales
+            try:
+                fig3, ax3 = plt.subplots()
+                sns.histplot(residuales, kde=True, ax=ax3)
+                ax3.set_title('Distribución de los residuales')
+                st.pyplot(fig3)
+                figuras.append(fig3)
+            except Exception as e:
+                st.write(f"No se pudo generar el histograma de residuales: {e}")
         else:
-            resultados += "No se encontraron suficientes variables numéricas relevantes para la pregunta.\n"
+            resultados += "No se encontraron suficientes variables numéricas para realizar la regresión.\n"
+
     else:
         resultados += "Opción de análisis no reconocida.\n"
 
@@ -894,7 +1087,7 @@ def main():
         st.write("Por favor, ingresa tu pregunta y opcionalmente aplica filtros.")
 
         st.session_state['pregunta_usuario'] = st.text_input("Ingresa tu pregunta:", value=st.session_state['pregunta_usuario'])
-        st.session_state['filtro_natural'] = st.text_input("Si deseas aplicar filtros, por favor descríbelos en lenguaje natural (opcional):", value=st.session_state['filtro_natural'])
+        st.session_state['filtro_natural'] = st.text_input("Si deseas aplicar filtros, por favor descríbelos (opcional):", value=st.session_state['filtro_natural'])
 
         if st.button("Realizar Análisis"):
             if st.session_state['pregunta_usuario'].strip() == '':
@@ -967,7 +1160,7 @@ Utilizando la siguiente pregunta de investigación:
 
 "{pregunta_usuario}"
 
-Y el método de análisis correspondiente a la opción {opcion_analisis}, por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
+Y el método de análisis correspondiente a la opción {opcion_analisis}, estas eran las opciones {opciones_analisis}, por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
 
 Para interpretar correctamente los resultados del análisis, aquí tienes un diccionario de datos de las variables relevantes:
 
@@ -1006,16 +1199,24 @@ Por favor, utiliza esta información para contextualizar y explicar los hallazgo
     # Conclusiones y Recomendaciones
     pdf.chapter_title('Conclusiones y Recomendaciones')
     # Generar el texto de conclusiones usando Gemini
-    prompt_conclusiones = f"""
+   prompt_conclusiones = f"""
 Basándote en los resultados obtenidos:
 
 {resultados}
+
+Y considerando la siguiente pregunta de investigación:
+
+"{pregunta_usuario}"
 
 Utilizando el siguiente diccionario de datos para interpretar correctamente los valores:
 
 {data_dictionary}
 
 Por favor, proporciona conclusiones y recomendaciones que puedan ser útiles para la empresa, asegurándote de interpretar correctamente los valores de las variables y los hallazgos del análisis según su significado.
+
+Si los datos no son suficientes para responder a la pregunta o no se generaron datos, integra la respuesta con teoría y fundamenta tus conclusiones y recomendaciones en la literatura académica real, citando en formato APA séptima edición y garantizando que las fuentes citadas existen.
+
+Responde desde la perspectiva de la psicología organizacional y la psicología de la salud, y asegúrate de que la interpretación de los resultados y las recomendaciones respondan a la pregunta planteada.
 """
     conclusiones = enviar_prompt(prompt_conclusiones)
     pdf.chapter_body(conclusiones)
