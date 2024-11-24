@@ -924,6 +924,16 @@ def main():
                     # Marcar que el análisis ha sido realizado
                     st.session_state['analisis_realizado'] = True
 
+                    st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
+                    # Mostrar botón para realizar otra consulta
+                    if st.button("Realizar otra consulta"):
+                        # Reiniciar los valores en st.session_state
+                        st.session_state['pregunta_usuario'] = ''
+                        st.session_state['filtro_natural'] = ''
+                        st.session_state['analisis_realizado'] = False
+                        # Reiniciar la aplicación
+                        st.experimental_rerun()
+
     else:
         st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
         # Mostrar botón para realizar otra consulta
