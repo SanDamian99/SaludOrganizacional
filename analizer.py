@@ -878,34 +878,62 @@ Por favor, realiza tu pregunta teniendo en cuenta las variables y dimensiones di
 
 # Función principal
 def main():
-    st.title("Bienvenido a la Aplicación de Análisis de Datos sobre Salud Organizacional")
+    st.title("Aplicación de Análisis de Datos sobre Salud Organizacional")
 
     mostrar_resumen_base_datos()
 
-    pregunta_usuario = st.text_input("Ingresa tu pregunta:")
-    filtro_natural = st.text_input("Si deseas aplicar filtros, por favor descríbelos en lenguaje natural (opcional):")
+    # Inicializar o restablecer los valores en st.session_state
+    if 'pregunta_usuario' not in st.session_state:
+        st.session_state['pregunta_usuario'] = ''
+    if 'filtro_natural' not in st.session_state:
+        st.session_state['filtro_natural'] = ''
+    if 'analisis_realizado' not in st.session_state:
+        st.session_state['analisis_realizado'] = False
 
-    if st.button("Realizar Análisis"):
-        with st.spinner('Procesando...'):
-            filtros_usuario = procesar_filtros(filtro_natural)
-            if filtros_usuario:
-                st.write(f"El filtro aplicado es: {filtros_usuario}")
+    if not st.session_state['analisis_realizado']:
+        st.write("Por favor, ingresa tu pregunta y opcionalmente aplica filtros.")
+
+        st.session_state['pregunta_usuario'] = st.text_input("Ingresa tu pregunta:", value=st.session_state['pregunta_usuario'])
+        st.session_state['filtro_natural'] = st.text_input("Si deseas aplicar filtros, por favor descríbelos en lenguaje natural (opcional):", value=st.session_state['filtro_natural'])
+
+        if st.button("Realizar Análisis"):
+            if st.session_state['pregunta_usuario'].strip() == '':
+                st.warning("Por favor, ingresa una pregunta para realizar el análisis.")
             else:
-                st.write("No se aplicará ningún filtro.")
-            respuesta = procesar_pregunta(pregunta_usuario)
-            st.write(f"Gemini sugiere la opción de análisis: {respuesta}")
-            resultados, figuras = realizar_analisis(respuesta, pregunta_usuario, filtros_usuario)
-            st.write("**Resultados del análisis:**")
-            st.write(resultados)
-            # Las figuras ya se muestran en la función realizar_analisis con st.pyplot()
-            # Generar el informe
-            generar_informe(pregunta_usuario, respuesta, resultados, figuras)
-            # Proporcionar un enlace de descarga para el informe PDF
-            with open('informe_analisis_datos.pdf', 'rb') as f:
-                pdf_data = f.read()
-            b64 = base64.b64encode(pdf_data).decode('utf-8')
-            href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_analisis_datos.pdf">Descargar Informe en PDF</a>'
-            st.markdown(href, unsafe_allow_html=True)
+                with st.spinner('Procesando...'):
+                    filtros_usuario = procesar_filtros(st.session_state['filtro_natural'])
+                    if filtros_usuario:
+                        st.write(f"El filtro aplicado es: {filtros_usuario}")
+                    else:
+                        st.write("No se aplicará ningún filtro.")
+                    respuesta = procesar_pregunta(st.session_state['pregunta_usuario'])
+                    st.write(f"Gemini sugiere la opción de análisis: {respuesta}")
+                    resultados, figuras = realizar_analisis(respuesta, st.session_state['pregunta_usuario'], filtros_usuario)
+                    st.write("**Resultados del análisis:**")
+                    st.write(resultados)
+                    # Las figuras ya se muestran en la función realizar_analisis con st.pyplot()
+                    # Generar el informe
+                    generar_informe(st.session_state['pregunta_usuario'], respuesta, resultados, figuras)
+                    # Proporcionar un enlace de descarga para el informe PDF
+                    with open('informe_analisis_datos.pdf', 'rb') as f:
+                        pdf_data = f.read()
+                    b64 = base64.b64encode(pdf_data).decode('utf-8')
+                    href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_analisis_datos.pdf">Descargar Informe en PDF</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+
+                    # Marcar que el análisis ha sido realizado
+                    st.session_state['analisis_realizado'] = True
+
+    else:
+        st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
+        # Mostrar botón para realizar otra consulta
+        if st.button("Realizar otra consulta"):
+            # Reiniciar los valores en st.session_state
+            st.session_state['pregunta_usuario'] = ''
+            st.session_state['filtro_natural'] = ''
+            st.session_state['analisis_realizado'] = False
+            # Reiniciar la aplicación
+            st.experimental_rerun()
 
 def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf = PDFReport()
