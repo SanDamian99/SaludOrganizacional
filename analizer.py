@@ -1249,11 +1249,11 @@ class PDFReport(FPDF):
         self.add_page()
         self.set_auto_page_break(auto=True, margin=15)
         # Utilizar fuentes incorporadas
-        self.set_font('Arial', '', 12)
+        self.set_font('Helvetica', '', 12)
 
     def header(self):
         # Encabezado del documento
-        self.set_font('Arial', 'B', 16)
+        self.set_font('Helvetica', 'B', 16)
         header_text = 'Informe de Análisis de Datos'
         header_text = clean_text(header_text)
         self.cell(0, 10, header_text, ln=True, align='C')
@@ -1261,14 +1261,14 @@ class PDFReport(FPDF):
 
     def chapter_title(self, label):
         # Título de cada sección
-        self.set_font('Arial', 'B', 14)
+        self.set_font('Helvetica', 'B', 14)
         label = clean_text(label)
         self.cell(0, 10, label, ln=True)
         self.ln(5)
 
     def chapter_body(self, text):
         # Cuerpo de texto de cada sección
-        self.set_font('Arial', '', 12)
+        self.set_font('Helvetica', '', 12)
         text = clean_text(text)
         self.multi_cell(0, 10, text)
         self.ln()
