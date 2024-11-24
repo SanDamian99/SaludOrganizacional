@@ -932,7 +932,7 @@ def main():
                         st.session_state['filtro_natural'] = ''
                         st.session_state['analisis_realizado'] = False
                         # Reiniciar la aplicación
-                        st.experimental_rerun()
+                        st.rerun()
 
     else:
         st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
@@ -943,7 +943,7 @@ def main():
             st.session_state['filtro_natural'] = ''
             st.session_state['analisis_realizado'] = False
             # Reiniciar la aplicación
-            st.experimental_rerun()
+            st.rerun()
 
 def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf = PDFReport()
