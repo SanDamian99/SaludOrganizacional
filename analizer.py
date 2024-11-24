@@ -134,7 +134,7 @@ data_dictionary = {
             "Tipo": "Continua",
             "Valores": "1 a 60 horas (agrupado por criterios en análisis)"
         },
-        "Ingreso SalDejaVu Mensual": {
+        "Ingreso Salarial Mensual": {
             "Tipo": "Categórica",
             "Valores": [
                 "Menos de 1 SMLV",
@@ -1038,7 +1038,7 @@ La base de datos contiene información sobre salud psicológica en el trabajo, i
    - **Trabajo por Turnos** (Categórica): Sí, No.
    - **Tipo de Contrato** (Categórica): Indefinido, Término Fijo, Obra o Labor, Aprendizaje, Prestación de Servicios.
    - **Número de horas de trabajo semanal** (Continua): De 1 a 60 horas.
-   - **Ingreso SalDejaVu Mensual** (Categórica): Rangos desde menos de 1 SMLV hasta más de 10 SMLV.
+   - **Ingreso Salarial Mensual** (Categórica): Rangos desde menos de 1 SMLV hasta más de 10 SMLV.
    - **Nivel Cargo** (Categórica): Operativo, Administrativo, Directivo.
    - **Personas a cargo en el trabajo** (Categórica): Sí, No.
    - **Años de Experiencia Laboral** (Continua): De 1 a 60 años.
