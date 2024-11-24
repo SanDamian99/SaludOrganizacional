@@ -1222,47 +1222,54 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf.output(nombre_informe)
     st.write(f"Informe generado y guardado como {nombre_informe}")
 
-# Clase PDFReport modificada
+def clean_text(text):
+    # Diccionario de reemplazos
+    replacements = {
+        '≈': 'aprox.',  # Reemplazar con 'aprox.'
+        '≤': '<=',       # Reemplazar con '<='
+        '≥': '>=',       # Reemplazar con '>='
+        '≠': '!=',       # Reemplazar con '!='
+        '√': 'raíz',     # Reemplazar con 'raíz'
+        '∞': 'infinito', # Reemplazar con 'infinito'
+        'π': 'pi',       # Reemplazar con 'pi'
+        '∑': 'sumatoria',# Reemplazar con 'sumatoria'
+        '∆': 'delta',    # Reemplazar con 'delta'
+        '∫': 'integral', # Reemplazar con 'integral'
+        # Agrega más reemplazos según sea necesario
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+    # Eliminar otros caracteres no soportados
+    text = text.encode('latin-1', 'ignore').decode('latin-1')
+    return text
+
 class PDFReport(FPDF):
     def __init__(self):
         super().__init__()
         self.add_page()
         self.set_auto_page_break(auto=True, margin=15)
-        
-        # Rutas absolutas a los archivos de fuente
-        import os
-        font_dir = os.path.dirname(os.path.abspath(__file__))
-        font_regular = os.path.join(font_dir, 'DejaVuSans.ttf')
-        font_bold = os.path.join(font_dir, 'DejaVuSans-Bold.ttf')
-
-        # Verificar si los archivos de fuente existen
-        if not os.path.isfile(font_regular):
-            st.write(f"No se encontró el archivo de fuente: {font_regular}")
-        if not os.path.isfile(font_bold):
-            st.write(f"No se encontró el archivo de fuente: {font_bold}")
-
-        # Registrar las fuentes
-        self.add_font('DejaVu', '', font_regular, uni=True)
-        self.add_font('DejaVu', 'B', font_bold, uni=True)
-
-        # Establecer la fuente predeterminada
-        self.set_font('DejaVu', '', 12)
+        # Utilizar fuentes incorporadas
+        self.set_font('Arial', '', 12)
 
     def header(self):
         # Encabezado del documento
-        self.set_font('DejaVu', 'B', 16)
-        self.cell(0, 10, 'Informe de Análisis de Datos', ln=True, align='C')
+        self.set_font('Arial', 'B', 16)
+        header_text = 'Informe de Análisis de Datos'
+        header_text = clean_text(header_text)
+        self.cell(0, 10, header_text, ln=True, align='C')
         self.ln(10)
 
     def chapter_title(self, label):
         # Título de cada sección
-        self.set_font('DejaVu', 'B', 14)
+        self.set_font('Arial', 'B', 14)
+        label = clean_text(label)
         self.cell(0, 10, label, ln=True)
         self.ln(5)
 
     def chapter_body(self, text):
         # Cuerpo de texto de cada sección
-        self.set_font('DejaVu', '', 12)
+        self.set_font('Arial', '', 12)
+        text = clean_text(text)
         self.multi_cell(0, 10, text)
         self.ln()
 
