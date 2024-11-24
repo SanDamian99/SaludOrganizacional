@@ -1199,7 +1199,7 @@ Por favor, utiliza esta información para contextualizar y explicar los hallazgo
     # Conclusiones y Recomendaciones
     pdf.chapter_title('Conclusiones y Recomendaciones')
     # Generar el texto de conclusiones usando Gemini
-   prompt_conclusiones = f"""
+    prompt_conclusiones = f"""
 Basándote en los resultados obtenidos:
 
 {resultados}
@@ -1218,6 +1218,7 @@ Si los datos no son suficientes para responder a la pregunta o no se generaron d
 
 Responde desde la perspectiva de la psicología organizacional y la psicología de la salud, y asegúrate de que la interpretación de los resultados y las recomendaciones respondan a la pregunta planteada.
 """
+
     conclusiones = enviar_prompt(prompt_conclusiones)
     pdf.chapter_body(conclusiones)
     conclusiones = enviar_prompt(prompt_conclusiones)
