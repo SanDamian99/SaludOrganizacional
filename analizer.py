@@ -1229,9 +1229,23 @@ class PDFReport(FPDF):
         self.add_page()
         self.set_auto_page_break(auto=True, margin=15)
         
-        # Registrar la fuente DejaVu Sans
-        self.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
-        self.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
+        # Rutas absolutas a los archivos de fuente
+        import os
+        font_dir = os.path.dirname(os.path.abspath(__file__))
+        font_regular = os.path.join(font_dir, 'DejaVuSans.ttf')
+        font_bold = os.path.join(font_dir, 'DejaVuSans-Bold.ttf')
+
+        # Verificar si los archivos de fuente existen
+        if not os.path.isfile(font_regular):
+            st.write(f"No se encontró el archivo de fuente: {font_regular}")
+        if not os.path.isfile(font_bold):
+            st.write(f"No se encontró el archivo de fuente: {font_bold}")
+
+        # Registrar las fuentes
+        self.add_font('DejaVu', '', font_regular, uni=True)
+        self.add_font('DejaVu', 'B', font_bold, uni=True)
+
+        # Establecer la fuente predeterminada
         self.set_font('DejaVu', '', 12)
 
     def header(self):
