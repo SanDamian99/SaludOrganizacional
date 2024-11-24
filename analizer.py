@@ -1156,24 +1156,23 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf.chapter_title('Introducción')
 
     prompt_introduccion = f"""
-Utilizando la siguiente pregunta de investigación:
+    Utilizando la siguiente pregunta de investigación:
 
-"{pregunta_usuario}"
+    "{pregunta_usuario}"
 
-Y el método de análisis correspondiente a la opción {opcion_analisis}, estas eran las opciones {opciones_analisis}, por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
+    Y el método de análisis correspondiente a la opción {opcion_analisis}, por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
 
-Para interpretar correctamente los resultados del análisis, aquí tienes un diccionario de datos de las variables relevantes:
+    Para interpretar correctamente los resultados del análisis, aquí tienes un diccionario de datos de las variables relevantes:
 
-{data_dictionary_relevante}
+    {data_dictionary_relevante}
 
-Por favor, utiliza esta información para contextualizar y explicar los hallazgos en la introducción, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
-"""
+    Por favor, utiliza esta información para contextualizar y explicar los hallazgos en la introducción, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
+    """
     introduccion = enviar_prompt(prompt_introduccion)
     pdf.chapter_body(introduccion)
 
     # Resultados
     pdf.chapter_title('Resultados')
-    # Agregar los resultados y visualizaciones al informe
     pdf.chapter_body('A continuación, se presentan los resultados obtenidos del análisis:')
     pdf.chapter_body(resultados)
 
@@ -1196,31 +1195,25 @@ Por favor, utiliza esta información para contextualizar y explicar los hallazgo
     # Conclusiones y Recomendaciones
     pdf.chapter_title('Conclusiones y Recomendaciones')
     # Generar el texto de conclusiones usando Gemini
-    # Conclusiones y Recomendaciones
-    pdf.chapter_title('Conclusiones y Recomendaciones')
-    # Generar el texto de conclusiones usando Gemini
     prompt_conclusiones = f"""
-Basándote en los resultados obtenidos:
+    Basándote en los resultados obtenidos:
 
-{resultados}
+    {resultados}
 
-Y considerando la siguiente pregunta de investigación:
+    Y considerando la siguiente pregunta de investigación:
 
-"{pregunta_usuario}"
+    "{pregunta_usuario}"
 
-Utilizando el siguiente diccionario de datos para interpretar correctamente los valores:
+    Utilizando el siguiente diccionario de datos para interpretar correctamente los valores:
 
-{data_dictionary}
+    {data_dictionary}
 
-Por favor, proporciona conclusiones y recomendaciones que puedan ser útiles para la empresa, asegurándote de interpretar correctamente los valores de las variables y los hallazgos del análisis según su significado.
+    Por favor, proporciona conclusiones y recomendaciones que puedan ser útiles para la empresa, asegurándote de interpretar correctamente los valores de las variables y los hallazgos del análisis según su significado.
 
-Si los datos no son suficientes para responder a la pregunta o no se generaron datos, integra la respuesta con teoría y fundamenta tus conclusiones y recomendaciones en la literatura académica real, citando en formato APA séptima edición y garantizando que las fuentes citadas existen.
+    Si los datos no son suficientes para responder a la pregunta o no se generaron datos, integra la respuesta con teoría y fundamenta tus conclusiones y recomendaciones en la literatura académica real, citando en formato APA séptima edición y garantizando que las fuentes citadas existen.
 
-Responde desde la perspectiva de la psicología organizacional y la psicología de la salud, y asegúrate de que la interpretación de los resultados y las recomendaciones respondan a la pregunta planteada.
-"""
-
-    conclusiones = enviar_prompt(prompt_conclusiones)
-    pdf.chapter_body(conclusiones)
+    Responde desde la perspectiva de la psicología organizacional y la psicología de la salud, y asegúrate de que la interpretación de los resultados y las recomendaciones respondan a la pregunta planteada.
+    """
     conclusiones = enviar_prompt(prompt_conclusiones)
     pdf.chapter_body(conclusiones)
 
@@ -1229,12 +1222,16 @@ Responde desde la perspectiva de la psicología organizacional y la psicología 
     pdf.output(nombre_informe)
     st.write(f"Informe generado y guardado como {nombre_informe}")
 
-# Clase para generar el informe en PDF
+# Clase PDFReport modificada
 class PDFReport(FPDF):
     def __init__(self):
         super().__init__()
         self.add_page()
         self.set_auto_page_break(auto=True, margin=15)
+        
+        # Registrar la fuente DejaVu Sans
+        self.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
+        self.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
         self.set_font('DejaVu', '', 12)
 
     def header(self):
