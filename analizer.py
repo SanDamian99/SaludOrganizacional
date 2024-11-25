@@ -1342,56 +1342,20 @@ class PDFReport(FPDF):
         """
         text = clean_text(text)
         html = markdown.markdown(text)
-        # Implement basic markdown parsing
-        self.parse_markdown(html)
+        # Usar write_html de fpdf2 para renderizar el HTML
+        try:
+            self.set_text_color(0, 0, 0)  # Asegurarse de que el texto es negro
+            self.write_html(html)
+        except Exception as e:
+            st.write(f"Error al procesar el HTML: {e}")
         self.ln()
-
-    def parse_markdown(self, html):
-        """
-        Parsea HTML básico generado por markdown y aplica estilos.
-        """
-        # Este es un parser muy básico y puede que no cubra todos los casos
-        for line in html.split('\n'):
-            line = line.strip()
-            if line.startswith('<h1>') and line.endswith('</h1>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'B', 16)
-                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<h2>') and line.endswith('</h2>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'B', 14)
-                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<strong>') and line.endswith('</strong>'):
-                content = line[8:-9]
-                self.set_font('Helvetica', 'B', 12)
-                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<em>') and line.endswith('</em>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'I', 12)
-                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<ul>'):
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<li>') and line.endswith('</li>'):
-                content = line[4:-5]
-                self.multi_cell(0, 10, f'- {content}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            elif line.startswith('</ul>'):
-                pass
-            elif line.startswith('<p>') and line.endswith('</p>'):
-                content = line[3:-4]
-                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            else:
-                self.multi_cell(0, 10, line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     def insert_data_section(self, text):
         """
         Sección con fondo morado titulada "Datos generados por el modelo".
         """
         # Título con fondo morado
-        self.set_fill_color(0, 0, 0)      # Fondo Negro
+        self.set_fill_color(128, 0, 128)      # Fondo morado
         self.set_text_color(255, 255, 255)    # Texto blanco para el título
         self.set_font('Helvetica', 'B', 12)
         self.set_x(15)  # Ajustar según margen izquierdo
@@ -1401,9 +1365,14 @@ class PDFReport(FPDF):
         self.set_fill_color(255, 255, 255)    # Fondo blanco
         self.set_text_color(0, 0, 0)          # Texto negro
         self.set_font('Helvetica', '', 12)
-        # Renderizar el contenido
-        html = markdown.markdown(clean_text(text))
-        self.parse_markdown(html)
+        # Renderizar el contenido con write_html
+        text = clean_text(text)
+        html = markdown.markdown(text)
+        try:
+            self.set_text_color(0, 0, 0)  # Reafirmar color negro antes de escribir
+            self.write_html(html)
+        except Exception as e:
+            st.write(f"Error al procesar el HTML: {e}")
         self.ln()
 
     def insert_image(self, image_path):
