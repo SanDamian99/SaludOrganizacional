@@ -1245,7 +1245,7 @@ def clean_text(text):
     text = text.encode('latin-1', 'ignore').decode('latin-1')
     return text
 
-class PDFReport(FPDF, HTMLMixin):
+class PDFReport(FPDF):
     def __init__(self):
         super().__init__()
         self.add_page()
@@ -1254,56 +1254,169 @@ class PDFReport(FPDF, HTMLMixin):
         self.set_font('Helvetica', '', 12)
 
     def header(self):
-        # Header con imagen que cubre toda la parte superior
-        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png' 
-        self.image(header_image, x=0, y=0, w=self.w, h=40)  # Ajusta 'h' según la altura de tu imagen
-        self.set_y(45)  # Posicionar el cursor debajo de la imagen
+        """
+        Encabezado del documento: una imagen que cubre toda la parte superior.
+        """
+        header_image = 'header_image.png'  # Reemplaza con la ruta de tu imagen de encabezado
+        # Verificar si la imagen existe
+        if os.path.isfile(header_image):
+            self.image(header_image, x=0, y=0, w=self.w, h=40)  # Ajusta 'h' según la altura de tu imagen
+        else:
+            # Si la imagen no existe, usar texto como respaldo
+            self.set_font('Helvetica', 'B', 16)
+            header_text = 'Informe de Análisis de Datos'
+            header_text = clean_text(header_text)
+            # Agregar el texto centrado
+            self.cell(0, 10, header_text, align='C')
+        # Posicionar el cursor debajo de la imagen o texto
+        self.set_y(45)
 
     def footer(self):
-        # Footer con fondo negro y texto blanco
-        self.set_y(-20)
-        self.set_fill_color(0, 0, 0)  # Fondo negro
+        """
+        Pie de página: fondo negro que abarca todo el ancho, texto blanco con número de página.
+        """
+        # Posicionar el cursor 15 mm desde el final
+        self.set_y(-15)
+        # Establecer colores y fuente
+        self.set_fill_color(0, 0, 0)      # Fondo negro
         self.set_text_color(255, 255, 255)  # Texto blanco
         self.set_font('Helvetica', '', 8)
+        # Dibujar el rectángulo del footer
+        self.rect(0, self.h - 15, self.w, 15, 'F')
+        # Agregar el texto con padding
         footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
-        self.cell(0, 10, clean_text(footer_text), 0, 0, 'C', fill=True)
+        self.set_xy(10, self.h - 13)  # Ajustar posición dentro del footer
+        self.cell(self.w - 20, 5, clean_text(footer_text), border=0, align='L', fill=False)
+        # Agregar número de página
+        page_number = f'Página {self.page_no()}'
+        self.set_xy(0, self.h - 13)
+        self.cell(0, 5, page_number, border=0, align='R', fill=False)
+        # Resetear colores de texto
+        self.set_text_color(0, 0, 0)
 
     def chapter_title(self, label):
-        # Título de cada sección
+        """
+        Título de cada sección.
+        """
         self.set_font('Helvetica', 'B', 14)
         label = clean_text(label)
-        self.cell(0, 10, label, ln=True)
+        self.multi_cell(0, 10, label)
         self.ln(5)
 
     def chapter_body(self, text):
-        # Interpretar Markdown y renderizar texto
+        """
+        Cuerpo de texto de cada sección, interpretando Markdown.
+        """
         text = clean_text(text)
         html = markdown.markdown(text)
-        self.write_html(html)
+        # Procesar el HTML generado por Markdown de forma básica
+        for line in html.split('\n'):
+            if line.startswith('<h1>') and line.endswith('</h1>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'B', 16)
+                self.multi_cell(0, 10, content)
+                self.ln(2)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<h2>') and line.endswith('</h2>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'B', 14)
+                self.multi_cell(0, 10, content)
+                self.ln(2)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<strong>') and line.endswith('</strong>'):
+                content = line[8:-9]
+                self.set_font('Helvetica', 'B', 12)
+                self.multi_cell(0, 10, content)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<em>') and line.endswith('</em>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'I', 12)
+                self.multi_cell(0, 10, content)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<ul>'):
+                pass  # Inicio de lista desordenada
+            elif line.startswith('<li>') and line.endswith('</li>'):
+                content = line[4:-5]
+                self.multi_cell(0, 10, f'- {content}')
+            elif line.startswith('</ul>'):
+                pass  # Fin de lista desordenada
+            elif line.startswith('<p>') and line.endswith('</p>'):
+                content = line[3:-4]
+                self.multi_cell(0, 10, content)
+            else:
+                self.multi_cell(0, 10, line)
         self.ln()
 
     def insert_data_section(self, text):
-        # Sección con fondo morado titulada "Datos generados por el modelo"
-        self.set_fill_color(128, 0, 128)  # Fondo morado
-        self.set_text_color(255, 255, 255)  # Texto blanco para el título
+        """
+        Sección con fondo morado titulada "Datos generados por el modelo".
+        """
+        # Título con fondo morado
+        self.set_fill_color(128, 0, 128)      # Fondo morado
+        self.set_text_color(255, 255, 255)    # Texto blanco
         self.set_font('Helvetica', 'B', 12)
-        self.cell(0, 10, 'Datos generados por el modelo', ln=True, fill=True)
-        self.ln(2)
-        # Fondo blanco para el contenido
-        self.set_fill_color(255, 255, 255)
-        self.set_text_color(0, 0, 0)  # Texto negro para el contenido
+        self.set_xy(0, self.get_y())
+        self.cell(self.w, 10, 'Datos generados por el modelo', align='C', fill=True)
+        self.ln(5)
+        # Contenido con fondo blanco y texto negro
+        self.set_fill_color(255, 255, 255)    # Fondo blanco
+        self.set_text_color(0, 0, 0)          # Texto negro
         self.set_font('Helvetica', '', 12)
+        # Renderizar el contenido
         html = markdown.markdown(clean_text(text))
-        self.write_html(html)
+        for line in html.split('\n'):
+            if line.startswith('<h1>') and line.endswith('</h1>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'B', 16)
+                self.multi_cell(0, 10, content)
+                self.ln(2)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<h2>') and line.endswith('</h2>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'B', 14)
+                self.multi_cell(0, 10, content)
+                self.ln(2)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<strong>') and line.endswith('</strong>'):
+                content = line[8:-9]
+                self.set_font('Helvetica', 'B', 12)
+                self.multi_cell(0, 10, content)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<em>') and line.endswith('</em>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'I', 12)
+                self.multi_cell(0, 10, content)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<ul>'):
+                pass  # Inicio de lista desordenada
+            elif line.startswith('<li>') and line.endswith('</li>'):
+                content = line[4:-5]
+                self.multi_cell(0, 10, f'- {content}')
+            elif line.startswith('</ul>'):
+                pass  # Fin de lista desordenada
+            elif line.startswith('<p>') and line.endswith('</p>'):
+                content = line[3:-4]
+                self.multi_cell(0, 10, content)
+            else:
+                self.multi_cell(0, 10, line)
         self.ln()
 
     def insert_image(self, image_path):
-        # Insertar una imagen en el PDF
-        self.image(image_path, w=180)
-        self.ln()
+        """
+        Insertar una imagen en el PDF.
+        """
+        if os.path.isfile(image_path):
+            self.image(image_path, w=180)
+            self.ln()
+        else:
+            self.set_font('Helvetica', 'I', 12)
+            self.cell(0, 10, 'Imagen no encontrada', align='C')
+            self.ln()
 
     def resultados_recomendaciones(self, text):
-        # Sección "Resultados y recomendaciones"
+        """
+        Sección "Resultados y recomendaciones".
+        """
         self.chapter_title('Resultados y recomendaciones')
         self.chapter_body(text)
 
