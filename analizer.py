@@ -1297,7 +1297,7 @@ class PDFReport(FPDF):
         """
         Encabezado del documento: una imagen que cubre toda la parte superior.
         """
-        header_image = 'header_image.png'  # Reemplaza con la ruta de tu imagen de encabezado
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png' 
         if os.path.isfile(header_image):
             # Insertar imagen, x=0, y=0, width=self.w, height=40
             self.image(header_image, x=0, y=0, w=self.w, h=40)
