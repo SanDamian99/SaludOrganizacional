@@ -12,6 +12,7 @@ import re
 import markdown
 import io
 import base64
+import os
 
 # Importar la librería de Gemini
 import google.generativeai as genai
