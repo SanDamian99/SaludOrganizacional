@@ -1276,7 +1276,7 @@ def clean_text(text):
     text = break_long_words(text, max_length=50)
     return text
 
-class PDFReport(FPDF):
+class PDFReport(FPDF,HTMLMixin):
     def __init__(self):
         super().__init__()
         # Definir márgenes
