@@ -1255,7 +1255,7 @@ class PDFReport(FPDF, HTMLMixin):
 
     def header(self):
         # Header con imagen que cubre toda la parte superior
-        header_image = 'header_image.png'  # Reemplaza con la ruta de tu imagen
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png' 
         self.image(header_image, x=0, y=0, w=self.w, h=40)  # Ajusta 'h' según la altura de tu imagen
         self.set_y(45)  # Posicionar el cursor debajo de la imagen
 
