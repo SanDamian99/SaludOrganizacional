@@ -1195,25 +1195,13 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     introduccion = enviar_prompt(prompt_introduccion)
     pdf.chapter_body(introduccion)
 
-    # Resultados
-    pdf.chapter_title('Resultados')
-    pdf.chapter_body('A continuación, se presentan los resultados obtenidos del análisis:')
-    pdf.chapter_body(resultados)
+    # Datos generados por el modelo
+    pdf.insert_data_section(resultados)
 
     # Insertar las figuras generadas
     for idx, fig in enumerate(figuras):
-        # Guardar la figura en un objeto BytesIO
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png')
-        buf.seek(0)
-        img_data = buf.read()
-
-        # Escribir la imagen en un archivo temporal
         img_path = f'figura_{idx}.png'
-        with open(img_path, 'wb') as f:
-            f.write(img_data)
-
-        # Insertar la imagen en el PDF
+        fig.savefig(img_path)
         pdf.insert_image(img_path)
 
     # Conclusiones y Recomendaciones
@@ -1243,8 +1231,11 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
 
     # Guardar el informe en PDF
     nombre_informe = 'informe_analisis_datos.pdf'
-    pdf.output(nombre_informe)
-    st.write(f"Informe generado y guardado como {nombre_informe}")
+    try:
+        pdf.output(nombre_informe)
+        st.write(f"Informe generado y guardado como {nombre_informe}")
+    except Exception as e:
+        st.write(f"Error al generar el PDF: {e}")
 
 def break_long_words(text, max_length=50):
     """
@@ -1300,7 +1291,7 @@ class PDFReport(FPDF):
         """
         Encabezado del documento: una imagen que cubre toda la parte superior.
         """
-        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png' 
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'  # Reemplaza con la ruta de tu imagen de encabezado
         if os.path.isfile(header_image):
             # Insertar imagen, x=0, y=0, width=self.w, height=40
             self.image(header_image, x=0, y=0, w=self.w, h=40)
@@ -1309,7 +1300,7 @@ class PDFReport(FPDF):
             header_text = 'Informe de Análisis de Datos'
             header_text = clean_text(header_text)
             # Agregar el texto centrado
-            self.cell(0, 10, header_text, align='C')
+            self.cell(0, 10, header_text, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         # Posicionar el cursor debajo de la imagen o texto
         self.set_y(45)
 
@@ -1323,16 +1314,16 @@ class PDFReport(FPDF):
         self.set_fill_color(0, 0, 0)          # Fondo negro
         self.set_text_color(255, 255, 255)    # Texto blanco
         self.set_font('Helvetica', '', 8)
-        # Dibujar el rectángulo del footer
+        # Dibujar el rectángulo del footer que abarca todo el ancho
         self.rect(0, self.h - 15, self.w, 15, 'F')
-        # Agregar el texto con padding
+        # Agregar el texto con padding a la izquierda
         footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
         self.set_xy(15, self.h - 13)         # Ajustar posición dentro del footer
-        self.multi_cell(self.w - 30, 5, clean_text(footer_text), border=0, align='L', fill=False)
-        # Agregar número de página
+        self.multi_cell((self.w - 30) / 2, 5, clean_text(footer_text), border=0, align='L', fill=False)
+        # Agregar número de página a la derecha
         page_number = f'Página {self.page_no()}'
-        self.set_xy(15, self.h - 13)
-        self.cell(self.w - 30, 5, page_number, border=0, align='R', fill=False)
+        self.set_xy(self.w - 15 - 20, self.h - 13)  # Ajustar posición para el número de página
+        self.multi_cell((self.w - 30) / 2, 5, page_number, border=0, align='R', fill=False)
         # Resetear colores de texto
         self.set_text_color(0, 0, 0)
 
@@ -1342,7 +1333,7 @@ class PDFReport(FPDF):
         """
         self.set_font('Helvetica', 'B', 14)
         label = clean_text(label)
-        self.multi_cell(0, 10, label)
+        self.multi_cell(0, 10, label, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(5)
 
     def chapter_body(self, text):
@@ -1351,34 +1342,68 @@ class PDFReport(FPDF):
         """
         text = clean_text(text)
         html = markdown.markdown(text)
-        # Usar write_html de fpdf2 para renderizar el HTML
-        try:
-            self.write_html(html)
-        except Exception as e:
-            st.write(f"Error al procesar el HTML: {e}")
+        # Implement basic markdown parsing
+        self.parse_markdown(html)
         self.ln()
+
+    def parse_markdown(self, html):
+        """
+        Parsea HTML básico generado por markdown y aplica estilos.
+        """
+        # Este es un parser muy básico y puede que no cubra todos los casos
+        for line in html.split('\n'):
+            line = line.strip()
+            if line.startswith('<h1>') and line.endswith('</h1>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'B', 16)
+                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<h2>') and line.endswith('</h2>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'B', 14)
+                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<strong>') and line.endswith('</strong>'):
+                content = line[8:-9]
+                self.set_font('Helvetica', 'B', 12)
+                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<em>') and line.endswith('</em>'):
+                content = line[4:-5]
+                self.set_font('Helvetica', 'I', 12)
+                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<ul>'):
+                self.set_font('Helvetica', '', 12)
+            elif line.startswith('<li>') and line.endswith('</li>'):
+                content = line[4:-5]
+                self.multi_cell(0, 10, f'- {content}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            elif line.startswith('</ul>'):
+                pass
+            elif line.startswith('<p>') and line.endswith('</p>'):
+                content = line[3:-4]
+                self.multi_cell(0, 10, content, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            else:
+                self.multi_cell(0, 10, line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     def insert_data_section(self, text):
         """
         Sección con fondo morado titulada "Datos generados por el modelo".
         """
         # Título con fondo morado
-        self.set_fill_color(128, 0, 128)      # Fondo morado
+        self.set_fill_color(0, 0, 0)      # Fondo Negro
         self.set_text_color(255, 255, 255)    # Texto blanco para el título
         self.set_font('Helvetica', 'B', 12)
         self.set_x(15)  # Ajustar según margen izquierdo
-        self.cell(self.w - 30, 10, 'Datos generados por el modelo', align='C', fill=True)
+        self.cell(self.w - 30, 10, 'Datos generados por el modelo', align='C', fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(5)
         # Resetear colores para el contenido
         self.set_fill_color(255, 255, 255)    # Fondo blanco
         self.set_text_color(0, 0, 0)          # Texto negro
         self.set_font('Helvetica', '', 12)
-        # Renderizar el contenido con write_html
+        # Renderizar el contenido
         html = markdown.markdown(clean_text(text))
-        try:
-            self.write_html(html)
-        except Exception as e:
-            st.write(f"Error al procesar el HTML: {e}")
+        self.parse_markdown(html)
         self.ln()
 
     def insert_image(self, image_path):
@@ -1390,7 +1415,7 @@ class PDFReport(FPDF):
             self.ln()
         else:
             self.set_font('Helvetica', 'I', 12)
-            self.cell(0, 10, 'Imagen no encontrada', align='C')
+            self.cell(0, 10, 'Imagen no encontrada', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.ln()
 
     def resultados_recomendaciones(self, text):
