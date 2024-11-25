@@ -7,7 +7,9 @@ from datetime import datetime
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import ProtocolError
 import matplotlib.pyplot as plt
-from fpdf import FPDF  # Necesitarás instalar esta librería: pip install fpdf
+from fpdf import FPDF, HTMLMixin
+import re
+import markdown
 import io
 import base64
 
@@ -1243,21 +1245,28 @@ def clean_text(text):
     text = text.encode('latin-1', 'ignore').decode('latin-1')
     return text
 
-class PDFReport(FPDF):
+class PDFReport(FPDF, HTMLMixin):
     def __init__(self):
         super().__init__()
         self.add_page()
         self.set_auto_page_break(auto=True, margin=15)
-        # Utilizar fuentes incorporadas
+        # Fuente predeterminada
         self.set_font('Helvetica', '', 12)
 
     def header(self):
-        # Encabezado del documento
-        self.set_font('Helvetica', 'B', 16)
-        header_text = 'Informe de Análisis de Datos'
-        header_text = clean_text(header_text)
-        self.cell(0, 10, header_text, ln=True, align='C')
-        self.ln(10)
+        # Header con imagen que cubre toda la parte superior
+        header_image = 'header_image.png'  # Reemplaza con la ruta de tu imagen
+        self.image(header_image, x=0, y=0, w=self.w, h=40)  # Ajusta 'h' según la altura de tu imagen
+        self.set_y(45)  # Posicionar el cursor debajo de la imagen
+
+    def footer(self):
+        # Footer con fondo negro y texto blanco
+        self.set_y(-20)
+        self.set_fill_color(0, 0, 0)  # Fondo negro
+        self.set_text_color(255, 255, 255)  # Texto blanco
+        self.set_font('Helvetica', '', 8)
+        footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
+        self.cell(0, 10, clean_text(footer_text), 0, 0, 'C', fill=True)
 
     def chapter_title(self, label):
         # Título de cada sección
@@ -1267,16 +1276,36 @@ class PDFReport(FPDF):
         self.ln(5)
 
     def chapter_body(self, text):
-        # Cuerpo de texto de cada sección
-        self.set_font('Helvetica', '', 12)
+        # Interpretar Markdown y renderizar texto
         text = clean_text(text)
-        self.multi_cell(0, 10, text)
+        html = markdown.markdown(text)
+        self.write_html(html)
+        self.ln()
+
+    def insert_data_section(self, text):
+        # Sección con fondo morado titulada "Datos generados por el modelo"
+        self.set_fill_color(128, 0, 128)  # Fondo morado
+        self.set_text_color(255, 255, 255)  # Texto blanco para el título
+        self.set_font('Helvetica', 'B', 12)
+        self.cell(0, 10, 'Datos generados por el modelo', ln=True, fill=True)
+        self.ln(2)
+        # Fondo blanco para el contenido
+        self.set_fill_color(255, 255, 255)
+        self.set_text_color(0, 0, 0)  # Texto negro para el contenido
+        self.set_font('Helvetica', '', 12)
+        html = markdown.markdown(clean_text(text))
+        self.write_html(html)
         self.ln()
 
     def insert_image(self, image_path):
         # Insertar una imagen en el PDF
         self.image(image_path, w=180)
         self.ln()
+
+    def resultados_recomendaciones(self, text):
+        # Sección "Resultados y recomendaciones"
+        self.chapter_title('Resultados y recomendaciones')
+        self.chapter_body(text)
 
 if __name__ == "__main__":
     main()
