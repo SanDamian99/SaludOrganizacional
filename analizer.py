@@ -13,6 +13,7 @@ import markdown
 import io
 import base64
 import os
+from fpdf.enums import XPos, YPos
 
 # Importar la librería de Gemini
 import google.generativeai as genai
@@ -546,12 +547,29 @@ informacion_datos = obtener_informacion_datos(df)
 opciones_analisis = """
 Opciones de análisis disponibles:
 
-1. Mostrar distribución de una variable categórica.
-2. Calcular estadísticas descriptivas de una variable numérica.
-3. Visualizar la relación entre dos variables numéricas.
-4. Filtrar datos según criterios y mostrar estadísticas.
-5. Mostrar correlación entre variables numéricas.
-6. Realizar análisis de regresión simple.
+1. **Distribución de variable categórica:** Explora cómo se distribuyen los datos en una variable categórica (no numérica). Muestra la frecuencia de cada categoría mediante tablas y gráficos (barras, pastel, barras horizontales). 
+
+   *Ejemplo:* Si eliges la variable "color", el análisis mostrará cuántas veces aparece cada color (rojo, azul, verde, etc.) en el conjunto de datos.
+
+2. **Estadísticas descriptivas de variable numérica:**  Calcula y muestra las estadísticas descriptivas (media, mediana, desviación estándar, mínimo, máximo, etc.) de una variable numérica, proporcionando un resumen de su distribución.  Incluye visualizaciones como histogramas, boxplots y gráficos de densidad para comprender la forma de la distribución, identificar valores atípicos y analizar la dispersión de los datos.
+
+   *Ejemplo:*  Si eliges la variable "edad", el análisis calculará la edad promedio, la edad que se encuentra en el medio del conjunto de datos,  cómo se agrupan las edades, etc.
+
+3. **Relación entre dos variables numéricas:** Analiza la relación entre dos variables numéricas. Se mostrarán gráficos de dispersión, hexágonos y densidad conjunta para visualizar la correlación entre las variables. También se calculará el coeficiente de correlación para cuantificar la fuerza y dirección de la relación.
+
+   *Ejemplo:*  Si eliges las variables "ingresos" y "gastos", el análisis mostrará si existe una relación (positiva, negativa o nula) entre ambas.
+
+4. **Filtrar datos y mostrar estadísticas:** Permite filtrar los datos según criterios específicos y luego calcular estadísticas descriptivas de una variable numérica en el conjunto de datos filtrado.  Se incluyen visualizaciones como histogramas, boxplots y gráficos de densidad para el análisis del subconjunto de datos.
+
+   *Ejemplo:* Puedes filtrar los datos para incluir solo a las personas mayores de 30 años y luego analizar la distribución de sus ingresos.
+
+5. **Correlación entre variables numéricas:** Calcula la correlación entre múltiples variables numéricas y muestra los resultados en una matriz de correlación.  Se incluyen visualizaciones como mapas de calor, matrices de dispersión y gráficos de correlación para identificar patrones y relaciones entre las variables.
+
+   *Ejemplo:*  Si seleccionas "edad", "ingresos" y "nivel educativo", el análisis mostrará la correlación entre cada par de variables.
+
+6. **Análisis de regresión simple:** Realiza un análisis de regresión lineal simple para modelar la relación entre dos variables numéricas. Se mostrará el coeficiente de determinación (R^2), el intercepto y los coeficientes del modelo.  Se incluyen visualizaciones como gráficos de dispersión con línea de regresión, gráficos de residuales y la distribución de los residuales para evaluar la calidad del modelo.
+
+   *Ejemplo:*  Puedes analizar cómo la variable "años de experiencia" (variable independiente) afecta a la variable "salario" (variable dependiente).
 """
 
 # Preparar el prompt para Gemini
@@ -1225,32 +1243,53 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf.output(nombre_informe)
     st.write(f"Informe generado y guardado como {nombre_informe}")
 
+def break_long_words(text, max_length=50):
+    """
+    Inserta guiones en palabras que excedan el máximo permitido para evitar errores de FPDF.
+    """
+    words = text.split()
+    new_words = []
+    for word in words:
+        while len(word) > max_length:
+            new_words.append(word[:max_length-1] + '-')
+            word = word[max_length-1:]
+        new_words.append(word)
+    return ' '.join(new_words)
+
 def clean_text(text):
-    # Diccionario de reemplazos
+    """
+    Reemplaza caracteres no soportados por Latin-1 y limpia el texto.
+    """
+    # Diccionario de reemplazos para caracteres no soportados
     replacements = {
-        '≈': 'aprox.',  # Reemplazar con 'aprox.'
-        '≤': '<=',       # Reemplazar con '<='
-        '≥': '>=',       # Reemplazar con '>='
-        '≠': '!=',       # Reemplazar con '!='
-        '√': 'raíz',     # Reemplazar con 'raíz'
-        '∞': 'infinito', # Reemplazar con 'infinito'
-        'π': 'pi',       # Reemplazar con 'pi'
-        '∑': 'sumatoria',# Reemplazar con 'sumatoria'
-        '∆': 'delta',    # Reemplazar con 'delta'
-        '∫': 'integral', # Reemplazar con 'integral'
+        '≈': 'aprox.',   # Reemplazar con 'aprox.'
+        '≤': '<=',        # Reemplazar con '<='
+        '≥': '>=',        # Reemplazar con '>='
+        '≠': '!=',        # Reemplazar con '!=',
+        '√': 'raíz',      # Reemplazar con 'raíz'
+        '∞': 'infinito',  # Reemplazar con 'infinito'
+        'π': 'pi',        # Reemplazar con 'pi'
+        '∑': 'sumatoria', # Reemplazar con 'sumatoria'
+        '∆': 'delta',     # Reemplazar con 'delta'
+        '∫': 'integral',  # Reemplazar con 'integral'
         # Agrega más reemplazos según sea necesario
     }
     for char, replacement in replacements.items():
         text = text.replace(char, replacement)
-    # Eliminar otros caracteres no soportados
+    # Eliminar caracteres no soportados
     text = text.encode('latin-1', 'ignore').decode('latin-1')
+    # Insertar guiones en palabras largas
+    text = break_long_words(text, max_length=50)
     return text
 
 class PDFReport(FPDF):
     def __init__(self):
         super().__init__()
-        self.add_page()
+        # Definir márgenes
+        self.set_left_margin(15)
+        self.set_right_margin(15)
         self.set_auto_page_break(auto=True, margin=15)
+        self.add_page()
         # Fuente predeterminada
         self.set_font('Helvetica', '', 12)
 
@@ -1259,11 +1298,10 @@ class PDFReport(FPDF):
         Encabezado del documento: una imagen que cubre toda la parte superior.
         """
         header_image = 'header_image.png'  # Reemplaza con la ruta de tu imagen de encabezado
-        # Verificar si la imagen existe
         if os.path.isfile(header_image):
-            self.image(header_image, x=0, y=0, w=self.w, h=40)  # Ajusta 'h' según la altura de tu imagen
+            # Insertar imagen, x=0, y=0, width=self.w, height=40
+            self.image(header_image, x=0, y=0, w=self.w, h=40)
         else:
-            # Si la imagen no existe, usar texto como respaldo
             self.set_font('Helvetica', 'B', 16)
             header_text = 'Informe de Análisis de Datos'
             header_text = clean_text(header_text)
@@ -1279,19 +1317,19 @@ class PDFReport(FPDF):
         # Posicionar el cursor 15 mm desde el final
         self.set_y(-15)
         # Establecer colores y fuente
-        self.set_fill_color(0, 0, 0)      # Fondo negro
-        self.set_text_color(255, 255, 255)  # Texto blanco
+        self.set_fill_color(0, 0, 0)          # Fondo negro
+        self.set_text_color(255, 255, 255)    # Texto blanco
         self.set_font('Helvetica', '', 8)
         # Dibujar el rectángulo del footer
         self.rect(0, self.h - 15, self.w, 15, 'F')
         # Agregar el texto con padding
         footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
-        self.set_xy(10, self.h - 13)  # Ajustar posición dentro del footer
-        self.cell(self.w - 20, 5, clean_text(footer_text), border=0, align='L', fill=False)
+        self.set_xy(15, self.h - 13)         # Ajustar posición dentro del footer
+        self.multi_cell(self.w - 30, 5, clean_text(footer_text), border=0, align='L', fill=False)
         # Agregar número de página
         page_number = f'Página {self.page_no()}'
-        self.set_xy(0, self.h - 13)
-        self.cell(0, 5, page_number, border=0, align='R', fill=False)
+        self.set_xy(15, self.h - 13)
+        self.cell(self.w - 30, 5, page_number, border=0, align='R', fill=False)
         # Resetear colores de texto
         self.set_text_color(0, 0, 0)
 
@@ -1310,42 +1348,11 @@ class PDFReport(FPDF):
         """
         text = clean_text(text)
         html = markdown.markdown(text)
-        # Procesar el HTML generado por Markdown de forma básica
-        for line in html.split('\n'):
-            if line.startswith('<h1>') and line.endswith('</h1>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'B', 16)
-                self.multi_cell(0, 10, content)
-                self.ln(2)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<h2>') and line.endswith('</h2>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'B', 14)
-                self.multi_cell(0, 10, content)
-                self.ln(2)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<strong>') and line.endswith('</strong>'):
-                content = line[8:-9]
-                self.set_font('Helvetica', 'B', 12)
-                self.multi_cell(0, 10, content)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<em>') and line.endswith('</em>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'I', 12)
-                self.multi_cell(0, 10, content)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<ul>'):
-                pass  # Inicio de lista desordenada
-            elif line.startswith('<li>') and line.endswith('</li>'):
-                content = line[4:-5]
-                self.multi_cell(0, 10, f'- {content}')
-            elif line.startswith('</ul>'):
-                pass  # Fin de lista desordenada
-            elif line.startswith('<p>') and line.endswith('</p>'):
-                content = line[3:-4]
-                self.multi_cell(0, 10, content)
-            else:
-                self.multi_cell(0, 10, line)
+        # Usar write_html de fpdf2 para renderizar el HTML
+        try:
+            self.write_html(html)
+        except Exception as e:
+            st.write(f"Error al procesar el HTML: {e}")
         self.ln()
 
     def insert_data_section(self, text):
@@ -1354,52 +1361,21 @@ class PDFReport(FPDF):
         """
         # Título con fondo morado
         self.set_fill_color(128, 0, 128)      # Fondo morado
-        self.set_text_color(255, 255, 255)    # Texto blanco
+        self.set_text_color(255, 255, 255)    # Texto blanco para el título
         self.set_font('Helvetica', 'B', 12)
-        self.set_xy(0, self.get_y())
-        self.cell(self.w, 10, 'Datos generados por el modelo', align='C', fill=True)
+        self.set_x(15)  # Ajustar según margen izquierdo
+        self.cell(self.w - 30, 10, 'Datos generados por el modelo', align='C', fill=True)
         self.ln(5)
-        # Contenido con fondo blanco y texto negro
+        # Resetear colores para el contenido
         self.set_fill_color(255, 255, 255)    # Fondo blanco
         self.set_text_color(0, 0, 0)          # Texto negro
         self.set_font('Helvetica', '', 12)
-        # Renderizar el contenido
+        # Renderizar el contenido con write_html
         html = markdown.markdown(clean_text(text))
-        for line in html.split('\n'):
-            if line.startswith('<h1>') and line.endswith('</h1>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'B', 16)
-                self.multi_cell(0, 10, content)
-                self.ln(2)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<h2>') and line.endswith('</h2>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'B', 14)
-                self.multi_cell(0, 10, content)
-                self.ln(2)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<strong>') and line.endswith('</strong>'):
-                content = line[8:-9]
-                self.set_font('Helvetica', 'B', 12)
-                self.multi_cell(0, 10, content)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<em>') and line.endswith('</em>'):
-                content = line[4:-5]
-                self.set_font('Helvetica', 'I', 12)
-                self.multi_cell(0, 10, content)
-                self.set_font('Helvetica', '', 12)
-            elif line.startswith('<ul>'):
-                pass  # Inicio de lista desordenada
-            elif line.startswith('<li>') and line.endswith('</li>'):
-                content = line[4:-5]
-                self.multi_cell(0, 10, f'- {content}')
-            elif line.startswith('</ul>'):
-                pass  # Fin de lista desordenada
-            elif line.startswith('<p>') and line.endswith('</p>'):
-                content = line[3:-4]
-                self.multi_cell(0, 10, content)
-            else:
-                self.multi_cell(0, 10, line)
+        try:
+            self.write_html(html)
+        except Exception as e:
+            st.write(f"Error al procesar el HTML: {e}")
         self.ln()
 
     def insert_image(self, image_path):
@@ -1420,6 +1396,6 @@ class PDFReport(FPDF):
         """
         self.chapter_title('Resultados y recomendaciones')
         self.chapter_body(text)
-
+        
 if __name__ == "__main__":
     main()
