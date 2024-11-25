@@ -1181,14 +1181,17 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
 
     "{pregunta_usuario}"
 
-    Y el método de análisis correspondiente a la opción {opcion_analisis}, por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
+    Y el método de análisis correspondiente a la opción {opcion_analisis}, recuerda que estan eran las opciones: {opciones_analisis}. 
+    
+    Por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
 
     Para interpretar correctamente los resultados del análisis, aquí tienes un diccionario de datos de las variables relevantes:
 
     {data_dictionary_relevante}
 
-    Por favor, utiliza esta información para contextualizar y explicar los hallazgos en la introducción, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
+    Por favor, utiliza esta información para contextualizar y explicar el planteamiento del analisi, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
     """
+    
     introduccion = enviar_prompt(prompt_introduccion)
     pdf.chapter_body(introduccion)
 
