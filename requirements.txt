@@ -5,3 +5,5 @@ google-generativeai
 fpdf2
 scikit-learn
 openpyxl
+re
+markdown
