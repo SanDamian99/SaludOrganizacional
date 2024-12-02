@@ -1259,7 +1259,7 @@ def clean_text(text):
         '≈': 'aprox.',   # Reemplazar con 'aprox.'
         '≤': '<=',        # Reemplazar con '<='
         '≥': '>=',        # Reemplazar con '>='
-        '≠': '!=',        # Reemplazar con '!=',
+        '≠': '!=',        # Reemplazar con '!='
         '√': 'raíz',      # Reemplazar con 'raíz'
         '∞': 'infinito',  # Reemplazar con 'infinito'
         'π': 'pi',        # Reemplazar con 'pi'
@@ -1276,7 +1276,7 @@ def clean_text(text):
     text = break_long_words(text, max_length=50)
     return text
 
-class PDFReport(FPDF,HTMLMixin):
+class PDFReport(FPDF, HTMLMixin):
     def __init__(self):
         super().__init__()
         # Definir márgenes
@@ -1291,7 +1291,7 @@ class PDFReport(FPDF,HTMLMixin):
         """
         Encabezado del documento: una imagen que cubre toda la parte superior.
         """
-        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'  # Reemplaza con la ruta de tu imagen de encabezado
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'  
         if os.path.isfile(header_image):
             # Insertar imagen, x=0, y=0, width=self.w, height=40
             self.image(header_image, x=0, y=0, w=self.w, h=40)
@@ -1300,7 +1300,7 @@ class PDFReport(FPDF,HTMLMixin):
             header_text = 'Informe de Análisis de Datos'
             header_text = clean_text(header_text)
             # Agregar el texto centrado
-            self.cell(0, 10, header_text, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.cell(0, 10, header_text, align='C', new_x='LMARGIN', new_y='NEXT')
         # Posicionar el cursor debajo de la imagen o texto
         self.set_y(45)
 
@@ -1329,26 +1329,47 @@ class PDFReport(FPDF,HTMLMixin):
 
     def chapter_title(self, label):
         """
-        Título de cada sección.
+        Título de cada sección con estilo controlado.
         """
         self.set_font('Helvetica', 'B', 14)
+        self.set_text_color(0, 0, 0)  # Asegurar que el título sea negro
         label = clean_text(label)
-        self.multi_cell(0, 10, label, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.multi_cell(0, 10, label, new_x='LMARGIN', new_y='NEXT')
         self.ln(5)
+        # Resetear fuente después del título
+        self.set_font('Helvetica', '', 12)
+        self.set_text_color(0, 0, 0)
 
     def chapter_body(self, text):
         """
-        Cuerpo de texto de cada sección, interpretando Markdown.
+        Cuerpo de texto de cada sección, interpretando Markdown con manejo mejorado.
         """
         text = clean_text(text)
-        html = markdown.markdown(text)
-        # Usar write_html de fpdf2 para renderizar el HTML
+        # Convertir Markdown a HTML con saltos de línea
+        html = markdown.markdown(text, extensions=['nl2br'])
+        # Añadir CSS personalizado para controlar el estilo
+        html = """
+        <style>
+        h1, h2, h3, h4, h5, h6 {
+            color: black;
+            font-size: 14pt;
+            font-weight: bold;
+        }
+        p {
+            text-align: justify;
+            text-indent: 20pt;
+        }
+        </style>
+        """ + html
+        # Usar write_html para renderizar el HTML
         try:
-            self.set_text_color(0, 0, 0)  # Asegurarse de que el texto es negro
             self.write_html(html)
         except Exception as e:
-            st.write(f"Error al procesar el HTML: {e}")
+            print(f"Error al procesar el HTML: {e}")
         self.ln()
+        # Resetear fuente después del cuerpo
+        self.set_font('Helvetica', '', 12)
+        self.set_text_color(0, 0, 0)
 
     def insert_data_section(self, text):
         """
@@ -1359,7 +1380,7 @@ class PDFReport(FPDF,HTMLMixin):
         self.set_text_color(255, 255, 255)    # Texto blanco para el título
         self.set_font('Helvetica', 'B', 12)
         self.set_x(15)  # Ajustar según margen izquierdo
-        self.cell(self.w - 30, 10, 'Datos generados por el modelo', align='C', fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.cell(self.w - 30, 10, 'Datos generados por el modelo', align='C', fill=True, new_x='LMARGIN', new_y='NEXT')
         self.ln(5)
         # Resetear colores para el contenido
         self.set_fill_color(255, 255, 255)    # Fondo blanco
@@ -1367,13 +1388,24 @@ class PDFReport(FPDF,HTMLMixin):
         self.set_font('Helvetica', '', 12)
         # Renderizar el contenido con write_html
         text = clean_text(text)
-        html = markdown.markdown(text)
+        html = markdown.markdown(text, extensions=['nl2br'])
+        # Añadir CSS personalizado
+        html = """
+        <style>
+        p {
+            text-align: justify;
+            text-indent: 20pt;
+        }
+        </style>
+        """ + html
         try:
-            self.set_text_color(0, 0, 0)  # Reafirmar color negro antes de escribir
             self.write_html(html)
         except Exception as e:
-            st.write(f"Error al procesar el HTML: {e}")
+            print(f"Error al procesar el HTML: {e}")
         self.ln()
+        # Resetear fuente después de la sección
+        self.set_font('Helvetica', '', 12)
+        self.set_text_color(0, 0, 0)
 
     def insert_image(self, image_path):
         """
@@ -1384,8 +1416,11 @@ class PDFReport(FPDF,HTMLMixin):
             self.ln()
         else:
             self.set_font('Helvetica', 'I', 12)
-            self.cell(0, 10, 'Imagen no encontrada', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.cell(0, 10, 'Imagen no encontrada', align='C', new_x='LMARGIN', new_y='NEXT')
             self.ln()
+        # Resetear fuente después de la imagen
+        self.set_font('Helvetica', '', 12)
+        self.set_text_color(0, 0, 0)
 
     def resultados_recomendaciones(self, text):
         """
