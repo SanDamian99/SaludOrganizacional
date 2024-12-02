@@ -14,6 +14,14 @@ import io
 import base64
 import os
 from fpdf.enums import XPos, YPos
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                Image, PageBreak)
+from reportlab.lib.units import mm
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+from bs4 import BeautifulSoup
 
 # Importar la librería de Gemini
 import google.generativeai as genai
@@ -1159,10 +1167,219 @@ def main():
             # Reiniciar la aplicación
             st.rerun()
 
-def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
-    pdf = PDFReport()
+# Clase PDFReport utilizando ReportLab
+class PDFReport:
+    def __init__(self, filename):
+        self.filename = filename
+        self.elements = []
+        self.styles = getSampleStyleSheet()
+        self.doc = SimpleDocTemplate(
+            self.filename,
+            pagesize=A4,
+            rightMargin=15*mm,
+            leftMargin=15*mm,
+            topMargin=50*mm,
+            bottomMargin=20*mm
+        )
+        # Estilos personalizados
+        self.styles.add(ParagraphStyle(
+            name='Title',
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            leading=16,
+            spaceAfter=12,
+            textColor=colors.black
+        ))
+        self.styles.add(ParagraphStyle(
+            name='BodyText',
+            fontName='Helvetica',
+            fontSize=12,
+            leading=14,
+            alignment=TA_JUSTIFY,
+            leftIndent=20,
+            rightIndent=20,
+            spaceAfter=12,
+            textColor=colors.black
+        ))
+        self.styles.add(ParagraphStyle(
+            name='DataSectionTitle',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            leading=14,
+            textColor=colors.white,
+            backColor=colors.purple,
+            alignment=TA_CENTER,
+            spaceAfter=12
+        ))
+        self.styles.add(ParagraphStyle(
+            name='Italic',
+            fontName='Helvetica-Oblique',
+            fontSize=12,
+            leading=14,
+            textColor=colors.black
+        ))
+        self.styles.add(ParagraphStyle(
+            name='Footer',
+            fontName='Helvetica',
+            fontSize=8,
+            leading=10,
+            textColor=colors.white
+        ))
+        self.styles.add(ParagraphStyle(
+            name='Heading',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            leading=14,
+            spaceAfter=12,
+            textColor=colors.black
+        ))
 
-    # Extract relevant variables
+    def header(self, canvas, doc):
+        """
+        Encabezado del documento: una imagen que cubre toda la parte superior.
+        """
+        canvas.saveState()
+        header_image = 'ruta_de_tu_imagen_de_encabezado.png'  # Reemplaza con la ruta de tu imagen
+        if os.path.isfile(header_image):
+            canvas.drawImage(header_image, 0, A4[1]-40*mm, width=A4[0], height=40*mm)
+        else:
+            canvas.setFont('Helvetica-Bold', 16)
+            header_text = 'Informe de Análisis de Datos'
+            header_text = clean_text(header_text)
+            canvas.drawCentredString(A4[0]/2.0, A4[1]-30*mm, header_text)
+        canvas.restoreState()
+
+    def footer(self, canvas, doc):
+        """
+        Pie de página: fondo negro que abarca todo el ancho, texto blanco con número de página.
+        """
+        canvas.saveState()
+        canvas.setFillColor(colors.black)
+        canvas.rect(0, 0, A4[0], 15*mm, fill=1)
+        footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
+        canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(15*mm, 5*mm, clean_text(footer_text))
+        page_number_text = f'Página {doc.page}'
+        canvas.drawRightString(A4[0]-15*mm, 5*mm, page_number_text)
+        canvas.restoreState()
+
+    def header_footer(self, canvas, doc):
+        self.header(canvas, doc)
+        self.footer(canvas, doc)
+
+    def chapter_title(self, text):
+        """
+        Añade un título de capítulo al documento.
+        """
+        text = clean_text(text)
+        paragraph = Paragraph(text, self.styles['Title'])
+        self.elements.append(paragraph)
+
+    def chapter_body(self, text):
+        """
+        Añade el cuerpo de texto de un capítulo, manejando el formato Markdown.
+        """
+        text = clean_text(text)
+        # Convertir Markdown a HTML
+        html = markdown.markdown(text)
+        # Parsear el HTML y convertir a párrafos
+        soup = BeautifulSoup(html, 'html.parser')
+        for element in soup.descendants:
+            if element.name == 'p':
+                paragraph = Paragraph(element.text, self.styles['BodyText'])
+                self.elements.append(paragraph)
+            elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                heading = Paragraph(element.text, self.styles['Heading'])
+                self.elements.append(heading)
+            elif element.name == 'ul':
+                for li in element.find_all('li'):
+                    bullet = u'\u2022 ' + li.text
+                    paragraph = Paragraph(bullet, self.styles['BodyText'])
+                    self.elements.append(paragraph)
+            # Agrega más casos según sea necesario para otros elementos HTML
+        self.elements.append(Spacer(1, 12))
+
+    def insert_data_section(self, text):
+        """
+        Inserta una sección titulada 'Datos generados por el modelo' con un fondo morado.
+        """
+        title = Paragraph('Datos generados por el modelo', self.styles['DataSectionTitle'])
+        self.elements.append(title)
+        text = clean_text(text)
+        html = markdown.markdown(text)
+        soup = BeautifulSoup(html, 'html.parser')
+        for element in soup.descendants:
+            if element.name == 'p':
+                paragraph = Paragraph(element.text, self.styles['BodyText'])
+                self.elements.append(paragraph)
+        self.elements.append(Spacer(1, 12))
+
+    def insert_image(self, image_path):
+        """
+        Inserta una imagen en el PDF.
+        """
+        if os.path.isfile(image_path):
+            img = Image(image_path, width=180*mm)
+            self.elements.append(img)
+            self.elements.append(Spacer(1, 12))
+        else:
+            self.elements.append(Paragraph('Imagen no encontrada', self.styles['Italic']))
+            self.elements.append(Spacer(1, 12))
+
+    def resultados_recomendaciones(self, text):
+        """
+        Añade una sección de 'Resultados y Recomendaciones'.
+        """
+        self.chapter_title('Resultados y Recomendaciones')
+        self.chapter_body(text)
+
+    def build_pdf(self):
+        self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+
+def break_long_words(text, max_length=50):
+    """
+    Inserta guiones en palabras que excedan el máximo permitido para evitar errores de renderizado.
+    """
+    words = text.split()
+    new_words = []
+    for word in words:
+        while len(word) > max_length:
+            new_words.append(word[:max_length-1] + '-')
+            word = word[max_length-1:]
+        new_words.append(word)
+    return ' '.join(new_words)
+
+def clean_text(text):
+    """
+    Reemplaza caracteres no soportados y limpia el texto.
+    """
+    # Diccionario de reemplazos para caracteres no soportados
+    replacements = {
+        '≈': 'aprox.',
+        '≤': '<=',
+        '≥': '>=',
+        '≠': '!=',
+        '√': 'raíz',
+        '∞': 'infinito',
+        'π': 'pi',
+        '∑': 'sumatoria',
+        '∆': 'delta',
+        '∫': 'integral',
+        # Agrega más reemplazos según sea necesario
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+    # Eliminar caracteres no soportados
+    text = text.encode('latin-1', 'ignore').decode('latin-1')
+    # Insertar guiones en palabras largas
+    text = break_long_words(text, max_length=50)
+    return text
+
+def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
+    pdf = PDFReport('informe_analisis_datos.pdf')
+
+    # Extraer variables relevantes
     variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'todas')
     data_dictionary_relevante = {}
     for categoria, variables in data_dictionary.items():
@@ -1181,7 +1398,7 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
 
     "{pregunta_usuario}"
 
-    Y el método de análisis correspondiente a la opción {opcion_analisis}, recuerda que estan eran las opciones: {opciones_analisis}. 
+    Y el método de análisis correspondiente a la opción {opcion_analisis}, recuerda que estas eran las opciones: {opciones_analisis}. 
     
     Por favor genera una introducción que explique la relevancia de la pregunta y el método utilizado para analizar la información de la base de datos.
 
@@ -1189,7 +1406,7 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
 
     {data_dictionary_relevante}
 
-    Por favor, utiliza esta información para contextualizar y explicar el planteamiento del analisi, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
+    Por favor, utiliza esta información para contextualizar y explicar el planteamiento del análisis, asegurándote de interpretar adecuadamente los valores de las variables según su significado.
     """
     
     introduccion = enviar_prompt(prompt_introduccion)
@@ -1203,10 +1420,10 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
         img_path = f'figura_{idx}.png'
         fig.savefig(img_path)
         pdf.insert_image(img_path)
+        # Opcional: eliminar la imagen temporal
+        # os.remove(img_path)
 
     # Conclusiones y Recomendaciones
-    pdf.chapter_title('Conclusiones y Recomendaciones')
-    # Generar el texto de conclusiones usando Gemini
     prompt_conclusiones = f"""
     Basándote en los resultados obtenidos:
 
@@ -1227,207 +1444,14 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     Responde desde la perspectiva de la psicología organizacional y la psicología de la salud, y asegúrate de que la interpretación de los resultados y las recomendaciones respondan a la pregunta planteada.
     """
     conclusiones = enviar_prompt(prompt_conclusiones)
-    pdf.chapter_body(conclusiones)
+    pdf.resultados_recomendaciones(conclusiones)
 
     # Guardar el informe en PDF
-    nombre_informe = 'informe_analisis_datos.pdf'
     try:
-        pdf.output(nombre_informe)
-        st.write(f"Informe generado y guardado como {nombre_informe}")
+        pdf.build_pdf()
+        st.write(f"Informe generado y guardado como {pdf.filename}")
     except Exception as e:
         st.write(f"Error al generar el PDF: {e}")
-
-def break_long_words(text, max_length=50):
-    """
-    Inserta guiones en palabras que excedan el máximo permitido para evitar errores de FPDF.
-    """
-    words = text.split()
-    new_words = []
-    for word in words:
-        while len(word) > max_length:
-            new_words.append(word[:max_length-1] + '-')
-            word = word[max_length-1:]
-        new_words.append(word)
-    return ' '.join(new_words)
-
-def clean_text(text):
-    """
-    Reemplaza caracteres no soportados por Latin-1 y limpia el texto.
-    """
-    # Diccionario de reemplazos para caracteres no soportados
-    replacements = {
-        '≈': 'aprox.',   # Reemplazar con 'aprox.'
-        '≤': '<=',        # Reemplazar con '<='
-        '≥': '>=',        # Reemplazar con '>='
-        '≠': '!=',        # Reemplazar con '!='
-        '√': 'raíz',      # Reemplazar con 'raíz'
-        '∞': 'infinito',  # Reemplazar con 'infinito'
-        'π': 'pi',        # Reemplazar con 'pi'
-        '∑': 'sumatoria', # Reemplazar con 'sumatoria'
-        '∆': 'delta',     # Reemplazar con 'delta'
-        '∫': 'integral',  # Reemplazar con 'integral'
-        # Agrega más reemplazos según sea necesario
-    }
-    for char, replacement in replacements.items():
-        text = text.replace(char, replacement)
-    # Eliminar caracteres no soportados
-    text = text.encode('latin-1', 'ignore').decode('latin-1')
-    # Insertar guiones en palabras largas
-    text = break_long_words(text, max_length=50)
-    return text
-
-class PDFReport(FPDF, HTMLMixin):
-    def __init__(self):
-        super().__init__()
-        # Definir márgenes
-        self.set_left_margin(15)
-        self.set_right_margin(15)
-        self.set_auto_page_break(auto=True, margin=15)
-        self.add_page()
-        # Fuente predeterminada
-        self.set_font('Helvetica', '', 12)
-
-    def header(self):
-        """
-        Encabezado del documento: una imagen que cubre toda la parte superior.
-        """
-        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'  
-        if os.path.isfile(header_image):
-            # Insertar imagen, x=0, y=0, width=self.w, height=40
-            self.image(header_image, x=0, y=0, w=self.w, h=40)
-        else:
-            self.set_font('Helvetica', 'B', 16)
-            header_text = 'Informe de Análisis de Datos'
-            header_text = clean_text(header_text)
-            # Agregar el texto centrado
-            self.cell(0, 10, header_text, align='C', new_x='LMARGIN', new_y='NEXT')
-        # Posicionar el cursor debajo de la imagen o texto
-        self.set_y(45)
-
-    def footer(self):
-        """
-        Pie de página: fondo negro que abarca todo el ancho, texto blanco con número de página.
-        """
-        # Posicionar el cursor 15 mm desde el final
-        self.set_y(-15)
-        # Establecer colores y fuente
-        self.set_fill_color(0, 0, 0)          # Fondo negro
-        self.set_text_color(255, 255, 255)    # Texto blanco
-        self.set_font('Helvetica', '', 8)
-        # Dibujar el rectángulo del footer que abarca todo el ancho
-        self.rect(0, self.h - 15, self.w, 15, 'F')
-        # Agregar el texto con padding a la izquierda
-        footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
-        self.set_xy(15, self.h - 13)         # Ajustar posición dentro del footer
-        self.multi_cell((self.w - 30) / 2, 5, clean_text(footer_text), border=0, align='L', fill=False)
-        # Agregar número de página a la derecha
-        page_number = f'Página {self.page_no()}'
-        self.set_xy(self.w - 15 - 20, self.h - 13)  # Ajustar posición para el número de página
-        self.multi_cell((self.w - 30) / 2, 5, page_number, border=0, align='R', fill=False)
-        # Resetear colores de texto
-        self.set_text_color(0, 0, 0)
-
-    def chapter_title(self, label):
-        """
-        Título de cada sección con estilo controlado.
-        """
-        self.set_font('Helvetica', 'B', 14)
-        self.set_text_color(0, 0, 0)  # Asegurar que el título sea negro
-        label = clean_text(label)
-        self.multi_cell(0, 10, label, new_x='LMARGIN', new_y='NEXT')
-        self.ln(5)
-        # Resetear fuente después del título
-        self.set_font('Helvetica', '', 12)
-        self.set_text_color(0, 0, 0)
-
-    def chapter_body(self, text):
-        """
-        Cuerpo de texto de cada sección, interpretando Markdown con manejo mejorado.
-        """
-        text = clean_text(text)
-        # Convertir Markdown a HTML con saltos de línea
-        html = markdown.markdown(text, extensions=['nl2br'])
-        # Añadir CSS personalizado para controlar el estilo
-        html = """
-        <style>
-        h1, h2, h3, h4, h5, h6 {
-            color: black;
-            font-size: 14pt;
-            font-weight: bold;
-        }
-        p {
-            text-align: justify;
-            text-indent: 20pt;
-        }
-        </style>
-        """ + html
-        # Usar write_html para renderizar el HTML
-        try:
-            self.write_html(html)
-        except Exception as e:
-            print(f"Error al procesar el HTML: {e}")
-        self.ln()
-        # Resetear fuente después del cuerpo
-        self.set_font('Helvetica', '', 12)
-        self.set_text_color(0, 0, 0)
-
-    def insert_data_section(self, text):
-        """
-        Sección con fondo morado titulada "Datos generados por el modelo".
-        """
-        # Título con fondo morado
-        self.set_fill_color(128, 0, 128)      # Fondo morado
-        self.set_text_color(255, 255, 255)    # Texto blanco para el título
-        self.set_font('Helvetica', 'B', 12)
-        self.set_x(15)  # Ajustar según margen izquierdo
-        self.cell(self.w - 30, 10, 'Datos generados por el modelo', align='C', fill=True, new_x='LMARGIN', new_y='NEXT')
-        self.ln(5)
-        # Resetear colores para el contenido
-        self.set_fill_color(255, 255, 255)    # Fondo blanco
-        self.set_text_color(0, 0, 0)          # Texto negro
-        self.set_font('Helvetica', '', 12)
-        # Renderizar el contenido con write_html
-        text = clean_text(text)
-        html = markdown.markdown(text, extensions=['nl2br'])
-        # Añadir CSS personalizado
-        html = """
-        <style>
-        p {
-            text-align: justify;
-            text-indent: 20pt;
-        }
-        </style>
-        """ + html
-        try:
-            self.write_html(html)
-        except Exception as e:
-            print(f"Error al procesar el HTML: {e}")
-        self.ln()
-        # Resetear fuente después de la sección
-        self.set_font('Helvetica', '', 12)
-        self.set_text_color(0, 0, 0)
-
-    def insert_image(self, image_path):
-        """
-        Insertar una imagen en el PDF.
-        """
-        if os.path.isfile(image_path):
-            self.image(image_path, w=180)
-            self.ln()
-        else:
-            self.set_font('Helvetica', 'I', 12)
-            self.cell(0, 10, 'Imagen no encontrada', align='C', new_x='LMARGIN', new_y='NEXT')
-            self.ln()
-        # Resetear fuente después de la imagen
-        self.set_font('Helvetica', '', 12)
-        self.set_text_color(0, 0, 0)
-
-    def resultados_recomendaciones(self, text):
-        """
-        Sección "Resultados y recomendaciones".
-        """
-        self.chapter_title('Resultados y recomendaciones')
-        self.chapter_body(text)
         
 if __name__ == "__main__":
     main()
