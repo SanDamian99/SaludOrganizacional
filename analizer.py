@@ -1170,7 +1170,7 @@ class PDFReport:
         Encabezado del documento: una imagen que cubre toda la parte superior.
         """
         canvas.saveState()
-        header_image = 'ruta_de_tu_imagen_de_encabezado.png'  # Reemplaza con la ruta de tu imagen
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'  
         if os.path.isfile(header_image):
             canvas.drawImage(header_image, 0, A4[1]-40*mm, width=A4[0], height=40*mm)
         else:
