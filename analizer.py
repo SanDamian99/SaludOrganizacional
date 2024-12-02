@@ -1098,75 +1098,6 @@ Por favor, realiza tu pregunta teniendo en cuenta las variables y dimensiones di
     """
     st.markdown(resumen)
 
-# Función principal
-def main():
-    st.title("Aplicación de Análisis de Datos sobre Salud Organizacional")
-
-    mostrar_resumen_base_datos()
-
-    # Inicializar o restablecer los valores en st.session_state
-    if 'pregunta_usuario' not in st.session_state:
-        st.session_state['pregunta_usuario'] = ''
-    if 'filtro_natural' not in st.session_state:
-        st.session_state['filtro_natural'] = ''
-    if 'analisis_realizado' not in st.session_state:
-        st.session_state['analisis_realizado'] = False
-
-    if not st.session_state['analisis_realizado']:
-        st.write("Por favor, ingresa tu pregunta y opcionalmente aplica filtros.")
-
-        st.session_state['pregunta_usuario'] = st.text_input("Ingresa tu pregunta:", value=st.session_state['pregunta_usuario'])
-        st.session_state['filtro_natural'] = st.text_input("Si deseas aplicar filtros, por favor descríbelos (opcional):", value=st.session_state['filtro_natural'])
-
-        if st.button("Realizar Análisis"):
-            if st.session_state['pregunta_usuario'].strip() == '':
-                st.warning("Por favor, ingresa una pregunta para realizar el análisis.")
-            else:
-                with st.spinner('Procesando...'):
-                    filtros_usuario = procesar_filtros(st.session_state['filtro_natural'])
-                    if filtros_usuario:
-                        st.write(f"El filtro aplicado es: {filtros_usuario}")
-                    else:
-                        st.write("No se aplicará ningún filtro.")
-                    respuesta = procesar_pregunta(st.session_state['pregunta_usuario'])
-                    st.write(f"Gemini sugiere la opción de análisis: {respuesta}")
-                    resultados, figuras = realizar_analisis(respuesta, st.session_state['pregunta_usuario'], filtros_usuario)
-                    st.write("**Resultados del análisis:**")
-                    st.write(resultados)
-                    # Las figuras ya se muestran en la función realizar_analisis con st.pyplot()
-                    # Generar el informe
-                    generar_informe(st.session_state['pregunta_usuario'], respuesta, resultados, figuras)
-                    # Proporcionar un enlace de descarga para el informe PDF
-                    with open('informe_analisis_datos.pdf', 'rb') as f:
-                        pdf_data = f.read()
-                    b64 = base64.b64encode(pdf_data).decode('utf-8')
-                    href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_analisis_datos.pdf">Descargar Informe en PDF</a>'
-                    st.markdown(href, unsafe_allow_html=True)
-
-                    # Marcar que el análisis ha sido realizado
-                    st.session_state['analisis_realizado'] = True
-
-                    st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
-                    # Mostrar botón para realizar otra consulta
-                    if st.button("Realizar otra consulta"):
-                        # Reiniciar los valores en st.session_state
-                        st.session_state['pregunta_usuario'] = ''
-                        st.session_state['filtro_natural'] = ''
-                        st.session_state['analisis_realizado'] = False
-                        # Reiniciar la aplicación
-                        st.rerun()
-
-    else:
-        st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
-        # Mostrar botón para realizar otra consulta
-        if st.button("Realizar otra consulta"):
-            # Reiniciar los valores en st.session_state
-            st.session_state['pregunta_usuario'] = ''
-            st.session_state['filtro_natural'] = ''
-            st.session_state['analisis_realizado'] = False
-            # Reiniciar la aplicación
-            st.rerun()
-
 # Clase PDFReport utilizando ReportLab
 class PDFReport:
     def __init__(self, filename):
@@ -1452,6 +1383,75 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
         st.write(f"Informe generado y guardado como {pdf.filename}")
     except Exception as e:
         st.write(f"Error al generar el PDF: {e}")
+
+# Función principal
+def main():
+    st.title("Aplicación de Análisis de Datos sobre Salud Organizacional")
+
+    mostrar_resumen_base_datos()
+
+    # Inicializar o restablecer los valores en st.session_state
+    if 'pregunta_usuario' not in st.session_state:
+        st.session_state['pregunta_usuario'] = ''
+    if 'filtro_natural' not in st.session_state:
+        st.session_state['filtro_natural'] = ''
+    if 'analisis_realizado' not in st.session_state:
+        st.session_state['analisis_realizado'] = False
+
+    if not st.session_state['analisis_realizado']:
+        st.write("Por favor, ingresa tu pregunta y opcionalmente aplica filtros.")
+
+        st.session_state['pregunta_usuario'] = st.text_input("Ingresa tu pregunta:", value=st.session_state['pregunta_usuario'])
+        st.session_state['filtro_natural'] = st.text_input("Si deseas aplicar filtros, por favor descríbelos (opcional):", value=st.session_state['filtro_natural'])
+
+        if st.button("Realizar Análisis"):
+            if st.session_state['pregunta_usuario'].strip() == '':
+                st.warning("Por favor, ingresa una pregunta para realizar el análisis.")
+            else:
+                with st.spinner('Procesando...'):
+                    filtros_usuario = procesar_filtros(st.session_state['filtro_natural'])
+                    if filtros_usuario:
+                        st.write(f"El filtro aplicado es: {filtros_usuario}")
+                    else:
+                        st.write("No se aplicará ningún filtro.")
+                    respuesta = procesar_pregunta(st.session_state['pregunta_usuario'])
+                    st.write(f"Gemini sugiere la opción de análisis: {respuesta}")
+                    resultados, figuras = realizar_analisis(respuesta, st.session_state['pregunta_usuario'], filtros_usuario)
+                    st.write("**Resultados del análisis:**")
+                    st.write(resultados)
+                    # Las figuras ya se muestran en la función realizar_analisis con st.pyplot()
+                    # Generar el informe
+                    generar_informe(st.session_state['pregunta_usuario'], respuesta, resultados, figuras)
+                    # Proporcionar un enlace de descarga para el informe PDF
+                    with open('informe_analisis_datos.pdf', 'rb') as f:
+                        pdf_data = f.read()
+                    b64 = base64.b64encode(pdf_data).decode('utf-8')
+                    href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_analisis_datos.pdf">Descargar Informe en PDF</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+
+                    # Marcar que el análisis ha sido realizado
+                    st.session_state['analisis_realizado'] = True
+
+                    st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
+                    # Mostrar botón para realizar otra consulta
+                    if st.button("Realizar otra consulta"):
+                        # Reiniciar los valores en st.session_state
+                        st.session_state['pregunta_usuario'] = ''
+                        st.session_state['filtro_natural'] = ''
+                        st.session_state['analisis_realizado'] = False
+                        # Reiniciar la aplicación
+                        st.experimental_rerun()
+
+    else:
+        st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
+        # Mostrar botón para realizar otra consulta
+        if st.button("Realizar otra consulta"):
+            # Reiniciar los valores en st.session_state
+            st.session_state['pregunta_usuario'] = ''
+            st.session_state['filtro_natural'] = ''
+            st.session_state['analisis_realizado'] = False
+            # Reiniciar la aplicación
+            st.experimental_rerun()
         
 if __name__ == "__main__":
     main()
