@@ -1114,7 +1114,7 @@ class PDFReport:
         )
         # Estilos personalizados
         self.styles.add(ParagraphStyle(
-            name='Title',
+            name='CustomTitle',  # Cambiado a 'CustomTitle'
             fontName='Helvetica-Bold',
             fontSize=14,
             leading=16,
@@ -1122,7 +1122,7 @@ class PDFReport:
             textColor=colors.black
         ))
         self.styles.add(ParagraphStyle(
-            name='BodyText',
+            name='CustomBodyText',  # Cambiado a 'CustomBodyText'
             fontName='Helvetica',
             fontSize=12,
             leading=14,
@@ -1143,7 +1143,7 @@ class PDFReport:
             spaceAfter=12
         ))
         self.styles.add(ParagraphStyle(
-            name='Italic',
+            name='CustomItalic',  # Cambiado a 'CustomItalic'
             fontName='Helvetica-Oblique',
             fontSize=12,
             leading=14,
@@ -1204,7 +1204,7 @@ class PDFReport:
         Añade un título de capítulo al documento.
         """
         text = clean_text(text)
-        paragraph = Paragraph(text, self.styles['Title'])
+        paragraph = Paragraph(text, self.styles['CustomTitle'])  # Usar 'CustomTitle'
         self.elements.append(paragraph)
 
     def chapter_body(self, text):
@@ -1218,7 +1218,7 @@ class PDFReport:
         soup = BeautifulSoup(html, 'html.parser')
         for element in soup.descendants:
             if element.name == 'p':
-                paragraph = Paragraph(element.text, self.styles['BodyText'])
+                paragraph = Paragraph(element.text, self.styles['CustomBodyText'])  # Usar 'CustomBodyText'
                 self.elements.append(paragraph)
             elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
                 heading = Paragraph(element.text, self.styles['Heading'])
@@ -1226,8 +1226,9 @@ class PDFReport:
             elif element.name == 'ul':
                 for li in element.find_all('li'):
                     bullet = u'\u2022 ' + li.text
-                    paragraph = Paragraph(bullet, self.styles['BodyText'])
+                    paragraph = Paragraph(bullet, self.styles['CustomBodyText'])  # Usar 'CustomBodyText'
                     self.elements.append(paragraph)
+                self.elements.append(Spacer(1, 12))
             # Agrega más casos según sea necesario para otros elementos HTML
         self.elements.append(Spacer(1, 12))
 
@@ -1242,7 +1243,7 @@ class PDFReport:
         soup = BeautifulSoup(html, 'html.parser')
         for element in soup.descendants:
             if element.name == 'p':
-                paragraph = Paragraph(element.text, self.styles['BodyText'])
+                paragraph = Paragraph(element.text, self.styles['CustomBodyText'])  # Usar 'CustomBodyText'
                 self.elements.append(paragraph)
         self.elements.append(Spacer(1, 12))
 
@@ -1255,7 +1256,7 @@ class PDFReport:
             self.elements.append(img)
             self.elements.append(Spacer(1, 12))
         else:
-            self.elements.append(Paragraph('Imagen no encontrada', self.styles['Italic']))
+            self.elements.append(Paragraph('Imagen no encontrada', self.styles['CustomItalic']))  # Usar 'CustomItalic'
             self.elements.append(Spacer(1, 12))
 
     def resultados_recomendaciones(self, text):
