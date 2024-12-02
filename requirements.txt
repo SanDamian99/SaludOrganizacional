@@ -6,3 +6,5 @@ fpdf2
 scikit-learn
 openpyxl
 markdown
+reportlab
+beautifulsoup4
