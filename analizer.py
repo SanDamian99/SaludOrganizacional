@@ -1452,7 +1452,7 @@ def main():
             st.session_state['filtro_natural'] = ''
             st.session_state['analisis_realizado'] = False
             # Reiniciar la aplicación
-            st.experimental_rerun()
+            st.rerun()
         
 if __name__ == "__main__":
     main()
