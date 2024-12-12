@@ -1560,7 +1560,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     if df_filtrado.empty:
         return "No se encontraron datos en el rango de fechas especificado.", []
     
-    # Convertir todo a valores numéricos según la escala fija
+    # Convertir todo a valores numéricos según la escala fija para las dimensiones
     df_num = df_filtrado.copy()
     for col in df_num.columns:
         if df_num[col].dtype == object:
@@ -1571,7 +1571,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     # Riesgo: <=3
     # Intermedio: 3<valor<5
 
-    # Calcular promedios por dimensión (ejemplo: se asume un dict `dimensiones` ya definido)
+    # Calcular promedios por dimensión
     resultados = {}
     for dim, vars_dim in dimensiones.items():
         vars_exist = [v for v in vars_dim if v in df_num.columns]
@@ -1606,17 +1606,144 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     """
     conclusiones = enviar_prompt(prompt_conclusiones)
 
-    # Generar figura con los resultados
     figuras = []
-    if resultados:
-        fig, ax = plt.subplots(figsize=(10,6))
-        dims = list(resultados.keys())
-        vals = list(resultados.values())
-        sns.barplot(x=vals, y=dims, ax=ax, palette='Blues_r')
-        ax.set_xlabel('Promedio')
-        ax.set_title('Promedio por Dimensión')
+
+    # Función para determinar estado de la dimensión
+    def estado_dimension(valor):
+        if valor >= 5:
+            return 'Fortaleza', 'green'
+        elif valor <= 3:
+            return 'Riesgo', 'red'
+        else:
+            return 'Intermedio', 'yellow'
+
+    # Graficas tipo semáforo para cada dimensión
+    for dim, val in resultados.items():
+        estado, color = estado_dimension(val)
+        fig, ax = plt.subplots(figsize=(2, 1))
+        ax.set_facecolor(color)
+        ax.text(0.5, 0.5, f"{dim}\n{estado}\nProm: {val:.2f}", ha='center', va='center', fontsize=10, color='black')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlim(0,1)
+        ax.set_ylim(0,1)
         plt.tight_layout()
         figuras.append(fig)
+
+    # Para análisis por sexo, edad y hijos, necesitamos crear variables auxiliares
+    # Asegurar que 'Sexo', 'Edad' y 'Numero de hijos' existan en df_filtrado
+    df_cat = df_filtrado.copy()
+
+    # Convertir Edad a numérico si posible
+    if 'Edad' in df_cat.columns:
+        df_cat['Edad'] = pd.to_numeric(df_cat['Edad'], errors='coerce')
+
+    # Crear rangos de edad
+    # Ejemplo: <25, 25-34, 35-44, 45+
+    if 'Edad' in df_cat.columns:
+        bins = [0, 24, 34, 44, 200]
+        labels = ['<25', '25-34', '35-44', '45+']
+        df_cat['Rango_Edad'] = pd.cut(df_cat['Edad'], bins=bins, labels=labels, include_lowest=True)
+    else:
+        df_cat['Rango_Edad'] = 'SinDatoEdad'
+
+    # Crear variable Hijos (0/1)
+    if 'Numero de hijos' in df_cat.columns:
+        df_cat['Hijos'] = df_cat['Numero de hijos'].apply(lambda x: 0 if str(x).strip().lower()=='sin hijos' else 1)
+    else:
+        df_cat['Hijos'] = 0
+
+    # Necesitamos calcular promedios por dim en cada grupo
+    # Para eso, calculamos el promedio de cada dimensión según el subgrupo.
+    # Vamos a recalcular df_num pero manteniendo las columnas originales para groupby
+    df_mix = df_filtrado.copy()
+    for c in df_mix.columns:
+        if df_mix[c].dtype == object:
+            df_mix[c] = mapear_valores(df_mix[c])
+
+    # Añadimos las columnas auxiliares al df_mix
+    df_mix['Rango_Edad'] = df_cat['Rango_Edad']
+    df_mix['Hijos'] = df_cat['Hijos']
+    # 'Sexo' ya existe, asumimos está en df_mix, si no mapear tampoco es necesario
+
+    # Graficar cada dimensión por sexo, rango de edad, hijos
+    for dim, vars_dim in dimensiones.items():
+        vars_exist = [v for v in vars_dim if v in df_mix.columns]
+        if not vars_exist:
+            continue
+
+        # Agrupar por sexo
+        if 'Sexo' in df_mix.columns:
+            df_sexo = df_mix.groupby('Sexo')[vars_exist].mean().mean(axis=1)
+            if not df_sexo.empty:
+                fig_sex, ax_sex = plt.subplots(figsize=(4,4))
+                df_sexo.plot(kind='bar', color='lightblue', ax=ax_sex)
+                ax_sex.set_title(f"{dim} por Sexo (Promedio)")
+                ax_sex.set_xlabel('Sexo')
+                ax_sex.set_ylabel('Promedio')
+                plt.tight_layout()
+                figuras.append(fig_sex)
+
+        # Agrupar por rango de edad
+        if 'Rango_Edad' in df_mix.columns:
+            df_edad = df_mix.groupby('Rango_Edad')[vars_exist].mean().mean(axis=1)
+            if not df_edad.empty:
+                fig_edad, ax_edad = plt.subplots(figsize=(4,4))
+                df_edad.plot(kind='bar', color='lightgreen', ax=ax_edad)
+                ax_edad.set_title(f"{dim} por Rango de Edad (Promedio)")
+                ax_edad.set_xlabel('Rango de Edad')
+                ax_edad.set_ylabel('Promedio')
+                plt.tight_layout()
+                figuras.append(fig_edad)
+
+        # Agrupar por hijos
+        if 'Hijos' in df_mix.columns:
+            df_hijos = df_mix.groupby('Hijos')[vars_exist].mean().mean(axis=1)
+            if not df_hijos.empty:
+                fig_hijos, ax_hijos = plt.subplots(figsize=(4,4))
+                # Reemplazar 0/1 por etiquetas
+                df_hijos_index = df_hijos.rename(index={0:'Sin hijos',1:'Con hijos'})
+                df_hijos_index.plot(kind='bar', color='orange', ax=ax_hijos)
+                ax_hijos.set_title(f"{dim} por Hijos (Promedio)")
+                ax_hijos.set_xlabel('Hijos')
+                ax_hijos.set_ylabel('Promedio')
+                plt.tight_layout()
+                figuras.append(fig_hijos)
+
+    # Gráficas descriptivas para cada variable según su tipo
+    for col in df_filtrado.columns:
+        # Omitir columnas no relevantes
+        if col in ["ID", "Hora de inicio", "Hora de finalización", "Correo electrónico", "Nombre", "Column"]:
+            continue
+
+        if df_filtrado[col].dtype == object:
+            # Categórica
+            conteo = df_filtrado[col].value_counts()
+            if not conteo.empty:
+                fig_c, ax_c = plt.subplots(figsize=(6,4))
+                conteo.plot(kind='bar', ax=ax_c, color='skyblue')
+                ax_c.set_title(f'Distribución de {col}')
+                ax_c.set_xlabel(col)
+                ax_c.set_ylabel('Frecuencia')
+                plt.tight_layout()
+                figuras.append(fig_c)
+        else:
+            # Numérica
+            # Histograma
+            fig_h, ax_h = plt.subplots(figsize=(6,4))
+            df_filtrado[col].dropna().hist(bins=10, ax=ax_h, color='lightgreen')
+            ax_h.set_title(f'Histograma de {col}')
+            ax_h.set_xlabel(col)
+            ax_h.set_ylabel('Frecuencia')
+            plt.tight_layout()
+            figuras.append(fig_h)
+
+            # Boxplot
+            fig_b, ax_b = plt.subplots(figsize=(2,4))
+            df_filtrado[[col]].boxplot(ax=ax_b)
+            ax_b.set_title(f'Boxplot de {col}')
+            plt.tight_layout()
+            figuras.append(fig_b)
 
     # Crear texto del informe
     informe = []
@@ -1651,6 +1778,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     informe.append(conclusiones)
 
     informe_texto = "".join(informe)
+
     return informe_texto, figuras
 
 # Función principal
