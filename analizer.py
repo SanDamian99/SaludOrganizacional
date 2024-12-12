@@ -1658,8 +1658,8 @@ def main():
     mostrar_resumen_base_datos()
     
     # Campos para fecha
-    fecha_inicio = st.date_input("Fecha de inicio", datetime.date.today() - datetime.timedelta(days=30))
-    fecha_fin = st.date_input("Fecha de fin", datetime.date.today())
+    fecha_inicio = st.date_input("Fecha de inicio",date.today() - datetime.timedelta(days=30))
+    fecha_fin = st.date_input("Fecha de fin", date.today())
 
     # Botón para generar informe general
     if st.button("Generar Informe General"):
