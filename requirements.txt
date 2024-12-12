@@ -8,3 +8,4 @@ openpyxl
 markdown
 reportlab
 beautifulsoup4
+seaborn
