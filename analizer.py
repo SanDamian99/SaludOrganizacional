@@ -1398,16 +1398,6 @@ respuesta_map = {
 # Función para mapear valores
 def mapear_valores(serie):
     return serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
-
-# Función para generar informe general (sintetizado)
-def generar_informe_general(df, fecha_inicio, fecha_fin):
-    # Filtrar por rango de fechas usando 'Hora de inicio'
-    df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
-    df_filtrado = df[(df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) & (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))]
-
-    if df_filtrado.empty:
-        return "No se encontraron datos en el rango de fechas especificado.", []
-
 dimensiones = {
     "Control del Tiempo": [
         "Tengo la opción de decidir qué hago en mi trabajo.",
@@ -1557,6 +1547,15 @@ dimensiones = {
         "Frustración "
     ]
 }
+
+# Función para generar informe general (sintetizado)
+def generar_informe_general(df, fecha_inicio, fecha_fin):
+    # Filtrar por rango de fechas usando 'Hora de inicio'
+    df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
+    df_filtrado = df[(df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) & (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))]
+
+    if df_filtrado.empty:
+        return "No se encontraron datos en el rango de fechas especificado.", []
     
     # Convertir todo a valores numéricos según la escala fija
     df_num = df_filtrado.copy()
