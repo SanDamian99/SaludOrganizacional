@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import time
 import random
+import seaborn as sns
 from datetime import datetime
 from datetime import date, timedelta
 from requests.exceptions import ConnectionError
