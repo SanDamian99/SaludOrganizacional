@@ -22,6 +22,7 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from bs4 import BeautifulSoup
+from datetime import date
 
 # Importar la librería de Gemini
 import google.generativeai as genai
