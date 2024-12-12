@@ -1385,12 +1385,303 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     except Exception as e:
         st.write(f"Error al generar el PDF: {e}")
 
+respuesta_map = {
+    "Nunca": 1,
+    "Rara vez": 2,
+    "Alguna vez": 3,
+    "Algunas veces": 4,
+    "A menudo": 5,
+    "Frecuentemente": 6,
+    "Siempre": 7
+}
+
+# Función para mapear valores
+def mapear_valores(serie):
+    return serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
+
+# Función para generar informe general (sintetizado)
+def generar_informe_general(df, fecha_inicio, fecha_fin):
+    # Filtrar por rango de fechas usando 'Hora de inicio'
+    df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
+    df_filtrado = df[(df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) & (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))]
+
+    if df_filtrado.empty:
+        return "No se encontraron datos en el rango de fechas especificado.", []
+
+dimensiones = {
+    "Control del Tiempo": [
+        "Tengo la opción de decidir qué hago en mi trabajo.",
+        "Tengo   algo que decir sobre la forma en que hago mi trabajo.",
+        "Tengo   voz y voto sobre mi propio ritmo de trabajo.",
+        "Me   presionan para que trabaje muchas horas.",
+        "Tengo   algunos plazos de entrega inalcanzables.",
+        "Tengo   presiones de tiempo poco realistas.",
+        "Tengo   que descuidar algunas tareas porque tengo mucho que hacer."
+    ],
+    "Compromiso del Líder": [
+        "Puedo confiar en mi líder para que me ayude con un problema laboral.",
+        "Si el trabajo se pone difícil, mi líder me ayudará.",
+        "Recibo la ayuda y el apoyo que necesito de mi líder.",
+        "Mi líder está dispuesto a escuchar mis problemas relacionados con el trabajo.",
+        "Siento que mi líder valora mis contribuciones a esta organización.",
+        "Mi líder me da suficiente crédito por mi trabajo duro.",
+        "Mi líder me anima en mi trabajo con elogios y agradecimientos."
+    ],
+    "Apoyo del Grupo": [
+        "Si el trabajo se pone difícil, mis compañeros de trabajo me ayudarán.",
+        "Recibo la ayuda y el apoyo que necesito de mis compañeros de trabajo.",
+        "Mis compañeros de trabajo están dispuestos a escuchar mis problemas laborales."
+    ],
+    "Claridad de Rol": [
+        "Tengo claro lo que se espera de mí en el trabajo.",
+        "Sé cómo hacer mi trabajo.",
+        "Tengo claro cuáles son mis deberes y responsabilidades.",
+        "Entiendo cómo mi trabajo encaja en el objetivo general de la organización.",
+        "Diferentes grupos en el trabajo me exigen cosas que son difíciles de hacer al mismo tiempo.",
+        "Diferentes personas en el trabajo esperan de mí cosas contradictorias.",
+        "Recibo solicitudes incompatibles de dos o más personas."
+    ],
+    "Cambio Organizacional": [
+        "Me consultan sobre cambios propuestos en el trabajo.",
+        "Cuando se realizan cambios en el trabajo, tengo claro cómo funcionarán en la práctica.",
+        "Estoy claramente informado sobre la naturaleza de los cambios que se producen en esta organización.",
+        "Puedo expresar inquietudes sobre cambios que afectan mi trabajo."
+    ],
+    "Responsabilidad Organizacional": [
+        "En mi lugar de trabajo la salud física y mental es un prioridad de los líderes.",
+        "En mi lugar de trabajo se hacen mediciones periódicas de los niveles de salud mental de las personas.",
+        "En mi lugar de trabajo existen recursos accesibles y fáciles de usar para las necesidades relacionadas con la salud mental de las personas.",
+        "Recibo entrenamiento periódico sobre pautas para el cuidado de mi salud mental en el trabajo.",
+        "En mi lugar de trabajo se comunican claramente los resultados de las acciones implementadas para el cuidado de la salud mental de las personas."
+    ],
+    "Conflicto Familia-Trabajo": [
+        "Las   demandas de mi familia o cónyuge / pareja interfieren con las actividades   relacionadas con el trabajo.",
+        "Tengo   que posponer las tareas en el trabajo debido a las exigencias de mi tiempo en   casa.",
+        "Las   cosas que quiero hacer en el trabajo no se hacen debido a las demandas de mi   familia o mi cónyuge / pareja.",
+        "Mi vida   hogareña interfiere con mis responsabilidades en el trabajo, como llegar al   trabajo a tiempo, realizar las tareas diarias y trabajar.",
+        "La   tensión relacionada con la familia interfiere con mi capacidad para realizar   tareas relacionadas con el trabajo.",
+        "Las exigencias de mi trabajo interfieren con mi hogar y mi vida familiar.",
+        "La cantidad de tiempo que ocupa mi trabajo dificulta el cumplimiento de las responsabilidades familiares.",
+        "Las cosas que quiero hacer en casa no se hacen debido a las exigencias que me impone mi trabajo.",
+        "Mi trabajo produce tensión que dificulta el cumplimiento de los deberes familiares.",
+        "Debido a deberes relacionados con el trabajo, tengo que hacer cambios en mis planes para las actividades familiares."
+    ],
+    "Síntomas de Burnout": [
+        "En mi   trabajo, me siento agotado/a emocionalmente.",
+        "Al final   del día de trabajo, me resulta difícil recuperar mi energía.",
+        "Me   siento físicamente agotado/a en mi trabajo.",
+        "Me   cuesta encontrar entusiasmo por mi trabajo.",
+        "Siento   una fuerte aversión hacia mi trabajo.",
+        "Soy   cínico (despreocupado) sobre lo que mi trabajo significa para los demás.",
+        "Tengo   problemas para mantenerme enfocado en mi trabajo.",
+        "Cuando   estoy trabajando, tengo dificultades para concentrarme.",
+        "Cometo   errores en mi trabajo, porque tengo mi mente en otras cosas.",
+        "En mi   trabajo, me siento incapaz de controlar mis emociones.",
+        "No me   reconozco en la forma que reacciono en el trabajo.",
+        "Puedo   reaccionar exageradamente sin querer."
+    ],
+    "Compromiso": [
+        "Mi labor   contribuye a la misión y visión de la empresa para la que laboro.",
+        "Me   siento entusiasmado por mi trabajo.",
+        "Cuando   me levanto en la mañana tengo ganas de ir a trabajar."
+    ],
+    "Defensa de la Organización": [
+        "Me   siento orgulloso de la empresa en la que laboro.",
+        "Recomendaría   ampliamente a otros trabajar en la empresa en la que laboro.",
+        "Me   molesta que otros hablen mal de la empresa en la que laboro."
+    ],
+    "Satisfacción": [
+        "Considero   mi trabajo significativo.",
+        "Me gusta   hacer las tareas y actividades de mi trabajo.",
+        "Me   siento satisfecho por el salario y los beneficios que recibo en mi trabajo."
+    ],
+    "Intención de Retiro": [
+        "Me veo   trabajando en este lugar en el próximo año.",
+        "A menudo   considero seriamente dejar mi trabajo actual.",
+        "Tengo la   intención de dejar mi trabajo actual en los próximos 3 a 6 meses.",
+        "He   empezado a buscar activamente otro trabajo."
+    ],
+    "Bienestar Psicosocial (Escala de Afectos)": [
+        "Marque para cada uno de los pares de adjetivos dispuestos, el número que mejor se identifica.  \n",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+    ],
+    "Bienestar Psicosocial (Escala de Competencias)": [
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20"
+    ],
+    "Bienestar Psicosocial (Escala de Expectativas)": [
+        "Mi motivación por   el trabajo",
+        "Mi capacidad para   responder a mi cargo de trabajo ",
+        "Mi autoestima   profesional",
+        "Mi confianza en mi   futuro profesional",
+        "El sentido de mi   trabajo",
+        "Mi estado de ánimo   laboral ",
+        "Mi sensación de   seguridad en el trabajo",
+        "MI eficacia   profesional",
+        "Mi compromiso con   el trabajo",
+        "Mis competencias   profesionales"
+    ],
+    "Factores de Efectos Colaterales (Escala de Somatización)": [
+        "Trastornos   digestivos",
+        "Dolores de cabeza",
+        "Alteraciones de   sueño",
+        "Dolores de espalda",
+        "Tensiones   musculares"
+    ],
+    "Factores de Efectos Colaterales (Escala de Desgaste)": [
+        "Sobrecarga de   trabajo",
+        "Desgaste emocional",
+        "Agotamiento físico",
+        "Cansancio   mental "
+    ],
+    "Factores de Efectos Colaterales (Escala de Alienación)": [
+        "Mal humor ",
+        "Baja realización   personal",
+        "Trato distante",
+        "Frustración "
+    ]
+}
+    
+    # Convertir todo a valores numéricos según la escala fija
+    df_num = df_filtrado.copy()
+    for col in df_num.columns:
+        if df_num[col].dtype == object:
+            df_num[col] = mapear_valores(df_num[col])
+
+    # Definir umbrales:
+    # Fortaleza: >=5
+    # Riesgo: <=3
+    # Intermedio: 3<valor<5
+
+    # Calcular promedios por dimensión (ejemplo: se asume un dict `dimensiones` ya definido)
+    resultados = {}
+    for dim, vars_dim in dimensiones.items():
+        vars_exist = [v for v in vars_dim if v in df_num.columns]
+        if vars_exist:
+            prom = df_num[vars_exist].mean(skipna=True, numeric_only=True).mean()
+            resultados[dim] = prom
+
+    fortalezas = [(d,v) for d,v in resultados.items() if v >=5]
+    riesgos = [(d,v) for d,v in resultados.items() if v <=3]
+    intermedios = [(d,v) for d,v in resultados.items() if v>3 and v<5]
+
+    # Crear un resumen ejecutivo con Gemini
+    prompt_resumen = f"""
+    Estas son las dimensiones y sus promedios:
+    Fortalezas: {fortalezas}
+    Riesgos: {riesgos}
+    Intermedios: {intermedios}
+
+    Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
+    ofreciendo una visión general de la situación y recomendaciones generales.
+    """
+    resumen_ejecutivo = enviar_prompt(prompt_resumen)
+
+    prompt_conclusiones = f"""
+    Basándote en los resultados:
+    Fortalezas: {fortalezas}
+    Riesgos: {riesgos}
+    Intermedios: {intermedios}
+
+    Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
+    desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
+    """
+    conclusiones = enviar_prompt(prompt_conclusiones)
+
+    # Generar figura con los resultados
+    figuras = []
+    if resultados:
+        fig, ax = plt.subplots(figsize=(10,6))
+        dims = list(resultados.keys())
+        vals = list(resultados.values())
+        sns.barplot(x=vals, y=dims, ax=ax, palette='Blues_r')
+        ax.set_xlabel('Promedio')
+        ax.set_title('Promedio por Dimensión')
+        plt.tight_layout()
+        figuras.append(fig)
+
+    # Crear texto del informe
+    informe = []
+    informe.append("Este informe presenta un análisis general de las dimensiones de bienestar laboral en el rango de fechas especificado.\n")
+    informe.append("Resumen Ejecutivo:\n")
+    informe.append(resumen_ejecutivo + "\n\n")
+    informe.append("Clasificación de Dimensiones:\n")
+    if fortalezas:
+        informe.append("Fortalezas:\n")
+        for f, val in fortalezas:
+            informe.append(f"- {f} (Promedio: {val:.2f})\n")
+    else:
+        informe.append("No se identificaron fortalezas.\n")
+
+    informe.append("\n")
+    if riesgos:
+        informe.append("Riesgos:\n")
+        for r, val in riesgos:
+            informe.append(f"- {r} (Promedio: {val:.2f})\n")
+    else:
+        informe.append("No se identificaron riesgos.\n")
+
+    informe.append("\n")
+    if intermedios:
+        informe.append("Intermedios:\n")
+        for i, val in intermedios:
+            informe.append(f"- {i} (Promedio: {val:.2f})\n")
+    else:
+        informe.append("No se identificaron dimensiones en nivel intermedio.\n")
+
+    informe.append("\nConclusiones y Recomendaciones:\n")
+    informe.append(conclusiones)
+
+    informe_texto = "".join(informe)
+    return informe_texto, figuras
+
 # Función principal
 def main():
     st.title("Aplicación de Análisis de Datos sobre Salud Organizacional")
 
     mostrar_resumen_base_datos()
+    
+    # Campos para fecha
+    fecha_inicio = st.date_input("Fecha de inicio", datetime.date.today() - datetime.timedelta(days=30))
+    fecha_fin = st.date_input("Fecha de fin", datetime.date.today())
 
+    # Botón para generar informe general
+    if st.button("Generar Informe General"):
+        with st.spinner("Generando informe general..."):
+            informe_texto, figs = generar_informe_general(df, fecha_inicio, fecha_fin)
+            st.write(informe_texto)
+            # Generar PDF
+            pdf_general = PDFReport('informe_general.pdf')
+            pdf_general.chapter_title("Informe General de Bienestar Laboral")
+            pdf_general.chapter_body(informe_texto)
+            for idx, f in enumerate(figs):
+                img_path = f'figura_general_{idx}.png'
+                f.savefig(img_path)
+                pdf_general.insert_image(img_path)
+            pdf_general.build_pdf()
+
+            with open('informe_general.pdf', 'rb') as f:
+                pdf_data = f.read()
+            b64 = base64.b64encode(pdf_data).decode('utf-8')
+            href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_general.pdf">Descargar Informe General en PDF</a>'
+            st.markdown(href, unsafe_allow_html=True)
+    
     # Inicializar o restablecer los valores en st.session_state
     if 'pregunta_usuario' not in st.session_state:
         st.session_state['pregunta_usuario'] = ''
