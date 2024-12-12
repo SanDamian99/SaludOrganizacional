@@ -4,8 +4,7 @@ import pandas as pd
 import time
 import random
 from datetime import datetime
-from datetime import date
-from datetime import timedelta 
+from datetime import date, timedelta
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import ProtocolError
 import matplotlib.pyplot as plt
@@ -1660,7 +1659,7 @@ def main():
     mostrar_resumen_base_datos()
     
     # Campos para fecha
-    fecha_inicio = st.date_input("Fecha de inicio",date.today() - datetime.timedelta(days=30))
+    fecha_inicio = st.date_input("Fecha de inicio",date.today() - timedelta(days=30))
     fecha_fin = st.date_input("Fecha de fin", date.today())
 
     # Botón para generar informe general
