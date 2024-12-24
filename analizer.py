@@ -1642,6 +1642,55 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     figuras = []
     fig_titles = []  # Para llevar un índice de figuras
 
+    def generar_indice_figuras_markdown(fig_titles):
+        """
+        Recibe una lista de títulos de figuras.
+        Retorna un string en formato Markdown con la tabla de índice de figuras,
+        agrupadas por tipo.
+        """
+        # 1. Clasificar las figuras en un dict con listas
+        grupos = {
+            "Semáforo": [],
+            "Comparación": [],
+            "Distribución": [],
+            "Descriptivas": [],
+            "Otros": []
+        }
+    
+        # Clasificar cada figura
+        for idx, title in enumerate(fig_titles, start=1):
+            # Determinar la categoría
+            t_lower = title.lower()
+            if "semáforo" in t_lower:
+                grupos["Semáforo"].append((idx, title))
+            elif "comparación" in t_lower:
+                grupos["Comparación"].append((idx, title))
+            elif "distribución" in t_lower:
+                grupos["Distribución"].append((idx, title))
+            elif "descriptivas" in t_lower:
+                grupos["Descriptivas"].append((idx, title))
+            else:
+                grupos["Otros"].append((idx, title))
+    
+        # 2. Generar la tabla en Markdown
+        # Encabezado de la tabla
+        md_table = "## Índice de Figuras\n\n"
+        md_table += "| **Tipo de Figura** | **Ítem** | **Título** |\n"
+        md_table += "|--------------------|----------|------------|\n"
+    
+        # Para cada tipo (en un orden predefinido) 
+        for tipo in ["Semáforo", "Comparación", "Distribución", "Descriptivas", "Otros"]:
+            figs_grupo = grupos[tipo]
+            if not figs_grupo:
+                continue  # si no hay figuras en este grupo, saltar
+            for (i, title) in figs_grupo:
+                # Agregar fila
+                # Ej: | Semáforo | Figura 1 | Figura: Semáforo de Dimensiones |
+                md_table += f"| {tipo} | Figura {i} | {title} |\n"
+    
+        return md_table
+
+
     # 1) Definir las dimensiones inversas (ejemplo)
     inverse_dims = {
         "Conflicto Familia-Trabajo": True,
@@ -1883,11 +1932,12 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     informe.append(conclusiones)
     informe.append("\n")
 
-    # Índice de figuras
     if fig_titles:
-        informe.append("\n**Índice de Figuras:**\n")
-        for idx, t in enumerate(fig_titles, start=1):
-            informe.append(f"Figura {idx}: {t}\n")
+        # Generar la tabla Markdown agrupada
+        md_indice = generar_indice_figuras_markdown(fig_titles)
+        # Lo insertamos al informe
+        informe.append("\n")
+        informe.append(md_indice)
 
     informe_texto = "".join(informe)
 
