@@ -24,7 +24,7 @@ from reportlab.lib import colors
 from reportlab.platypus.doctemplate import LayoutError
 from bs4 import BeautifulSoup
 from PIL import Image as PILImage
-
+import math
 
 # Importar la librería de Gemini
 import google.generativeai as genai
@@ -1632,45 +1632,86 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     figuras = []
     fig_titles = []  # Para llevar un índice de figuras
 
-    # Función para determinar estado de la dimensión
+    # 1) Definir las dimensiones inversas (ejemplo)
+    inverse_dims = {
+        "Conflicto Familia-Trabajo": True,
+        "Síntomas de Burnout": True,
+        "Factores de Efectos Colaterales (Escala de Desgaste)": True,
+        "Factores de Efectos Colaterales (Escala de Alienación)": True,
+        # Agrega aquí las que correspondan.
+        # Por ejemplo, si "Control del Tiempo" también es inversa:
+        "Control del Tiempo": True
+        # Las demás dimensiones, por omisión, se tratarán como directas.
+    }
+    
     def estado_dimension(valor):
+        """
+        Devuelve la tupla (estado, color) dada la puntuación 'valor'.
+        'valor' ya debe estar invertido si la dimensión es inversa.
+        """
         if valor >= 5:
-            return 'Fortaleza', 'green'
+            return ('Fortaleza', 'green')
         elif valor <= 3:
-            return 'Riesgo', 'red'
+            return ('Riesgo', 'red')
         else:
-            return 'Intermedio', 'yellow'
+            return ('Intermedio', 'yellow')
 
     # ---------------------------
     # 1. Semáforo en forma de matriz de subplots
     # ---------------------------
-    dims_list = list(resultados.items())  # [(dim, val), (dim, val), ...]
+    dims_list = list(resultados.items())  # [('Dimensión1', prom1), ('Dimensión2', prom2), ...]
+    
     n_dims = len(dims_list)
-    cols = 3  # Ajustar si deseas más o menos columnas
+    cols = 3  # Ajusta si deseas más o menos columnas
     rows = math.ceil(n_dims / cols)
-
-    fig_semaforo, axes_semaforo = plt.subplots(rows, cols, figsize=(cols*2.5, rows*1.5))
+    
+    fig_semaforo, axes_semaforo = plt.subplots(rows, cols, figsize=(cols*2.5, rows*1.7)) 
+    # ↑ Ajusta aquí el figsize para dar un poco más de altura (1.7) y que el texto no se corte
+    
+    # Aplanar los ejes (axes) para iterar cómodamente
     axes_semaforo = axes_semaforo.flatten() if n_dims > 1 else [axes_semaforo]
-
+    
     for idx, (dim, val) in enumerate(dims_list):
-        estado, color = estado_dimension(val)
+        # 2) Ajustar el valor si la dimensión es inversa
+        if dim in inverse_dims and inverse_dims[dim]:
+            # Escala Likert 1..7 => invertimos con '8 - val'
+            val_display = 8 - val
+        else:
+            val_display = val
+        
+        # Obtener estado & color
+        estado, color = estado_dimension(val_display)
+    
         ax = axes_semaforo[idx]
         ax.set_facecolor(color)
-        ax.text(0.5, 0.5, f"{dim}\n{estado}\nProm: {val:.2f}", ha='center', va='center', 
-                fontsize=8, color='black', wrap=True)
+    
+        # 3) Texto en el recuadro.
+        # Indicar (inv) si la dimensión es inversa, para dejar claro
+        suffix_inv = " (inv)" if (dim in inverse_dims and inverse_dims[dim]) else ""
+    
+        # Para evitar que se corte el texto, se puede usar la propiedad 'wrap=True'
+        # y aumentar un poco el espacio vertical (rows*1.7).
+        text_content = f"{dim}{suffix_inv}\n{estado}\nProm: {val_display:.2f}"
+        ax.text(0.5, 0.5, text_content,
+                ha='center', va='center',
+                fontsize=8, color='black',
+                wrap=True)
+    
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xlim(0,1)
         ax.set_ylim(0,1)
-
-    # Ocultar ejes sobrantes si hay menos dimensiones que subplots
+    
+    # Ocultar ejes sobrantes si hay más subplots que dimensiones
     for j in range(idx+1, len(axes_semaforo)):
         axes_semaforo[j].set_visible(False)
-
+    
     fig_semaforo.suptitle("Semáforo de Dimensiones (Resumen)", fontsize=12)
     fig_semaforo.tight_layout()
+    
     figuras.append(fig_semaforo)
     fig_titles.append("Figura: Semáforo de Dimensiones")
+
 
     # ---------------------------
     # 2. Análisis por sexo, edad y hijos
