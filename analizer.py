@@ -1112,6 +1112,9 @@ import os
 import markdown
 from bs4 import BeautifulSoup
 
+######################################################
+# CLASE PDFReport
+######################################################
 class PDFReport:
     def __init__(self, filename):
         self.filename = filename
@@ -1139,7 +1142,7 @@ class PDFReport:
             fontName='Helvetica',
             fontSize=12,
             leading=14,
-            alignment=1,  # TA_JUSTIFY es 4, alignment=1 es TA_CENTER etc. Ajusta si deseas
+            alignment=4,  # 4 = TA_JUSTIFY, 1 = TA_CENTER, etc.
             leftIndent=20,
             rightIndent=20,
             spaceAfter=12,
@@ -1180,23 +1183,17 @@ class PDFReport:
 
     def header(self, canvas, doc):
         """
-        Encabezado del documento: una imagen que cubre toda la parte superior (opcional).
+        Encabezado del documento
         """
         canvas.saveState()
-        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'
-        if os.path.isfile(header_image):
-            # Si deseas que la imagen abarque todo el ancho, ajusta su width
-            canvas.drawImage(header_image, 0, A4[1]-40*mm, width=A4[0], height=40*mm)
-        else:
-            canvas.setFont('Helvetica-Bold', 16)
-            header_text = 'Informe de Análisis de Datos'
-            header_text = clean_text(header_text)
-            canvas.drawCentredString(A4[0]/2.0, A4[1]-30*mm, header_text)
+        header_text = 'Informe de Análisis de Datos'
+        canvas.setFont('Helvetica-Bold', 16)
+        canvas.drawCentredString(A4[0]/2.0, A4[1]-30*mm, header_text)
         canvas.restoreState()
 
     def footer(self, canvas, doc):
         """
-        Pie de página: fondo negro que abarca todo el ancho, texto blanco con número de página.
+        Pie de página
         """
         canvas.saveState()
         canvas.setFillColor(colors.black)
@@ -1214,112 +1211,79 @@ class PDFReport:
         self.footer(canvas, doc)
 
     def chapter_title(self, text):
-        """
-        Añade un título de capítulo al documento.
-        """
         text = clean_text(text)
         paragraph = Paragraph(text, self.styles['CustomTitle'])
         self.elements.append(paragraph)
 
     def chapter_body(self, text):
         """
-        Añade el cuerpo de texto de un capítulo, manejando el formato Markdown
-        y conservando encabezados, listas, saltos de línea, etc.
+        Añade el cuerpo de texto manejando el formato Markdown
+        (encabezados, listas, saltos, etc.) recursivamente.
         """
         text = clean_text(text)
-        # Convertir Markdown a HTML completo
         html = markdown.markdown(text)
-
-        # Parsear el HTML
         soup = BeautifulSoup(html, 'html.parser')
 
-        # Recorrer únicamente los elementos de bloque de primer nivel
-        for block in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol'], recursive=False):
-            # Convertir el bloque actual a HTML string
-            block_html = str(block)
+        # Recorremos TODOS los nodos relevantes recursivamente
+        for block in soup.find_all():
+            if block.name in ['p', 'h1','h2','h3','h4','h5','h6','ul','ol','li','br']:
+                block_html = str(block)
+                if block.name in ['h1','h2','h3','h4','h5','h6']:
+                    style = self.styles['Heading']
+                else:
+                    style = self.styles['CustomBodyText']
+                paragraph = Paragraph(block_html, style)
+                self.elements.append(paragraph)
 
-            # Determinar estilo según etiqueta
-            if block.name in ['h1','h2','h3','h4','h5','h6']:
-                style = self.styles['Heading']
-            else:
-                style = self.styles['CustomBodyText']
-
-            # Crear el párrafo con el fragmento HTML, para que preserve
-            # saltos de línea, listas, etc.
-            paragraph = Paragraph(block_html, style)
-            self.elements.append(paragraph)
-
-        # Espacio extra al final
         self.elements.append(Spacer(1, 12))
 
     def insert_data_section(self, text):
-        """
-        Inserta una sección titulada 'Datos generados por el modelo' con un fondo morado.
-        """
         title = Paragraph('Datos generados por el modelo', self.styles['DataSectionTitle'])
         self.elements.append(title)
 
-        # Parsear con la misma lógica
         text = clean_text(text)
         html = markdown.markdown(text)
         soup = BeautifulSoup(html, 'html.parser')
 
-        for block in soup.find_all(['p','h1','h2','h3','h4','h5','h6','ul','ol'], recursive=False):
-            block_html = str(block)
-            paragraph = Paragraph(block_html, self.styles['CustomBodyText'])
-            self.elements.append(paragraph)
+        for block in soup.find_all():
+            if block.name in ['p','h1','h2','h3','h4','h5','h6','ul','ol','li','br']:
+                block_html = str(block)
+                paragraph = Paragraph(block_html, self.styles['CustomBodyText'])
+                self.elements.append(paragraph)
 
         self.elements.append(Spacer(1, 12))
 
     def insert_image(self, image_path, max_width=480):
         """
-        Inserta una imagen en el PDF, ajustándola a un max_width y calculando la altura
-        de forma proporcional para conservar la relación de aspecto.
+        Ajusta la imagen para que no exceda max_width, preservando relación de aspecto.
         """
         if os.path.isfile(image_path):
-            # Abrimos la imagen con PIL para obtener su tamaño original
             with PILImage.open(image_path) as im:
-                orig_width, orig_height = im.size  # tamaño en píxeles
-            # Si orig_width es 0, evitamos división por cero
+                orig_width, orig_height = im.size
             if orig_width == 0:
-                # En caso extremo, definimos un ancho y alto fijos para no romper el PDF
                 new_width = max_width
                 new_height = max_width
             else:
-                # Calcular proporción
                 ratio = float(orig_height) / float(orig_width)
-                # Ajustar al max_width (si orig_width es menor que max_width, usar orig_width)
                 new_width = min(max_width, orig_width)
-                # Calcular la altura manteniendo la proporción
                 new_height = new_width * ratio
-            
-            # Crear el flowable RLImage con la nueva anchura y altura
+
             img = RLImage(image_path, width=new_width, height=new_height)
             self.elements.append(img)
             self.elements.append(Spacer(1, 12))
         else:
-            # Si no se encontró la imagen, insertamos un párrafo de aviso
             self.elements.append(Paragraph('Imagen no encontrada', self.styles['CustomItalic']))
             self.elements.append(Spacer(1, 12))
 
-
     def resultados_recomendaciones(self, text):
-        """
-        Añade una sección de 'Resultados y Recomendaciones'.
-        """
         self.chapter_title('Resultados y Recomendaciones')
         self.chapter_body(text)
 
     def build_pdf(self):
         try:
-            self.doc.build(
-                self.elements,
-                onFirstPage=self.header_footer, 
-                onLaterPages=self.header_footer
-            )
+            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         except LayoutError as e:
             raise e
-
 
 # Funciones de limpieza de texto
 def break_long_words(text, max_length=50):
