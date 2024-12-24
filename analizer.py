@@ -1258,21 +1258,31 @@ class PDFReport:
 
         self.elements.append(Spacer(1, 12))
 
-    def insert_image(self, image_path, max_width=480):
+    def insert_image(self, image_path, max_width=400, max_height=550):
         """
-        Ajusta la imagen para que no exceda max_width, preservando relación de aspecto.
+        Ajusta la imagen para que no exceda max_width ni max_height,
+        conservando la relación de aspecto.
         """
         if os.path.isfile(image_path):
+            from PIL import Image as PILImage
             with PILImage.open(image_path) as im:
                 orig_width, orig_height = im.size
-            if orig_width == 0:
+            if orig_width == 0 or orig_height == 0:
+                # Caso extremo, se asigna un tamaño fijo
                 new_width = max_width
                 new_height = max_width
             else:
+                # Calcular la relación de aspecto
                 ratio = float(orig_height) / float(orig_width)
+                # Iniciar con el ancho deseado
                 new_width = min(max_width, orig_width)
                 new_height = new_width * ratio
-
+    
+                # Si la altura resultante supera max_height, ajustar de nuevo
+                if new_height > max_height:
+                    new_height = max_height
+                    new_width = new_height / ratio
+    
             img = RLImage(image_path, width=new_width, height=new_height)
             self.elements.append(img)
             self.elements.append(Spacer(1, 12))
