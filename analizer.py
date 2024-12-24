@@ -16,13 +16,12 @@ import io
 import base64
 import os
 from fpdf.enums import XPos, YPos
-from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-                                Image, PageBreak)
 from reportlab.lib.units import mm
-from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.platypus.doctemplate import LayoutError
 from bs4 import BeautifulSoup
 
 
@@ -1101,7 +1100,17 @@ Por favor, realiza tu pregunta teniendo en cuenta las variables y dimensiones di
     """
     st.markdown(resumen)
 
-# Clase PDFReport utilizando ReportLab
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.platypus.doctemplate import LayoutError
+
+import os
+import markdown
+from bs4 import BeautifulSoup
+
 class PDFReport:
     def __init__(self, filename):
         self.filename = filename
@@ -1117,7 +1126,7 @@ class PDFReport:
         )
         # Estilos personalizados
         self.styles.add(ParagraphStyle(
-            name='CustomTitle',  # Cambiado a 'CustomTitle'
+            name='CustomTitle',
             fontName='Helvetica-Bold',
             fontSize=14,
             leading=16,
@@ -1125,11 +1134,11 @@ class PDFReport:
             textColor=colors.black
         ))
         self.styles.add(ParagraphStyle(
-            name='CustomBodyText',  # Cambiado a 'CustomBodyText'
+            name='CustomBodyText',
             fontName='Helvetica',
             fontSize=12,
             leading=14,
-            alignment=TA_JUSTIFY,
+            alignment=1,  # TA_JUSTIFY es 4, alignment=1 es TA_CENTER etc. Ajusta si deseas
             leftIndent=20,
             rightIndent=20,
             spaceAfter=12,
@@ -1142,11 +1151,11 @@ class PDFReport:
             leading=14,
             textColor=colors.white,
             backColor=colors.purple,
-            alignment=TA_CENTER,
+            alignment=1,  # TA_CENTER
             spaceAfter=12
         ))
         self.styles.add(ParagraphStyle(
-            name='CustomItalic',  # Cambiado a 'CustomItalic'
+            name='CustomItalic',
             fontName='Helvetica-Oblique',
             fontSize=12,
             leading=14,
@@ -1170,11 +1179,12 @@ class PDFReport:
 
     def header(self, canvas, doc):
         """
-        Encabezado del documento: una imagen que cubre toda la parte superior.
+        Encabezado del documento: una imagen que cubre toda la parte superior (opcional).
         """
         canvas.saveState()
-        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'  
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'
         if os.path.isfile(header_image):
+            # Si deseas que la imagen abarque todo el ancho, ajusta su width
             canvas.drawImage(header_image, 0, A4[1]-40*mm, width=A4[0], height=40*mm)
         else:
             canvas.setFont('Helvetica-Bold', 16)
@@ -1190,7 +1200,7 @@ class PDFReport:
         canvas.saveState()
         canvas.setFillColor(colors.black)
         canvas.rect(0, 0, A4[0], 15*mm, fill=1)
-        footer_text = 'Este informe ha sido generado con Inteligencia Artificial generativa y puede contener errores e imprecisiones.'
+        footer_text = 'Informe generado con IA. Puede contener errores e imprecisiones.'
         canvas.setFillColor(colors.white)
         canvas.setFont('Helvetica', 8)
         canvas.drawString(15*mm, 5*mm, clean_text(footer_text))
@@ -1207,32 +1217,38 @@ class PDFReport:
         Añade un título de capítulo al documento.
         """
         text = clean_text(text)
-        paragraph = Paragraph(text, self.styles['CustomTitle'])  # Usar 'CustomTitle'
+        paragraph = Paragraph(text, self.styles['CustomTitle'])
         self.elements.append(paragraph)
 
     def chapter_body(self, text):
         """
-        Añade el cuerpo de texto de un capítulo, manejando el formato Markdown.
+        Añade el cuerpo de texto de un capítulo, manejando el formato Markdown
+        y conservando encabezados, listas, saltos de línea, etc.
         """
         text = clean_text(text)
-        # Convertir Markdown a HTML
+        # Convertir Markdown a HTML completo
         html = markdown.markdown(text)
-        # Parsear el HTML y convertir a párrafos
+
+        # Parsear el HTML
         soup = BeautifulSoup(html, 'html.parser')
-        for element in soup.descendants:
-            if element.name == 'p':
-                paragraph = Paragraph(element.text, self.styles['CustomBodyText'])  # Usar 'CustomBodyText'
-                self.elements.append(paragraph)
-            elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                heading = Paragraph(element.text, self.styles['Heading'])
-                self.elements.append(heading)
-            elif element.name == 'ul':
-                for li in element.find_all('li'):
-                    bullet = u'\u2022 ' + li.text
-                    paragraph = Paragraph(bullet, self.styles['CustomBodyText'])  # Usar 'CustomBodyText'
-                    self.elements.append(paragraph)
-                self.elements.append(Spacer(1, 12))
-            # Agrega más casos según sea necesario para otros elementos HTML
+
+        # Recorrer únicamente los elementos de bloque de primer nivel
+        for block in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol'], recursive=False):
+            # Convertir el bloque actual a HTML string
+            block_html = str(block)
+
+            # Determinar estilo según etiqueta
+            if block.name in ['h1','h2','h3','h4','h5','h6']:
+                style = self.styles['Heading']
+            else:
+                style = self.styles['CustomBodyText']
+
+            # Crear el párrafo con el fragmento HTML, para que preserve
+            # saltos de línea, listas, etc.
+            paragraph = Paragraph(block_html, style)
+            self.elements.append(paragraph)
+
+        # Espacio extra al final
         self.elements.append(Spacer(1, 12))
 
     def insert_data_section(self, text):
@@ -1241,25 +1257,30 @@ class PDFReport:
         """
         title = Paragraph('Datos generados por el modelo', self.styles['DataSectionTitle'])
         self.elements.append(title)
+
+        # Parsear con la misma lógica
         text = clean_text(text)
         html = markdown.markdown(text)
         soup = BeautifulSoup(html, 'html.parser')
-        for element in soup.descendants:
-            if element.name == 'p':
-                paragraph = Paragraph(element.text, self.styles['CustomBodyText'])  # Usar 'CustomBodyText'
-                self.elements.append(paragraph)
+
+        for block in soup.find_all(['p','h1','h2','h3','h4','h5','h6','ul','ol'], recursive=False):
+            block_html = str(block)
+            paragraph = Paragraph(block_html, self.styles['CustomBodyText'])
+            self.elements.append(paragraph)
+
         self.elements.append(Spacer(1, 12))
 
-    def insert_image(self, image_path):
+    def insert_image(self, image_path, max_width=480):
         """
-        Inserta una imagen en el PDF.
+        Inserta una imagen en el PDF, ajustando su tamaño para que quepa en la página.
         """
         if os.path.isfile(image_path):
-            img = Image(image_path, width=180*mm)
+            # Ajustar el ancho para no exceder el espacio en el PDF
+            img = RLImage(image_path, width=max_width, preserveAspectRatio=True)
             self.elements.append(img)
             self.elements.append(Spacer(1, 12))
         else:
-            self.elements.append(Paragraph('Imagen no encontrada', self.styles['CustomItalic']))  # Usar 'CustomItalic'
+            self.elements.append(Paragraph('Imagen no encontrada', self.styles['CustomItalic']))
             self.elements.append(Spacer(1, 12))
 
     def resultados_recomendaciones(self, text):
@@ -1270,8 +1291,15 @@ class PDFReport:
         self.chapter_body(text)
 
     def build_pdf(self):
-        self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+        # Se llama al método .build y pasamos las funciones de header & footer
+        try:
+            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+        except LayoutError as e:
+            # Por si acaso quieres manejar el error
+            raise e
 
+
+# Funciones de limpieza de texto
 def break_long_words(text, max_length=50):
     """
     Inserta guiones en palabras que excedan el máximo permitido para evitar errores de renderizado.
@@ -1285,9 +1313,11 @@ def break_long_words(text, max_length=50):
         new_words.append(word)
     return ' '.join(new_words)
 
+
 def clean_text(text):
     """
-    Reemplaza caracteres no soportados y limpia el texto.
+    Reemplaza caracteres no soportados y limpia el texto,
+    intentando conservar la estructura para Markdown -> HTML.
     """
     # Diccionario de reemplazos para caracteres no soportados
     replacements = {
@@ -1301,12 +1331,13 @@ def clean_text(text):
         '∑': 'sumatoria',
         '∆': 'delta',
         '∫': 'integral',
-        # Agrega más reemplazos según sea necesario
     }
     for char, replacement in replacements.items():
         text = text.replace(char, replacement)
-    # Eliminar caracteres no soportados
+
+    # Eliminar caracteres no soportados en PDF
     text = text.encode('latin-1', 'ignore').decode('latin-1')
+
     # Insertar guiones en palabras largas
     text = break_long_words(text, max_length=50)
     return text
