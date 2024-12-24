@@ -1272,16 +1272,35 @@ class PDFReport:
 
     def insert_image(self, image_path, max_width=480):
         """
-        Inserta una imagen en el PDF, ajustando su tamaño para que quepa en la página.
+        Inserta una imagen en el PDF, ajustándola a un max_width y calculando la altura
+        de forma proporcional para conservar la relación de aspecto.
         """
         if os.path.isfile(image_path):
-            # Ajustar el ancho para no exceder el espacio en el PDF
-            img = RLImage(image_path, width=max_width, preserveAspectRatio=True)
+            # Abrimos la imagen con PIL para obtener su tamaño original
+            with PILImage.open(image_path) as im:
+                orig_width, orig_height = im.size  # tamaño en píxeles
+            # Si orig_width es 0, evitamos división por cero
+            if orig_width == 0:
+                # En caso extremo, definimos un ancho y alto fijos para no romper el PDF
+                new_width = max_width
+                new_height = max_width
+            else:
+                # Calcular proporción
+                ratio = float(orig_height) / float(orig_width)
+                # Ajustar al max_width (si orig_width es menor que max_width, usar orig_width)
+                new_width = min(max_width, orig_width)
+                # Calcular la altura manteniendo la proporción
+                new_height = new_width * ratio
+            
+            # Crear el flowable RLImage con la nueva anchura y altura
+            img = RLImage(image_path, width=new_width, height=new_height)
             self.elements.append(img)
             self.elements.append(Spacer(1, 12))
         else:
+            # Si no se encontró la imagen, insertamos un párrafo de aviso
             self.elements.append(Paragraph('Imagen no encontrada', self.styles['CustomItalic']))
             self.elements.append(Spacer(1, 12))
+
 
     def resultados_recomendaciones(self, text):
         """
@@ -1291,11 +1310,13 @@ class PDFReport:
         self.chapter_body(text)
 
     def build_pdf(self):
-        # Se llama al método .build y pasamos las funciones de header & footer
         try:
-            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+            self.doc.build(
+                self.elements,
+                onFirstPage=self.header_footer, 
+                onLaterPages=self.header_footer
+            )
         except LayoutError as e:
-            # Por si acaso quieres manejar el error
             raise e
 
 
