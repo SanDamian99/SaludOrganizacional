@@ -1101,17 +1101,6 @@ Por favor, realiza tu pregunta teniendo en cuenta las variables y dimensiones di
     """
     st.markdown(resumen)
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.platypus.doctemplate import LayoutError
-
-import os
-import markdown
-from bs4 import BeautifulSoup
-
 ######################################################
 # CLASE PDFReport
 ######################################################
@@ -1301,18 +1290,20 @@ class PDFReport:
             raise e
 
 # Funciones de limpieza de texto
-def break_long_words(text, max_length=50):
-    """
-    Inserta guiones en palabras que excedan el máximo permitido para evitar errores de renderizado.
-    """
-    words = text.split()
-    new_words = []
-    for word in words:
+def break_long_words_markdown_aware(text, max_length=50):
+    """Breaks long words while preserving Markdown structure."""
+
+    def break_word(word):
+        """Breaks a single word."""
+        new_word = ""
         while len(word) > max_length:
-            new_words.append(word[:max_length-1] + '-')
-            word = word[max_length-1:]
-        new_words.append(word)
-    return ' '.join(new_words)
+            new_word += word[:max_length - 1] + "-"
+            word = word[max_length - 1:]
+        new_word += word
+        return new_word
+
+    # Use a regular expression to find words (sequences of non-whitespace characters)
+    return re.sub(r"\S+", lambda m: break_word(m.group(0)), text)
 
 
 def clean_text(text):
