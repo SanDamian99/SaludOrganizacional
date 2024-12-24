@@ -23,6 +23,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.platypus.doctemplate import LayoutError
 from bs4 import BeautifulSoup
+from PIL import Image as PILImage
 
 
 # Importar la librería de Gemini
