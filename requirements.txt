@@ -9,3 +9,4 @@ markdown
 reportlab
 beautifulsoup4
 seaborn
+Pillow
