@@ -1551,8 +1551,9 @@ dimensiones = {
     ]
 }
 
-# Función para generar informe general (sintetizado)
 def generar_informe_general(df, fecha_inicio, fecha_fin):
+    import math
+
     # Filtrar por rango de fechas usando 'Hora de inicio'
     df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
     df_filtrado = df[(df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) & (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))]
@@ -1607,6 +1608,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     conclusiones = enviar_prompt(prompt_conclusiones)
 
     figuras = []
+    fig_titles = []  # Para llevar un índice de figuras
 
     # Función para determinar estado de la dimensión
     def estado_dimension(valor):
@@ -1617,21 +1619,40 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
         else:
             return 'Intermedio', 'yellow'
 
-    # Graficas tipo semáforo para cada dimensión
-    for dim, val in resultados.items():
+    # ---------------------------
+    # 1. Semáforo en forma de matriz de subplots
+    # ---------------------------
+    dims_list = list(resultados.items())  # [(dim, val), (dim, val), ...]
+    n_dims = len(dims_list)
+    cols = 3  # Ajustar si deseas más o menos columnas
+    rows = math.ceil(n_dims / cols)
+
+    fig_semaforo, axes_semaforo = plt.subplots(rows, cols, figsize=(cols*2.5, rows*1.5))
+    axes_semaforo = axes_semaforo.flatten() if n_dims > 1 else [axes_semaforo]
+
+    for idx, (dim, val) in enumerate(dims_list):
         estado, color = estado_dimension(val)
-        fig, ax = plt.subplots(figsize=(2, 1))
+        ax = axes_semaforo[idx]
         ax.set_facecolor(color)
-        ax.text(0.5, 0.5, f"{dim}\n{estado}\nProm: {val:.2f}", ha='center', va='center', fontsize=10, color='black')
+        ax.text(0.5, 0.5, f"{dim}\n{estado}\nProm: {val:.2f}", ha='center', va='center', 
+                fontsize=8, color='black', wrap=True)
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xlim(0,1)
         ax.set_ylim(0,1)
-        plt.tight_layout()
-        figuras.append(fig)
 
-    # Para análisis por sexo, edad y hijos, necesitamos crear variables auxiliares
-    # Asegurar que 'Sexo', 'Edad' y 'Numero de hijos' existan en df_filtrado
+    # Ocultar ejes sobrantes si hay menos dimensiones que subplots
+    for j in range(idx+1, len(axes_semaforo)):
+        axes_semaforo[j].set_visible(False)
+
+    fig_semaforo.suptitle("Semáforo de Dimensiones (Resumen)", fontsize=12)
+    fig_semaforo.tight_layout()
+    figuras.append(fig_semaforo)
+    fig_titles.append("Figura: Semáforo de Dimensiones")
+
+    # ---------------------------
+    # 2. Análisis por sexo, edad y hijos
+    # ---------------------------
     df_cat = df_filtrado.copy()
 
     # Convertir Edad a numérico si posible
@@ -1639,7 +1660,6 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
         df_cat['Edad'] = pd.to_numeric(df_cat['Edad'], errors='coerce')
 
     # Crear rangos de edad
-    # Ejemplo: <25, 25-34, 35-44, 45+
     if 'Edad' in df_cat.columns:
         bins = [0, 24, 34, 44, 200]
         labels = ['<25', '25-34', '35-44', '45+']
@@ -1653,9 +1673,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     else:
         df_cat['Hijos'] = 0
 
-    # Necesitamos calcular promedios por dim en cada grupo
-    # Para eso, calculamos el promedio de cada dimensión según el subgrupo.
-    # Vamos a recalcular df_num pero manteniendo las columnas originales para groupby
+    # Recalcular df_mix con valores numéricos
     df_mix = df_filtrado.copy()
     for c in df_mix.columns:
         if df_mix[c].dtype == object:
@@ -1664,95 +1682,109 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     # Añadimos las columnas auxiliares al df_mix
     df_mix['Rango_Edad'] = df_cat['Rango_Edad']
     df_mix['Hijos'] = df_cat['Hijos']
-    # 'Sexo' ya existe, asumimos está en df_mix, si no mapear tampoco es necesario
 
-    # Graficar cada dimensión por sexo, rango de edad, hijos
+    # Para cada dimensión, generamos UNA figura con 3 subplots (sexo, edad, hijos)
     for dim, vars_dim in dimensiones.items():
         vars_exist = [v for v in vars_dim if v in df_mix.columns]
         if not vars_exist:
             continue
 
-        # Agrupar por sexo
+        # Creamos la figura con 3 columnas (Sexo, Rango_Edad, Hijos)
+        fig_dim, axs_dim = plt.subplots(1, 3, figsize=(9,3))
+        fig_dim.suptitle(f"{dim} comparado por Sexo, Rango de Edad y Hijos", fontsize=10)
+
+        # Subplot 0: por sexo
         if 'Sexo' in df_mix.columns:
             df_sexo = df_mix.groupby('Sexo')[vars_exist].mean().mean(axis=1)
+            ax0 = axs_dim[0]
             if not df_sexo.empty:
-                fig_sex, ax_sex = plt.subplots(figsize=(4,4))
-                df_sexo.plot(kind='bar', color='lightblue', ax=ax_sex)
-                ax_sex.set_title(f"{dim} por Sexo (Promedio)")
-                ax_sex.set_xlabel('Sexo')
-                ax_sex.set_ylabel('Promedio')
-                plt.tight_layout()
-                figuras.append(fig_sex)
+                df_sexo.plot(kind='bar', color='lightblue', ax=ax0)
+                ax0.set_title("Por Sexo", fontsize=8)
+                ax0.set_xlabel('')
+                ax0.set_ylabel('Promedio')
+            else:
+                ax0.set_visible(False)
+        else:
+            axs_dim[0].set_visible(False)
 
-        # Agrupar por rango de edad
+        # Subplot 1: por rango de edad
         if 'Rango_Edad' in df_mix.columns:
             df_edad = df_mix.groupby('Rango_Edad')[vars_exist].mean().mean(axis=1)
+            ax1 = axs_dim[1]
             if not df_edad.empty:
-                fig_edad, ax_edad = plt.subplots(figsize=(4,4))
-                df_edad.plot(kind='bar', color='lightgreen', ax=ax_edad)
-                ax_edad.set_title(f"{dim} por Rango de Edad (Promedio)")
-                ax_edad.set_xlabel('Rango de Edad')
-                ax_edad.set_ylabel('Promedio')
-                plt.tight_layout()
-                figuras.append(fig_edad)
+                df_edad.plot(kind='bar', color='lightgreen', ax=ax1)
+                ax1.set_title("Por Rango de Edad", fontsize=8)
+                ax1.set_xlabel('')
+                ax1.set_ylabel('Promedio')
+            else:
+                ax1.set_visible(False)
+        else:
+            axs_dim[1].set_visible(False)
 
-        # Agrupar por hijos
+        # Subplot 2: por hijos
         if 'Hijos' in df_mix.columns:
             df_hijos = df_mix.groupby('Hijos')[vars_exist].mean().mean(axis=1)
+            ax2 = axs_dim[2]
             if not df_hijos.empty:
-                fig_hijos, ax_hijos = plt.subplots(figsize=(4,4))
-                # Reemplazar 0/1 por etiquetas
                 df_hijos_index = df_hijos.rename(index={0:'Sin hijos',1:'Con hijos'})
-                df_hijos_index.plot(kind='bar', color='orange', ax=ax_hijos)
-                ax_hijos.set_title(f"{dim} por Hijos (Promedio)")
-                ax_hijos.set_xlabel('Hijos')
-                ax_hijos.set_ylabel('Promedio')
-                plt.tight_layout()
-                figuras.append(fig_hijos)
+                df_hijos_index.plot(kind='bar', color='orange', ax=ax2)
+                ax2.set_title("Por Hijos", fontsize=8)
+                ax2.set_xlabel('')
+                ax2.set_ylabel('Promedio')
+            else:
+                ax2.set_visible(False)
+        else:
+            axs_dim[2].set_visible(False)
 
-    # Gráficas descriptivas para cada variable según su tipo
+        plt.tight_layout()
+        figuras.append(fig_dim)
+        fig_titles.append(f"Figura: Comparación por Sexo, Edad, Hijos - {dim}")
+
+    # ---------------------------
+    # 3. Gráficas descriptivas para cada variable según su tipo
+    # ---------------------------
     for col in df_filtrado.columns:
-        # Omitir columnas no relevantes
         if col in ["ID", "Hora de inicio", "Hora de finalización", "Correo electrónico", "Nombre", "Column"]:
             continue
 
+        # Para cada variable, creamos UNA figura con 2 subplots (si es numérica),
+        # o 1 subplot si es categórica
         if df_filtrado[col].dtype == object:
-            # Categórica
             conteo = df_filtrado[col].value_counts()
             if not conteo.empty:
-                fig_c, ax_c = plt.subplots(figsize=(6,4))
+                fig_c, ax_c = plt.subplots(figsize=(5,3))
                 conteo.plot(kind='bar', ax=ax_c, color='skyblue')
                 ax_c.set_title(f'Distribución de {col}')
                 ax_c.set_xlabel(col)
                 ax_c.set_ylabel('Frecuencia')
                 plt.tight_layout()
                 figuras.append(fig_c)
+                fig_titles.append(f"Figura: Distribución de {col}")
         else:
-            # Numérica
+            # Histograma y Boxplot en una sola figura con 2 subplots
+            fig_desc, (ax_h, ax_b) = plt.subplots(1, 2, figsize=(8,3))
             # Histograma
-            fig_h, ax_h = plt.subplots(figsize=(6,4))
             df_filtrado[col].dropna().hist(bins=10, ax=ax_h, color='lightgreen')
             ax_h.set_title(f'Histograma de {col}')
             ax_h.set_xlabel(col)
             ax_h.set_ylabel('Frecuencia')
-            plt.tight_layout()
-            figuras.append(fig_h)
 
             # Boxplot
-            fig_b, ax_b = plt.subplots(figsize=(2,4))
             df_filtrado[[col]].boxplot(ax=ax_b)
             ax_b.set_title(f'Boxplot de {col}')
+
             plt.tight_layout()
-            figuras.append(fig_b)
+            figuras.append(fig_desc)
+            fig_titles.append(f"Figura: Descriptivas de {col}")
 
     # Crear texto del informe
     informe = []
     informe.append("Este informe presenta un análisis general de las dimensiones de bienestar laboral en el rango de fechas especificado.\n")
-    informe.append("Resumen Ejecutivo:\n")
+    informe.append("**Resumen Ejecutivo:**\n")
     informe.append(resumen_ejecutivo + "\n\n")
-    informe.append("Clasificación de Dimensiones:\n")
+    informe.append("**Clasificación de Dimensiones:**\n")
     if fortalezas:
-        informe.append("Fortalezas:\n")
+        informe.append("**Fortalezas:**\n")
         for f, val in fortalezas:
             informe.append(f"- {f} (Promedio: {val:.2f})\n")
     else:
@@ -1760,7 +1792,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
 
     informe.append("\n")
     if riesgos:
-        informe.append("Riesgos:\n")
+        informe.append("**Riesgos:**\n")
         for r, val in riesgos:
             informe.append(f"- {r} (Promedio: {val:.2f})\n")
     else:
@@ -1768,18 +1800,26 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
 
     informe.append("\n")
     if intermedios:
-        informe.append("Intermedios:\n")
+        informe.append("**Intermedios:**\n")
         for i, val in intermedios:
             informe.append(f"- {i} (Promedio: {val:.2f})\n")
     else:
         informe.append("No se identificaron dimensiones en nivel intermedio.\n")
 
-    informe.append("\nConclusiones y Recomendaciones:\n")
+    informe.append("\n**Conclusiones y Recomendaciones:**\n")
     informe.append(conclusiones)
+    informe.append("\n")
+
+    # Índice de figuras
+    if fig_titles:
+        informe.append("\n**Índice de Figuras:**\n")
+        for idx, t in enumerate(fig_titles, start=1):
+            informe.append(f"Figura {idx}: {t}\n")
 
     informe_texto = "".join(informe)
 
     return informe_texto, figuras
+
 
 # Función principal
 def main():
