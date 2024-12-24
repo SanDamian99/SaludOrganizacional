@@ -1290,7 +1290,7 @@ class PDFReport:
             raise e
 
 # Funciones de limpieza de texto
-def break_long_words_markdown_aware(text, max_length=50):
+def break_long_words(text, max_length=50):
     """Breaks long words while preserving Markdown structure."""
 
     def break_word(word):
