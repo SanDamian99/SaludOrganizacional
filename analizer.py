@@ -1181,15 +1181,21 @@ class PDFReport:
             textColor=colors.black
         ))
 
-    def header(self, canvas, doc):
+def header(self, canvas, doc):
         """
-        Encabezado del documento
+        Encabezado del documento: una imagen que cubre toda la parte superior (opcional).
         """
         canvas.saveState()
-        header_text = 'Informe de Análisis de Datos'
-        canvas.setFont('Helvetica-Bold', 16)
-        canvas.drawCentredString(A4[0]/2.0, A4[1]-30*mm, header_text)
+        header_image = 'Captura de pantalla 2024-11-25 a la(s) 9.02.19 a.m..png'
+        if os.path.isfile(header_image):
+            canvas.drawImage(header_image, 0, A4[1]-40*mm, width=A4[0], height=40*mm)
+        else:
+            canvas.setFont('Helvetica-Bold', 16)
+            header_text = 'Informe de Análisis de Datos'
+            header_text = clean_text(header_text)
+            canvas.drawCentredString(A4[0]/2.0, A4[1]-30*mm, header_text)
         canvas.restoreState()
+
 
     def footer(self, canvas, doc):
         """
