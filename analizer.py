@@ -732,24 +732,31 @@ def procesar_filtros(filtro_natural):
     filtro_pandas = filtro_pandas.strip().split('Filtro pandas:')[-1].strip()
     return filtro_pandas
 
-def realizar_analisis(opcion, pregunta_usuario, filtros=None):
+def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     """
     Ajustado para evitar perder la selección del usuario 
-    cuando se re-renderiza la app por los selectbox/multiselect.
+    cuando se re-renderiza la app por los selectbox/multiselect,
+    y para aceptar df_base como DataFrame base.
     """
 
     resultados = ""
     figuras = []
 
-    # 1) Manejo del DataFrame filtrado
+    # Usar df_base si se proporciona, sino usar df global
+    if df_base is not None:
+        df_filtrado_inicial = df_base
+    else:
+        df_filtrado_inicial = df.copy()
+
+    # 1) Manejo adicional de filtros si se proporcionan
     if filtros:
         try:
-            df_filtrado = df.query(filtros)
+            df_filtrado = df_filtrado_inicial.query(filtros)
         except Exception as e:
             st.write(f"Error al aplicar el filtro: {e}")
-            df_filtrado = df.copy()
+            df_filtrado = df_filtrado_inicial.copy()
     else:
-        df_filtrado = df.copy()
+        df_filtrado = df_filtrado_inicial.copy()
 
     # Función auxiliar para obtener info de una variable
     def get_variable_info(variable_name):
@@ -1933,9 +1940,15 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
 
     # Convertir todo a numérico en df_mix
     df_mix = df_filtrado.copy()
-    for c in df_mix.columns:
-        if df_mix[c].dtype == object:
-            df_mix[c] = mapear_valores(df_mix[c])
+    for colname in df_mix.columns:
+        # NO mapear si es 'Sexo' u otras columnas que no sean Likert
+        if colname in ["Sexo", "Estado Civil", "ID", "Municipio", "Sector Económico"]:
+            continue
+        
+        # Verificar si dtype es object
+        if df_mix[colname].dtype == object:
+            # Aplicar mapear_valores
+            df_mix[colname] = mapear_valores(df_mix[colname])
 
     # Añadir las columnas auxiliares
     df_mix['Rango_Edad'] = df_cat['Rango_Edad']
@@ -2103,12 +2116,20 @@ def main():
     # Campos para fecha en la interfaz
     fecha_inicio = st.date_input("Fecha de inicio", date.today() - timedelta(days=30))
     fecha_fin = st.date_input("Fecha de fin", date.today())
-
+    
+    # Seleccionar código empresa (columna ID)
+    cod_empresa = st.text_input("Código de la empresa (ID). Déjelo vacío si no desea filtrar por empresa:")
+    
     # Crear DataFrame filtrado por fechas
     df_rango = df[
         (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) &
         (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
     ]
+    
+    # Si el usuario especifica un código
+    if cod_empresa.strip():
+        # Filtrar por esa ID
+        df_rango = df_rango[df_rango['ID'].astype(str) == cod_empresa.strip()]
 
     # -----------------------------
     # 1) Generar Informe General
