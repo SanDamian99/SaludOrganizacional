@@ -10,3 +10,4 @@ reportlab
 beautifulsoup4
 seaborn
 Pillow
+scipy
