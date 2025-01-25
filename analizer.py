@@ -1560,7 +1560,7 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf = PDFReport('informe_analisis_datos.pdf')
 
     # Extraer variables relevantes
-    variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'todas')
+    variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'todas', df)
     data_dictionary_relevante = {}
     for categoria, variables in data_dictionary.items():
         variables_relevantes_categoria = {}
