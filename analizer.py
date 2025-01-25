@@ -769,7 +769,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 1: Distribución de variable categórica
     # ----------------------------------------------------------------
     if opcion == '1':
-        variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'categórica')
+        variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
 
         # 1.1: Guardar/recuperar la selección en st.session_state
         if 'cat_var_opt1' not in st.session_state:
@@ -836,7 +836,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 2: Estadísticas descriptivas de variable numérica
     # ----------------------------------------------------------------
     elif opcion == '2':
-        variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica')
+        variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
 
         if 'num_var_opt2' not in st.session_state:
             st.session_state['num_var_opt2'] = None
@@ -890,7 +890,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 3: Relación entre dos variables numéricas
     # ----------------------------------------------------------------
     elif opcion == '3':
-        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica')
+        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica',df_filtrado)
 
         # Manejo en session_state
         if 'num_var3_x' not in st.session_state:
@@ -967,7 +967,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if 'num_var_opt4' not in st.session_state:
             st.session_state['num_var_opt4'] = None
 
-        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica')
+        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
         if vars_relevantes:
             st.session_state['num_var_opt4'] = st.selectbox(
                 "Selecciona una variable numérica para estadísticas descriptivas:",
@@ -1017,7 +1017,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 5: Correlación entre múltiples variables numéricas
     # ----------------------------------------------------------------
     elif opcion == '5':
-        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica')
+        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
 
         # Manejo de session_state
         if 'corr_vars_opt5' not in st.session_state:
@@ -1079,7 +1079,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 6: Análisis de regresión simple
     # ----------------------------------------------------------------
     elif opcion == '6':
-        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica')
+        vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica',df_filtrado)
 
         if 'reg_var6_x' not in st.session_state:
             st.session_state['reg_var6_x'] = None
@@ -1168,8 +1168,8 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         #  para var1 y var2).
         resultados += "Análisis de Tablas de Contingencia y Chi-cuadrado.\n\n"
 
-        vars_cat = obtener_variables_relevantes(pregunta_usuario, 'categórica')
-        vars_num = obtener_variables_relevantes(pregunta_usuario, 'numérica')
+        vars_cat = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
+        vars_num = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
         todas_las_cols = list(set(vars_cat + vars_num))
 
         if 'var7_1' not in st.session_state:
