@@ -1199,7 +1199,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         # --- 1) Busca todas las columnas relevantes (sin importar si son cat o num)
         st.write("DEBUG: Llamando obtener_variables_relevantes con tipo='todas'")
-        all_relevant = obtener_variables_relevantes_flexible(pregunta_usuario, 'todas', df_filtrado)
+        all_relevant = obtener_variables_relevante(pregunta_usuario, 'todas', df_filtrado)
         st.write("DEBUG - (opción7) all_relevant:", all_relevant)
     
         # Verificar si se obtuvieron columnas:
