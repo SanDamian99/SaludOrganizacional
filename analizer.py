@@ -2106,59 +2106,91 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     return informe_texto, figuras
     
 def main():
+    """
+    Función principal de la aplicación Streamlit para el análisis de datos 
+    sobre salud organizacional. Contiene la lógica de:
+    
+    1) Filtrado por fecha y código de empresa (ID).
+    2) Generación de un Informe General (rangos de fechas).
+    3) Realizar un análisis específico en base a una pregunta dada por el usuario 
+       y, opcionalmente, filtros en lenguaje natural.
+    4) Uso de Gemini para determinar la opción de análisis (1 a 7).
+    5) Interfaz para selección de variables, confirmación y generación de resultados 
+       e informe en PDF.
+    """
+    
+    # Título de la app
     st.title("Aplicación de Análisis de Datos sobre Salud Organizacional")
 
+    # 0) Mostrar un resumen de la base de datos (información general)
     mostrar_resumen_base_datos()
 
-    # Convertir la columna 'Hora de inicio' a datetime una sola vez
+    # 1) Conversión de la columna 'Hora de inicio' a tipo datetime (solo una vez)
     df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
 
-    # Campos para fecha en la interfaz
+    # 2) Widgets para escoger rango de fechas
     fecha_inicio = st.date_input("Fecha de inicio", date.today() - timedelta(days=30))
     fecha_fin = st.date_input("Fecha de fin", date.today())
-    
-    # Seleccionar código empresa (columna ID)
+
+    # 3) Opción para filtrar por código de empresa (columna "ID" en el DataFrame)
     cod_empresa = st.text_input("Código de la empresa (ID). Déjelo vacío si no desea filtrar por empresa:")
-    
-    # Crear DataFrame filtrado por fechas
+
+    # 4) Crear DataFrame filtrado por rango de fechas
     df_rango = df[
         (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) &
         (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
     ]
-    
-    # Si el usuario especifica un código
+
+    # Si el usuario especifica un código, filtrar también por esa ID
     if cod_empresa.strip():
-        # Filtrar por esa ID
         df_rango = df_rango[df_rango['ID'].astype(str) == cod_empresa.strip()]
 
-    # -----------------------------
-    # 1) Generar Informe General
-    # -----------------------------
+    # --------------------------------------------------------------------------
+    # 1) BOTÓN: Generar Informe General
+    # --------------------------------------------------------------------------
     if st.button("Generar Informe General"):
         with st.spinner("Generando informe general..."):
+            # Llamamos a la función que genera un informe general en PDF 
+            # para el rango de fechas (y código de empresa, si se proporcionó).
             informe_texto, figs = generar_informe_general(df_rango, fecha_inicio, fecha_fin)
+            
+            # Mostramos el texto del informe en la app
             st.write(informe_texto)
-            # Generar PDF
+
+            # Construimos el PDF usando la clase PDFReport
             pdf_general = PDFReport('informe_general.pdf')
             pdf_general.chapter_title("Informe General de Bienestar Laboral")
             pdf_general.chapter_body(informe_texto)
+
+            # Insertamos cada figura en el PDF
             for idx, f in enumerate(figs):
                 img_path = f'figura_general_{idx}.png'
                 f.savefig(img_path)
                 pdf_general.insert_image(img_path)
+
+            # Finalmente construimos y guardamos el PDF
             pdf_general.build_pdf()
 
+            # Ofrecemos el PDF para descargarlo
             with open('informe_general.pdf', 'rb') as f:
                 pdf_data = f.read()
             b64 = base64.b64encode(pdf_data).decode('utf-8')
             href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_general.pdf">Descargar Informe General en PDF</a>'
             st.markdown(href, unsafe_allow_html=True)
 
-    # ----------------------------------
-    # 2) Pregunta del usuario y análisis
-    # ----------------------------------
+    # --------------------------------------------------------------------------
+    # 2) Análisis específico a partir de la pregunta del usuario
+    # --------------------------------------------------------------------------
 
-    # Inicializar st.session_state si no existe
+    # Variables de sesión para manejar el flujo
+    if "opcion_analisis" not in st.session_state:
+        st.session_state["opcion_analisis"] = None  # guardará la opción (1..7) sugerida por Gemini
+    if "seleccion_hecha" not in st.session_state:
+        st.session_state["seleccion_hecha"] = False  # indica si ya se seleccionaron variables
+    if "resultados" not in st.session_state:
+        st.session_state["resultados"] = ""
+    if "figuras" not in st.session_state:
+        st.session_state["figuras"] = []
     if 'pregunta_usuario' not in st.session_state:
         st.session_state['pregunta_usuario'] = ''
     if 'filtro_natural' not in st.session_state:
@@ -2166,11 +2198,11 @@ def main():
     if 'analisis_realizado' not in st.session_state:
         st.session_state['analisis_realizado'] = False
 
-    # Si el análisis no ha sido realizado todavía
+    # Solo si todavía NO se ha realizado un análisis en esta sesión
     if not st.session_state['analisis_realizado']:
-        st.write("Por favor, ingresa tu pregunta y opcionalmente aplica filtros.")
+        st.write("Por favor, ingresa tu pregunta y opcionalmente aplica filtros para un análisis más focalizado.")
 
-        # Conservamos el texto de la pregunta y del filtro en session_state
+        # Capturamos la pregunta y el filtro del usuario
         st.session_state['pregunta_usuario'] = st.text_input(
             "Ingresa tu pregunta:",
             value=st.session_state['pregunta_usuario']
@@ -2180,40 +2212,151 @@ def main():
             value=st.session_state['filtro_natural']
         )
 
+        # Botón para iniciar el análisis
         if st.button("Realizar Análisis"):
             if st.session_state['pregunta_usuario'].strip() == '':
+                # Validación simple: si no hay pregunta, no hacemos nada
                 st.warning("Por favor, ingresa una pregunta para realizar el análisis.")
             else:
-                with st.spinner('Procesando...'):
-                    # Procesar filtro en lenguaje natural
+                with st.spinner('Procesando con Gemini...'):
+                    # 1) Procesar filtro en lenguaje natural (opcional)
                     filtros_usuario = procesar_filtros(st.session_state['filtro_natural'])
                     if filtros_usuario:
                         st.write(f"El filtro aplicado es: {filtros_usuario}")
                     else:
                         st.write("No se aplicará ningún filtro adicional.")
 
-                    # Gemini sugiere la opción de análisis
+                    # 2) Consultamos a Gemini para que sugiera la opción (1..7) de análisis
                     respuesta = procesar_pregunta(st.session_state['pregunta_usuario'])
+                    st.session_state["opcion_analisis"] = respuesta
                     st.write(f"Gemini sugiere la opción de análisis: {respuesta}")
 
-                    # Usar df_rango en lugar de df
-                    # Ajusta la firma de realizar_analisis para que reciba df_base
-                    resultados, figuras = realizar_analisis(
-                        opcion=respuesta,
-                        pregunta_usuario=st.session_state['pregunta_usuario'],
-                        filtros=filtros_usuario,       # Filtros en lenguaje natural
-                        df_base=df_rango              # df base filtrado por fechas
-                    )
+                    # Reseteamos banderas y resultados previos
+                    st.session_state["seleccion_hecha"] = False
+                    st.session_state["resultados"] = ""
+                    st.session_state["figuras"] = []
 
-                    st.write("**Resultados del análisis:**")
-                    st.write(resultados)
+                    # Verificamos si la respuesta (opción) está en nuestro diccionario 
+                    if st.session_state["opcion_analisis"] is not None:
+                        opcion = st.session_state["opcion_analisis"]
+                        
+                        # Definimos los requerimientos de cada opción
+                        requerimientos = {
+                            "1": {"num_vars": 0, "cat_vars": 1},  # Distribución variable categórica
+                            "2": {"num_vars": 1, "cat_vars": 0},  # Estadísticas descriptivas variable numérica
+                            "3": {"num_vars": 2, "cat_vars": 0},  # Relación entre dos variables numéricas
+                            "4": {"num_vars": 1, "cat_vars": 0},  # Filtrar y mostrar estadísticas de una variable numérica
+                            "5": {"num_vars": -1, "cat_vars": 0}, # Correlación múltiples variables numéricas
+                            "6": {"num_vars": 2, "cat_vars": 0},  # Análisis de regresión simple
+                            "7": {"num_vars": 1, "cat_vars": 1},  # Tablas de contingencia y Chi-cuadrado
+                        }
 
-                    # Generar informe PDF
+                        # Si la opción no está reconocida en nuestro diccionario
+                        if opcion not in requerimientos:
+                            st.warning("Opción desconocida o no implementada (devuelta por Gemini).")
+                        else:
+                            req = requerimientos[opcion]
+                            num_needed = req["num_vars"]
+                            cat_needed = req["cat_vars"]
+
+                            # Subheader para la sección de selección de variables
+                            st.subheader(f"2) Seleccione las variables para el análisis (opción {opcion})")
+
+                            # Ahora realizamos el análisis con la función 'realizar_analisis'
+                            # La función en su implementación actual mostrará menús de selección 
+                            # y/o gráficos directamente.
+                            resultados, figuras = realizar_analisis(
+                                opcion=respuesta,
+                                pregunta_usuario=st.session_state['pregunta_usuario'],
+                                filtros=filtros_usuario,  # El filtro en lenguaje natural convertido (query)
+                                df_base=df_rango          # Base de datos filtrada por fecha / ID
+                            )
+
+                            # 2.2) Dependiendo de cuántas variables necesite la opción, 
+                            #     podríamos mostrar selectboxes adicionales o no. 
+                            #     (En el código actual, 'realizar_analisis' ya maneja selectboxes 
+                            #     por dentro, así que lo dejamos como está).
+
+                            # Aun así, ejemplificamos la forma de guardarlas en variables 
+                            # si fuera necesario que el usuario las escoja manualmente:
+                            numeric_cols = df_rango.select_dtypes(include=["int", "float"]).columns.tolist()
+                            cat_cols = df_rango.select_dtypes(include=["object", "category"]).columns.tolist()
+                            
+                            selected_vars_num = []
+                            selected_vars_cat = []
+                            
+                            # (Según la opción, mostramos selectboxes manuales) 
+                            # Este bloque es ilustrativo; en la implementación actual 
+                            # 'realizar_analisis' ya los maneja internamente.
+                            if num_needed > 0:
+                                if num_needed == 1:
+                                    var_num_unica = st.selectbox(
+                                        "Seleccione variable numérica:",
+                                        numeric_cols, 
+                                        key="var_num_unica_key"
+                                    )
+                                    selected_vars_num = [var_num_unica]
+                                elif num_needed == 2:
+                                    var_num1 = st.selectbox(
+                                        "Variable numérica (X):",
+                                        numeric_cols,
+                                        key="var_num1_key"
+                                    )
+                                    numeric_cols2 = [c for c in numeric_cols if c != var_num1]
+                                    var_num2 = st.selectbox(
+                                        "Variable numérica (Y):",
+                                        numeric_cols2,
+                                        key="var_num2_key"
+                                    )
+                                    selected_vars_num = [var_num1, var_num2]
+                                elif num_needed == -1:
+                                    selected_vars_num = st.multiselect(
+                                        "Selecciona múltiples variables numéricas:",
+                                        numeric_cols,
+                                        key="var_multiselect_key"
+                                    )
+
+                            if cat_needed > 0:
+                                if cat_needed == 1:
+                                    var_cat_unica = st.selectbox(
+                                        "Seleccione variable categórica:",
+                                        cat_cols,
+                                        key="var_cat_unica_key"
+                                    )
+                                    selected_vars_cat = [var_cat_unica]
+                                elif cat_needed == 2:
+                                    # Ejemplo si la opción 7 necesitara 2 categóricas, etc.
+                                    # Se omite detalle al ser un ejemplo.
+                                    pass
+
+                            # Botón de confirmación de la selección manual (opcional)
+                            # Si se desea usar la lógica de 'selected_vars_num' y 'selected_vars_cat'
+                            # en lugar del approach interno de 'realizar_analisis'.
+                            if st.button("Confirmar Selección de Variables"):
+                                # Validación
+                                if num_needed > 0 and len(selected_vars_num) == 0:
+                                    st.warning("Por favor seleccione las variables numéricas necesarias.")
+                                elif cat_needed > 0 and len(selected_vars_cat) == 0:
+                                    st.warning("Por favor seleccione las variables categóricas necesarias.")
+                                else:
+                                    st.session_state["selected_vars_num"] = selected_vars_num
+                                    st.session_state["selected_vars_cat"] = selected_vars_cat
+                                    st.success("Variables seleccionadas correctamente. Puedes continuar.")
+                                    st.session_state["seleccion_hecha"] = True
+
+                    # ----------------------------------------------------------------
+                    # 3) Luego, cuando la selección está hecha, se podría generar
+                    #    un segundo análisis con las variables definidas manualmente.
+                    #    En esta implementación, sin embargo, ya 'realizar_analisis'
+                    #    ejecuta todo. Así que basta con generar el PDF.
+                    # ----------------------------------------------------------------
+                    
+                    # Generamos el informe en PDF con los resultados y figuras obtenidos
                     generar_informe(
-                        st.session_state['pregunta_usuario'],
-                        respuesta,
-                        resultados,
-                        figuras
+                        st.session_state['pregunta_usuario'],  # la pregunta del usuario
+                        respuesta,                              # opción que sugirió Gemini
+                        resultados,                             # texto de resultados
+                        figuras                                 # lista de figuras matplotlib
                     )
 
                     # Botón de descarga del PDF
@@ -2223,30 +2366,27 @@ def main():
                     href = f'<a href="data:application/octet-stream;base64,{b64}" download="informe_analisis_datos.pdf">Descargar Informe en PDF</a>'
                     st.markdown(href, unsafe_allow_html=True)
 
-                    # Marcamos que el análisis se ha completado
+                    # Marcamos que se ha completado el análisis
                     st.session_state['analisis_realizado'] = True
 
+                    # Posibilidad de hacer otra consulta sin recargar la app
                     st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación:")
                     if st.button("Realizar otra consulta"):
-                        # Limpiamos las variables de sesión 
-                        # (sin usar st.experimental_rerun)
                         st.session_state['pregunta_usuario'] = ''
                         st.session_state['filtro_natural'] = ''
                         st.session_state['analisis_realizado'] = False
-                        # La app se re-renderizará naturalmente. 
-                        # No se pierde el DF filtrado.
+                        # No llamamos a st.experimental_rerun() para no recargar toda la app;
+                        # al volver a re-renderizar, se detectará 'analisis_realizado' = False
+                        # y volverá a mostrar la interfaz de preguntas.
 
     else:
-        # Ya se marcó el análisis como realizado
+        # Si 'analisis_realizado' == True, el usuario ya hizo un análisis en esta sesión
         st.write("Si deseas realizar otra consulta, haz clic en el botón a continuación.")
         if st.button("Realizar otra consulta"):
-            # Borramos estados para un nuevo análisis
+            # Limpiamos los estados para permitir un nuevo análisis
             st.session_state['pregunta_usuario'] = ''
             st.session_state['filtro_natural'] = ''
             st.session_state['analisis_realizado'] = False
-            # Sin st.experimental_rerun, la app se volverá a renderizar, 
-            # detectará analisis_realizado=False y mostrará la UI de pregunta
-            # manteniendo df_rango para su uso en un nuevo análisis
 
 if __name__ == "__main__":
     main()
