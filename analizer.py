@@ -1697,7 +1697,12 @@ respuesta_map = {
 
 # Función para mapear valores
 def mapear_valores(serie):
-    return serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
+    def mapear_valores(serie):
+    print("DEBUG - Antes de replace, unique values:", serie.unique())
+    temp = serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
+    print("DEBUG - Después de replace->to_numeric, unique values:", temp.unique())
+    return temp
+    
 dimensiones = {
     "Control del Tiempo": [
         "Tengo la opción de decidir qué hago en mi trabajo.",
@@ -1865,7 +1870,16 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     df_num = df_filtrado.copy()
     for col in df_num.columns:
         if df_num[col].dtype == object:
+            # EJEMPLO: print de debug
+            print("DEBUG - Antes de mapear_valores, df_num[column].value_counts():")
+            print(df_num[col].value_counts(dropna=False))
+            
+            # Llamada a mapear_valores
             df_num[col] = mapear_valores(df_num[col])
+            
+            # Después
+            print("DEBUG - Después de mapear_valores, df_num[column].value_counts():")
+            print(df_num[col].value_counts(dropna=False))
 
     # Definir umbrales
     # Fortaleza: >=5, Riesgo: <=3, Intermedio: (3,5)
