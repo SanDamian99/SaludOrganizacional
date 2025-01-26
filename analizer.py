@@ -766,7 +766,7 @@ def procesar_filtros(filtro_natural):
 
     El filtro es:
 
-    "{filtro_natural}"
+    {filtro_natural}
 
     Proporciona únicamente la expresión de filtrado en el formato que pandas 'query' entiende, sin ninguna explicación adicional.
     Por ejemplo, si el filtro es 'empleados mayores de 30 años y que sean mujeres', la salida debería ser "Edad > 30 & Sexo == 'Mujer'".
@@ -777,10 +777,6 @@ def procesar_filtros(filtro_natural):
     # Limpiar la respuesta de Gemini
     filtro_pandas = filtro_pandas.strip().split('Filtro pandas:')[-1].strip()
     return filtro_pandas
-
-def clean_column_names(df):
-    df.columns = [str(col).strip().replace('  ', ' ').replace('\n', '').replace('\t', '').lower() for col in df.columns]
-    return df
     
 def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     """
@@ -1197,22 +1193,48 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         # 7) Tablas de contingencia y Chi-cuadrado
         resultados += "Análisis de Tablas de Contingencia y Chi-cuadrado.\n\n"
     
+        st.write("DEBUG: Entrando a la Opción 7 - Tablas de Contingencia")
+        st.write("DEBUG: La pregunta del usuario es:", pregunta_usuario)
+        st.write("DEBUG: df_filtrado.shape =", df_filtrado.shape)
+    
         # --- 1) Busca todas las columnas relevantes (sin importar si son cat o num)
-        all_relevant = obtener_variables_relevantes(pregunta_usuario, 'todas', df_filtrado)
+        st.write("DEBUG: Llamando obtener_variables_relevantes con tipo='todas'")
+        all_relevant = obtener_variables_relevantes_flexible(pregunta_usuario, 'todas', df_filtrado)
         st.write("DEBUG - (opción7) all_relevant:", all_relevant)
+    
+        # Verificar si se obtuvieron columnas:
+        if not all_relevant:
+            st.write("DEBUG: No se encontraron columnas en all_relevant (lista vacía).")
+        else:
+            st.write("DEBUG: Se encontraron columns en all_relevant.")
     
         if len(all_relevant) < 2:
             resultados += "No hay suficientes columnas relevantes para la tabla.\n"
+            st.write("DEBUG - Motivo: len(all_relevant) < 2 =>", len(all_relevant))
             return resultados, figuras
     
         # --- 2) Separa en cat y num
         cats_encontradas = []
         nums_encontradas = []
+    
+        st.write("DEBUG: df_filtrado dtypes:\n", df_filtrado.dtypes)
+    
         for col in all_relevant:
-            if col in df_filtrado.select_dtypes(include=['object','category']).columns:
+            # Mostrar el nombre y su dtype real
+            if col not in df_filtrado.columns:
+                st.write(f"DEBUG: La columna '{col}' NO está en df_filtrado.columns (posible mismatch).")
+                continue
+            real_dtype = df_filtrado[col].dtype
+            st.write(f"DEBUG: Columna '{col}', dtype -> {real_dtype}")
+    
+            # Revisamos si es object/categ o num
+            if real_dtype in [object, 'category']:
                 cats_encontradas.append(col)
-            else:
+            elif str(real_dtype).startswith('float') or str(real_dtype).startswith('int'):
                 nums_encontradas.append(col)
+            else:
+                st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no entra ni a cat ni a num.")
+    
     
         st.write("DEBUG - cats_encontradas:", cats_encontradas)
         st.write("DEBUG - nums_encontradas:", nums_encontradas)
@@ -1224,24 +1246,22 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         # c) dos numéricas => no aplica (si quisiéramos, habría que agrupar ambas)
         #    o forzar la que le interese al usuario
     
-        # Para simplificar: tomamos la 1ra cat y la 1ra num si existen,
-        # o la 1ra cat y la 2da cat si no hay num, etc.
-    
         var1, var2 = None, None
     
+        st.write("DEBUG: Reglas para asignar var1, var2 ...")
+    
         if len(cats_encontradas) >= 2:
-            # Con 2 categóricas se arma crosstab normal
             var1 = cats_encontradas[0]
             var2 = cats_encontradas[1]
-            st.write(f"DEBUG - Usando 2 categóricas: {var1}, {var2}")
+            st.write(f"DEBUG - Usando 2 categóricas: var1={var1}, var2={var2}")
         elif len(cats_encontradas) == 1 and len(nums_encontradas) >= 1:
-            # 1 cat y 1 num => agrupar la num y crosstab
             var1 = cats_encontradas[0]
             var2 = nums_encontradas[0]
             st.write(f"DEBUG - Usando cat={var1} y num={var2}")
         else:
             # No es posible
             resultados += "No se pudo encontrar dos columnas adecuadas (categ y/o num) para la tabla.\n"
+            st.write("DEBUG - No se cumplieron las condiciones para tener var1 y var2")
             return resultados, figuras
     
         # --- 4) Generar la crosstab
@@ -1250,25 +1270,46 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         def agrupar_si_es_num(s, nbins=5):
             """Si la columna es numérica, agrupar en nbins. Si es categórica, devolver tal cual."""
-            if s.dtype in ['float64','float32','int64','int32']:
+            st.write(f"DEBUG: agrupar_si_es_num -> dtype={s.dtype}, length={len(s)}")
+            if str(s.dtype).startswith('float') or str(s.dtype).startswith('int'):
                 return pd.cut(s, nbins, labels=False).astype(str)
             else:
                 return s.astype(str)
     
+        # Mostrar la cantidad de nulos antes del dropna
+        st.write(f"DEBUG: Cantidad de nulos en '{var1}': {df_filtrado[var1].isna().sum()}.")
+        st.write(f"DEBUG: Cantidad de nulos en '{var2}': {df_filtrado[var2].isna().sum()}.")
+    
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
     
+        st.write(f"DEBUG: serie1 (var1={var1}) length tras dropna -> {len(serie1)}")
+        st.write(f"DEBUG: serie2 (var2={var2}) length tras dropna -> {len(serie2)}")
+    
+        # Mostrar un head(5) para ver si hay datos
+        st.write("DEBUG: serie1.sample(5):", serie1.sample(min(5,len(serie1))).tolist() if len(serie1)>0 else "VACIO")
+        st.write("DEBUG: serie2.sample(5):", serie2.sample(min(5,len(serie2))).tolist() if len(serie2)>0 else "VACIO")
+    
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes (serie vacía) para generar la tabla.\n"
+            st.write("DEBUG - Motivo: serie1/serie2 está vacía => no se genera la tabla.")
             return resultados, figuras
     
         # Agrupar si es num
         serie1 = agrupar_si_es_num(serie1)
         serie2 = agrupar_si_es_num(serie2)
     
+        st.write("DEBUG: Después de agrupar_si_es_num:")
+        st.write("DEBUG: serie1 unique values ->", serie1.unique())
+        st.write("DEBUG: serie2 unique values ->", serie2.unique())
+    
         crosstab = pd.crosstab(serie1, serie2)
+        st.write("DEBUG - crosstab shape:", crosstab.shape)
+        st.write("DEBUG - crosstab:\n", crosstab)
+    
         if crosstab.empty:
             resultados += "Tabla de contingencia vacía.\n"
+            st.write("DEBUG - Motivo: crosstab está vacío (no hay registros tras agrupar).")
             return resultados, figuras
     
         resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
