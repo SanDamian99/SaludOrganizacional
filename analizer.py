@@ -644,26 +644,43 @@ Un miembro de la empresa ha hecho la siguiente pregunta:
 
 "{pregunta_usuario}"
 
-Por favor, decide cuál de las opciones de análisis (1-6) es más adecuada para responder a esta pregunta. Solo responde con el número de la opción más relevante. El número debe ser del 1 al 6. Solo puede ser un número.
+Por favor, decide cuál de las opciones de análisis (1-7) es más adecuada para responder a esta pregunta. Solo responde con el número de la opción más relevante. El número debe ser del 1 al 6. Solo puede ser un número.
 """
     respuesta = enviar_prompt(prompt_pregunta)
     return respuesta.strip()
 
 def obtener_variables_relevantes(pregunta, tipo_variable, df):
     """
-    Mejora la selección de variables relevantes basándose 
-    en el tipo (categórica o numérica) que pide el usuario.
+    Selecciona columnas relevantes según el tipo de dato (numérico/categórico) solicitado,
+    priorizando las relacionadas con salud mental cuando la pregunta lo sugiere
+    y asegurando que no queden series completamente vacías.
     """
+    # Palabras clave para detectar "pregunta sobre salud mental"
+    keywords_salud_mental = ["salud mental", "bienestar", "burnout", "estrés", "estres"]
+    lower_pregunta = pregunta.lower()
 
-    # 1. Clasificar las columnas de df en numéricas y categóricas
-    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    # PASO A) Detección de si la pregunta menciona temas de salud mental
+    sugerir_dim_salud = any(kw in lower_pregunta for kw in keywords_salud_mental)
 
-    # 2. Construir un prompt que incluya la información de 
-    #    qué columnas son numéricas y cuáles son categóricas
+    # PASO B) Construir la lista de prioridad (todas las columnas de "Dimensiones de Bienestar y Salud Mental")
+    prioridad_salud = []
+    if sugerir_dim_salud:
+        # Recorremos cada dimensión en el diccionario 'dimensiones'
+        for dim_name, lista_columnas_dim in dimensiones.items():
+            for col_name in lista_columnas_dim:
+                # Verificar que 'col_name' exista en df.columns
+                if col_name in df.columns and col_name not in prioridad_salud:
+                    prioridad_salud.append(col_name)
+
+    # PASO C) Clasificar las columnas de df en numéricas y categóricas
+    numeric_cols = df.select_dtypes(include=['int64','float64','int32','float32']).columns.tolist()
+    cat_cols = df.select_dtypes(include=['object','category']).columns.tolist()
+
+    # Construir strings con la lista de columnas (para el prompt a Gemini)
     columnas_numericas_str = ", ".join(numeric_cols)
     columnas_categoricas_str = ", ".join(cat_cols)
 
+    # PASO D) Crear el prompt para Gemini
     prompt_variables = f"""
     Aquí tienes la clasificación local de columnas del DataFrame:
 
@@ -679,34 +696,54 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     y sin explicaciones adicionales.
     """
 
-    # 3. Llamar a Gemini con este prompt
+    # PASO E) Llamar a Gemini con este prompt
     respuesta = enviar_prompt(prompt_variables)
 
-    # 4. Dividir en comas y filtrar
-    #    4.1: Quitar espacios extra
-    #    4.2: Asegurarnos de que realmente estén en df.columns
-    #    4.3: Asegurarnos de que coincidan con el tipo de dato pedido
-    variables_sugeridas = [var.strip() for var in respuesta.split(',')]
+    # Convertir la respuesta de Gemini en una lista de columnas sugeridas
+    variables_sugeridas = [var.strip() for var in respuesta.split(',') if var.strip()]
 
-    # 5. Filtrar por el tipo correspondiente, según la decisión
-    #    de 'tipo_variable' (por ejemplo, 'numérica' o 'categórica')
-    if tipo_variable.lower() in ['numérica', 'numerica']:
+    # PASO F) Según el tipo solicitado, filtrar a num/cat
+    if tipo_variable.lower() in ["numérica","numerica"]:
         vars_correspondientes = set(numeric_cols)
-    elif tipo_variable.lower() in ['categórica', 'categorica']:
+    elif tipo_variable.lower() in ["categórica","categorica"]:
         vars_correspondientes = set(cat_cols)
     else:
-        # Si no se especifica, podrías devolver todo, 
-        # o manejarlo según tu lógica
+        # Si no se especifica, asumimos que puede retornar cualquiera
         vars_correspondientes = set(df.columns)
 
-    # 6. Intersectar lo que Gemini sugirió 
-    #    con lo que realmente corresponde y existe
+    # Filtrar la sugerencia de Gemini para que solo sean columnas existentes y del tipo correcto
     variables_filtradas = []
     for var in variables_sugeridas:
         if var in vars_correspondientes and var in df.columns:
             variables_filtradas.append(var)
 
-    return variables_filtradas
+    # PASO G) Ajustar la 'prioridad_salud' también al tipo (num/cat)
+    if tipo_variable.lower() in ["numérica","numerica"]:
+        prioridad_salud = [c for c in prioridad_salud if c in numeric_cols]
+    elif tipo_variable.lower() in ["categórica","categorica"]:
+        prioridad_salud = [c for c in prioridad_salud if c in cat_cols]
+
+    # PASO H) Combinar la prioridad con lo sugerido, sin duplicar
+    final_list = []
+    # Primero la prioridad
+    for colx in prioridad_salud:
+        if colx not in final_list:
+            final_list.append(colx)
+    # Luego lo sugerido por Gemini
+    for colx in variables_filtradas:
+        if colx not in final_list:
+            final_list.append(colx)
+
+    # PASO I) Quitar aquellas columnas que estén completamente vacías (no tengan datos no-nulos)
+    # para evitar series con longitud 0.
+    final_list_no_empty = []
+    for col in final_list:
+        # Si la columna no está vacía tras quitar nulos
+        if df[col].dropna().shape[0] > 0:
+            final_list_no_empty.append(col)
+
+    # Retornar la lista final priorizada y sin columnas vacías
+    return final_list_no_empty
 
 # Función para procesar filtros en lenguaje natural utilizando Gemini
 def procesar_filtros(filtro_natural):
