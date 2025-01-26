@@ -1145,56 +1145,70 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # ===========================================================
     elif opcion == '7':
         resultados += "Análisis de Tablas de Contingencia y Chi-cuadrado.\n\n"
-
-        # Podría ser variable categórica o numérica (agrupada)
+    
+        # Obtener listas de variables categóricas y numéricas relevantes
         vars_cat = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
         vars_num = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
-        todas_las_cols = list(set(vars_cat + vars_num))
-
+        
+        # Unir ambas listas sin usar 'set()' para no perder el orden.
+        # (Opcional: se pueden concatenar y luego filtrar duplicados en orden.)
+        todas_las_cols = []
+        for c in vars_cat + vars_num:
+            if c not in todas_las_cols:
+                todas_las_cols.append(c)
+    
+        # (Opcional) barajar si deseas que sea aleatorio:
+        # import random
+        # random.shuffle(todas_las_cols)
+    
+        # Necesitamos al menos 2 columnas diferentes
         if len(todas_las_cols) < 2:
             resultados += "No hay suficientes columnas relevantes para hacer tablas de contingencia.\n"
             return resultados, figuras
-
-        # Tomar las dos primeras distintas
+    
+        # Tomar la primera como var1
         var1 = todas_las_cols[0]
+        # Buscar la segunda distinta
         var2 = None
-        for col in todas_las_cols[1:]:
-            if col != var1:
-                var2 = col
+        for c in todas_las_cols[1:]:
+            if c != var1:
+                var2 = c
                 break
-
+    
         if var2 is None:
             resultados += "No se encontraron dos columnas diferentes (categóricas o numéricas) para la tabla.\n"
             return resultados, figuras
-
-        # Otras no utilizadas
-        idx_unused = todas_las_cols.index(var2) + 1
-        otras_vars = todas_las_cols[idx_unused:]
+    
+        # Mostrar las otras no utilizadas
+        start_idx = todas_las_cols.index(var2) + 1
+        otras_vars = todas_las_cols[start_idx:]
         if otras_vars:
             st.write(f"**Otras columnas relevantes no utilizadas:** {otras_vars}")
-
+    
         import numpy as np
         from scipy.stats import chi2_contingency
-
+    
         def to_categorical_if_numeric(s, nbins=5):
             if np.issubdtype(s.dtype, np.number):
+                if s.empty:
+                    # Retornamos algo inocuo
+                    return pd.Series([], dtype=str)
                 cat_series = pd.cut(s, nbins, labels=False)
                 return cat_series.astype(str)
             else:
                 return s.astype(str)
-
+    
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
-        
-        # Verificar si están vacías ANTES de convertir a categóricas:
+    
+        # Verificar antes de 'cut' si están vacías
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes para generar la tabla.\n"
             return resultados, figuras
-        
-        # Si no están vacías, ahora sí llamas a la función
+    
         serie1 = to_categorical_if_numeric(serie1)
         serie2 = to_categorical_if_numeric(serie2)
-
+    
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes para generar la tabla.\n"
         else:
@@ -1208,7 +1222,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
                 resultados += f"**p-value**: {p:.4f}\n"
                 resultados += f"**Grados de libertad (dof)**: {dof}\n"
                 resultados += f"**Valores Esperados**:\n{expected}\n\n"
-
+    
                 # Graficar heatmap
                 try:
                     fig_ct, ax_ct = plt.subplots()
