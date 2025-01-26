@@ -545,6 +545,9 @@ data_dictionary = {
 
 df = pd.read_excel(ruta_csv)
 
+# Limpiar los nombres de las columnas
+df = clean_column_names(df)
+
 # Extraer información de las columnas y tipos de datos
 def obtener_informacion_datos(df):
     info_columnas = []
@@ -829,6 +832,10 @@ def procesar_filtros(filtro_natural):
     filtro_pandas = filtro_pandas.strip().split('Filtro pandas:')[-1].strip()
     return filtro_pandas
 
+def clean_column_names(df):
+    df.columns = [str(col).strip().replace('  ', ' ').replace('\n', '').replace('\t', '').lower() for col in df.columns]
+    return df
+    
 def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     """
     Realiza el análisis de datos según la 'opcion' (1..7) detectada, 
