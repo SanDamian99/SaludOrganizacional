@@ -1185,8 +1185,13 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
 
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
-
-        # Convertir a categóricas si son numéricas
+        
+        # Verificar si están vacías ANTES de convertir a categóricas:
+        if serie1.empty or serie2.empty:
+            resultados += "No hay datos suficientes para generar la tabla.\n"
+            return resultados, figuras
+        
+        # Si no están vacías, ahora sí llamas a la función
         serie1 = to_categorical_if_numeric(serie1)
         serie2 = to_categorical_if_numeric(serie2)
 
