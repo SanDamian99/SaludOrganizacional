@@ -1149,26 +1149,23 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         # Obtener listas de variables categóricas y numéricas relevantes
         vars_cat = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
         vars_num = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
-        
-        # Unir ambas listas sin usar 'set()' para no perder el orden.
-        # (Opcional: se pueden concatenar y luego filtrar duplicados en orden.)
+    
+        # Concatenar sin usar 'set' (preservar orden) y filtrar duplicados
         todas_las_cols = []
         for c in vars_cat + vars_num:
             if c not in todas_las_cols:
                 todas_las_cols.append(c)
     
-        # (Opcional) barajar si deseas que sea aleatorio:
-        # import random
-        # random.shuffle(todas_las_cols)
+        # DEBUG: imprime las columnas detectadas
+        st.write("DEBUG (Opción 7) - Columnas relevantes totales:", todas_las_cols)
     
-        # Necesitamos al menos 2 columnas diferentes
         if len(todas_las_cols) < 2:
             resultados += "No hay suficientes columnas relevantes para hacer tablas de contingencia.\n"
+            st.write("DEBUG - Motivo: Se encontraron menos de 2 columnas relevantes:", todas_las_cols)
             return resultados, figuras
     
-        # Tomar la primera como var1
+        # Tomar la primera y la segunda distinta
         var1 = todas_las_cols[0]
-        # Buscar la segunda distinta
         var2 = None
         for c in todas_las_cols[1:]:
             if c != var1:
@@ -1177,21 +1174,28 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         if var2 is None:
             resultados += "No se encontraron dos columnas diferentes (categóricas o numéricas) para la tabla.\n"
+            st.write("DEBUG - Motivo: No se halló una segunda columna distinta de var1:", var1)
             return resultados, figuras
     
-        # Mostrar las otras no utilizadas
-        start_idx = todas_las_cols.index(var2) + 1
-        otras_vars = todas_las_cols[start_idx:]
+        # Mostrar info de las columnas elegidas
+        st.write(f"DEBUG - var1 = {var1}, var2 = {var2}")
+    
+        # Mostrar las demás no utilizadas
+        idx_unused = todas_las_cols.index(var2) + 1
+        otras_vars = todas_las_cols[idx_unused:]
         if otras_vars:
-            st.write(f"**Otras columnas relevantes no utilizadas:** {otras_vars}")
+            st.write(f"DEBUG - Otras columnas relevantes no utilizadas: {otras_vars}")
     
         import numpy as np
         from scipy.stats import chi2_contingency
     
         def to_categorical_if_numeric(s, nbins=5):
+            # debug
+            st.write(f"DEBUG - Longitud antes de 'pd.cut': {len(s)}")
             if np.issubdtype(s.dtype, np.number):
                 if s.empty:
-                    # Retornamos algo inocuo
+                    # imprimir debug
+                    st.write("DEBUG - Serie vacía antes de cut, retornando vacía.")
                     return pd.Series([], dtype=str)
                 cat_series = pd.cut(s, nbins, labels=False)
                 return cat_series.astype(str)
@@ -1201,39 +1205,51 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
     
-        # Verificar antes de 'cut' si están vacías
+        # Debug: info de las series
+        st.write(f"DEBUG - Longitud serie1 ({var1}):", len(serie1))
+        st.write(f"DEBUG - Longitud serie2 ({var2}):", len(serie2))
+    
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes para generar la tabla.\n"
+            st.write("DEBUG - Motivo: Al menos una de las series está vacía.")
             return resultados, figuras
     
+        # Convertir a categóricas si num
         serie1 = to_categorical_if_numeric(serie1)
         serie2 = to_categorical_if_numeric(serie2)
     
+        # Chequeo final antes de crosstab
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes para generar la tabla.\n"
-        else:
-            crosstab = pd.crosstab(serie1, serie2)
-            if crosstab.empty:
-                resultados += "Tabla de contingencia vacía.\n"
-            else:
-                resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
-                chi2, p, dof, expected = chi2_contingency(crosstab)
-                resultados += f"**Chi-cuadrado**: {chi2:.2f}\n"
-                resultados += f"**p-value**: {p:.4f}\n"
-                resultados += f"**Grados de libertad (dof)**: {dof}\n"
-                resultados += f"**Valores Esperados**:\n{expected}\n\n"
+            st.write("DEBUG - Motivo: La conversión a categorías resultó en serie vacía.")
+            return resultados, figuras
     
-                # Graficar heatmap
-                try:
-                    fig_ct, ax_ct = plt.subplots()
-                    sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct)
-                    ax_ct.set_title(f"Heatmap de {var1} vs {var2}")
-                    ax_ct.set_xlabel(var2)
-                    ax_ct.set_ylabel(var1)
-                    st.pyplot(fig_ct)
-                    figuras.append(fig_ct)
-                except Exception as e:
-                    st.write(f"No se pudo graficar la tabla de contingencia: {e}")
+        crosstab = pd.crosstab(serie1, serie2)
+        st.write("DEBUG - Crosstab shape:", crosstab.shape)
+    
+        if crosstab.empty:
+            resultados += "Tabla de contingencia vacía.\n"
+            st.write("DEBUG - Motivo: crosstab está vacío.")
+        else:
+            resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
+            chi2, p, dof, expected = chi2_contingency(crosstab)
+            resultados += f"**Chi-cuadrado**: {chi2:.2f}\n"
+            resultados += f"**p-value**: {p:.4f}\n"
+            resultados += f"**Grados de libertad (dof)**: {dof}\n"
+            resultados += f"**Valores Esperados**:\n{expected}\n\n"
+    
+            try:
+                fig_ct, ax_ct = plt.subplots()
+                sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct)
+                ax_ct.set_title(f"Heatmap de {var1} vs {var2}")
+                ax_ct.set_xlabel(var2)
+                ax_ct.set_ylabel(var1)
+                st.pyplot(fig_ct)
+                figuras.append(fig_ct)
+            except Exception as e:
+                st.write(f"No se pudo graficar la tabla de contingencia: {e}")
+    
+        return resultados, figuras
 
     else:
         resultados += "Opción de análisis no reconocida.\n"
