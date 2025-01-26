@@ -1697,7 +1697,6 @@ respuesta_map = {
 
 # Función para mapear valores
 def mapear_valores(serie):
-    def mapear_valores(serie):
     print("DEBUG - Antes de replace, unique values:", serie.unique())
     temp = serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
     print("DEBUG - Después de replace->to_numeric, unique values:", temp.unique())
