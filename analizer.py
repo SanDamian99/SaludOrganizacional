@@ -1197,7 +1197,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         resultados += "Análisis de Tablas de Contingencia y Chi-cuadrado.\n\n"
     
         # --- 1) Busca todas las columnas relevantes (sin importar si son cat o num)
-        all_relevant = obtener_variables_relevantes_flexible(pregunta_usuario, 'todas', df_filtrado)
+        all_relevant = obtener_variables_relevantes(pregunta_usuario, 'todas', df_filtrado)
         st.write("DEBUG - (opción7) all_relevant:", all_relevant)
     
         if len(all_relevant) < 2:
