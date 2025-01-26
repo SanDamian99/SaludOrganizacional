@@ -652,35 +652,48 @@ Por favor, decide cuál de las opciones de análisis (1-7) es más adecuada para
 def obtener_variables_relevantes(pregunta, tipo_variable, df):
     """
     Selecciona columnas relevantes según el tipo de dato (numérico/categórico) solicitado,
-    priorizando las relacionadas con salud mental cuando la pregunta lo sugiere
+    priorizando las relacionadas con salud mental cuando la pregunta lo sugiere,
     y asegurando que no queden series completamente vacías.
+    
+    Si no se encuentra nada (ni con la priorización de salud mental),
+    se toma como 'último recurso' todas las columnas de salud mental
+    que correspondan al tipo (numérico o categórico).
     """
-    # Palabras clave para detectar "pregunta sobre salud mental"
+    
+    import streamlit as st  # asumiendo que queremos usar st.write para debug
+    
+    # --- 1) Palabras clave para "pregunta sobre salud mental" ---
     keywords_salud_mental = ["salud mental", "bienestar", "burnout", "estrés", "estres"]
     lower_pregunta = pregunta.lower()
-
-    # PASO A) Detección de si la pregunta menciona temas de salud mental
+    
+    # Detectar si la pregunta menciona temas de salud mental
     sugerir_dim_salud = any(kw in lower_pregunta for kw in keywords_salud_mental)
-
-    # PASO B) Construir la lista de prioridad (todas las columnas de "Dimensiones de Bienestar y Salud Mental")
+    
+    st.write("DEBUG - Pregunta recibida:", pregunta)
+    st.write("DEBUG - Tipo de variable solicitado:", tipo_variable)
+    st.write("DEBUG - ¿Menciona salud mental?:", sugerir_dim_salud)
+    
+    # --- 2) Construir la lista de prioridad (columnas de "Dimensiones de Bienestar y Salud Mental") ---
     prioridad_salud = []
     if sugerir_dim_salud:
-        # Recorremos cada dimensión en el diccionario 'dimensiones'
+        st.write("DEBUG - Se fuerza priorización de columnas de salud mental.")
         for dim_name, lista_columnas_dim in dimensiones.items():
             for col_name in lista_columnas_dim:
-                # Verificar que 'col_name' exista en df.columns
                 if col_name in df.columns and col_name not in prioridad_salud:
                     prioridad_salud.append(col_name)
-
-    # PASO C) Clasificar las columnas de df en numéricas y categóricas
+    st.write("DEBUG - prioridad_salud (antes de filtrar tipo):", prioridad_salud)
+    
+    # --- 3) Clasificar las columnas de df en numéricas y categóricas ---
     numeric_cols = df.select_dtypes(include=['int64','float64','int32','float32']).columns.tolist()
     cat_cols = df.select_dtypes(include=['object','category']).columns.tolist()
-
-    # Construir strings con la lista de columnas (para el prompt a Gemini)
+    
+    st.write("DEBUG - numeric_cols:", numeric_cols)
+    st.write("DEBUG - cat_cols:", cat_cols)
+    
+    # --- 4) Crear el prompt para Gemini con la clasificación local ---
     columnas_numericas_str = ", ".join(numeric_cols)
     columnas_categoricas_str = ", ".join(cat_cols)
-
-    # PASO D) Crear el prompt para Gemini
+    
     prompt_variables = f"""
     Aquí tienes la clasificación local de columnas del DataFrame:
 
@@ -695,55 +708,102 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     dicha pregunta. Lista las variables separadas por comas 
     y sin explicaciones adicionales.
     """
+    st.write("DEBUG - Prompt que se envía a Gemini:\n", prompt_variables)
 
-    # PASO E) Llamar a Gemini con este prompt
+    # --- 5) Llamar a Gemini ---
     respuesta = enviar_prompt(prompt_variables)
+    st.write("DEBUG - Respuesta cruda de Gemini:", respuesta)
 
-    # Convertir la respuesta de Gemini en una lista de columnas sugeridas
+    # Convertir la respuesta en una lista de columnas sugeridas
     variables_sugeridas = [var.strip() for var in respuesta.split(',') if var.strip()]
-
-    # PASO F) Según el tipo solicitado, filtrar a num/cat
-    if tipo_variable.lower() in ["numérica","numerica"]:
+    st.write("DEBUG - variables_sugeridas:", variables_sugeridas)
+    
+    # --- 6) Definir qué tipo de columnas corresponde (num o cat) ---
+    if tipo_variable.lower() in ["numérica", "numerica"]:
         vars_correspondientes = set(numeric_cols)
-    elif tipo_variable.lower() in ["categórica","categorica"]:
+    elif tipo_variable.lower() in ["categórica", "categorica"]:
         vars_correspondientes = set(cat_cols)
     else:
-        # Si no se especifica, asumimos que puede retornar cualquiera
+        # Si no se especifica con claridad, permitimos cualquier columna
         vars_correspondientes = set(df.columns)
-
-    # Filtrar la sugerencia de Gemini para que solo sean columnas existentes y del tipo correcto
+    
+    # Filtrar la sugerencia de Gemini para que solo sean columnas existentes y de tipo correcto
     variables_filtradas = []
     for var in variables_sugeridas:
         if var in vars_correspondientes and var in df.columns:
             variables_filtradas.append(var)
-
-    # PASO G) Ajustar la 'prioridad_salud' también al tipo (num/cat)
-    if tipo_variable.lower() in ["numérica","numerica"]:
+    
+    st.write("DEBUG - variables_filtradas (tras chequear existencia y tipo):", variables_filtradas)
+    
+    # --- 7) Ajustar la 'prioridad_salud' al tipo (num o cat) ---
+    if tipo_variable.lower() in ["numérica", "numerica"]:
         prioridad_salud = [c for c in prioridad_salud if c in numeric_cols]
-    elif tipo_variable.lower() in ["categórica","categorica"]:
+    elif tipo_variable.lower() in ["categórica", "categorica"]:
         prioridad_salud = [c for c in prioridad_salud if c in cat_cols]
-
-    # PASO H) Combinar la prioridad con lo sugerido, sin duplicar
+    
+    st.write("DEBUG - prioridad_salud (tras filtrar por tipo):", prioridad_salud)
+    
+    # --- 8) Combinar la prioridad con lo sugerido, sin duplicar ---
     final_list = []
-    # Primero la prioridad
+    # Primero prioridad salud mental
     for colx in prioridad_salud:
         if colx not in final_list:
             final_list.append(colx)
-    # Luego lo sugerido por Gemini
+    # Luego las sugeridas por Gemini
     for colx in variables_filtradas:
         if colx not in final_list:
             final_list.append(colx)
-
-    # PASO I) Quitar aquellas columnas que estén completamente vacías (no tengan datos no-nulos)
-    # para evitar series con longitud 0.
+    
+    st.write("DEBUG - final_list (antes de descartar columnas vacías):", final_list)
+    
+    # --- 9) Quitar columnas completamente vacías (sin datos no-nulos) ---
     final_list_no_empty = []
     for col in final_list:
-        # Si la columna no está vacía tras quitar nulos
-        if df[col].dropna().shape[0] > 0:
+        non_null_count = df[col].dropna().shape[0]
+        st.write(f"DEBUG - Columna '{col}', non_null_count={non_null_count}")
+        if non_null_count > 0:
             final_list_no_empty.append(col)
-
-    # Retornar la lista final priorizada y sin columnas vacías
+    
+    st.write("DEBUG - final_list_no_empty (después de descartar vacías):", final_list_no_empty)
+    
+    # --- 10) Si tras todo lo anterior no queda nada, forzar con SALUD MENTAL del diccionario ---
+    if not final_list_no_empty:
+        st.write("ADVERTENCIA: No se encontraron columnas relevantes. Se forzará un set de salud mental.")
+        # Tomar TODAS las columnas definidas en 'dimensiones'
+        # y filtrar a tipo_variable
+        fallback_cols = []
+        for dim_name, lista_cols in dimensiones.items():
+            for colx in lista_cols:
+                if colx in df.columns:
+                    fallback_cols.append(colx)
+        fallback_cols = list(set(fallback_cols))  # quitar duplicados
+        
+        # Filtrar por el tipo nuevamente
+        if tipo_variable.lower() in ["numérica", "numerica"]:
+            fallback_cols = [c for c in fallback_cols if c in numeric_cols]
+        elif tipo_variable.lower() in ["categórica", "categorica"]:
+            fallback_cols = [c for c in fallback_cols if c in cat_cols]
+        
+        # Chequear que no estén vacías
+        forced_no_empty = []
+        for col in fallback_cols:
+            non_null_count = df[col].dropna().shape[0]
+            st.write(f"DEBUG - (Fallback) Columna '{col}', non_null_count={non_null_count}")
+            if non_null_count > 0:
+                forced_no_empty.append(col)
+        
+        st.write("DEBUG - forced_no_empty (Fallback real):", forced_no_empty)
+        
+        if forced_no_empty:
+            st.write("DEBUG - Usando fallback de salud mental como columnas finales.")
+            return forced_no_empty
+        else:
+            st.write("DEBUG - Ni siquiera en fallback se encontraron columnas con datos. Se retorna vacío.")
+            return []
+    
+    # Si llegamos aquí y sí hay columnas en final_list_no_empty, retornar
     return final_list_no_empty
+
 
 # Función para procesar filtros en lenguaje natural utilizando Gemini
 def procesar_filtros(filtro_natural):
