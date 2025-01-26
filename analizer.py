@@ -545,8 +545,7 @@ data_dictionary = {
 
 df = pd.read_excel(ruta_csv)
 
-# Limpiar los nombres de las columnas
-df = clean_column_names(df)
+df.dropna(axis=1, how='all', inplace=True)
 
 # Extraer información de las columnas y tipos de datos
 def obtener_informacion_datos(df):
@@ -663,148 +662,94 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     que correspondan al tipo (numérico o categórico).
     """
     
-    import streamlit as st  # asumiendo que queremos usar st.write para debug
-    
-    # --- 1) Palabras clave para "pregunta sobre salud mental" ---
     keywords_salud_mental = ["salud mental", "bienestar", "burnout", "estrés", "estres"]
     lower_pregunta = pregunta.lower()
-    
-    # Detectar si la pregunta menciona temas de salud mental
     sugerir_dim_salud = any(kw in lower_pregunta for kw in keywords_salud_mental)
-    
-    st.write("DEBUG - Pregunta recibida:", pregunta)
-    st.write("DEBUG - Tipo de variable solicitado:", tipo_variable)
-    st.write("DEBUG - ¿Menciona salud mental?:", sugerir_dim_salud)
-    
-    # --- 2) Construir la lista de prioridad (columnas de "Dimensiones de Bienestar y Salud Mental") ---
+
+    st.write("DEBUG - (FLEX) Pregunta:", pregunta)
+    st.write("DEBUG - (FLEX) Tipo variable:", tipo_variable)
+    st.write("DEBUG - (FLEX) Menciona salud mental:", sugerir_dim_salud)
+
+    # Listas reales de df
+    numeric_cols = df.select_dtypes(include=['int64','float64','int32','float32']).columns.tolist()
+    cat_cols     = df.select_dtypes(include=['object','category']).columns.tolist()
+    all_cols     = df.columns.tolist()
+
+    # Filtrar según 'tipo_variable'
+    if tipo_variable.lower() in ["numérica", "numerica"]:
+        candidate_cols = numeric_cols
+    elif tipo_variable.lower() in ["categórica", "categorica"]:
+        candidate_cols = cat_cols
+    else:
+        candidate_cols = all_cols
+
+    # --- 1) Buscar en las dimensiones de salud mental (si lo amerita)
     prioridad_salud = []
     if sugerir_dim_salud:
-        st.write("DEBUG - Se fuerza priorización de columnas de salud mental.")
-        for dim_name, lista_columnas_dim in dimensiones.items():
-            for col_name in lista_columnas_dim:
-                if col_name in df.columns and col_name not in prioridad_salud:
-                    prioridad_salud.append(col_name)
-    st.write("DEBUG - prioridad_salud (antes de filtrar tipo):", prioridad_salud)
-    
-    # --- 3) Clasificar las columnas de df en numéricas y categóricas ---
-    numeric_cols = df.select_dtypes(include=['int64','float64','int32','float32']).columns.tolist()
-    cat_cols = df.select_dtypes(include=['object','category']).columns.tolist()
-    
-    st.write("DEBUG - numeric_cols:", numeric_cols)
-    st.write("DEBUG - cat_cols:", cat_cols)
-    
-    # --- 4) Crear el prompt para Gemini con la clasificación local ---
-    columnas_numericas_str = ", ".join(numeric_cols)
-    columnas_categoricas_str = ", ".join(cat_cols)
-    
+        # Recolectar TODAS las columnas definidas en "dimensiones"
+        # y encontrar el "closest match" en df.columns
+        for dim_name, lista_col_dicc in dimensiones.items():
+            for col_dicc in lista_col_dicc:
+                # Buscar coincidencia flexible con cada col real
+                close_matches = difflib.get_close_matches(col_dicc, all_cols, n=1, cutoff=0.7)
+                if close_matches:
+                    col_real = close_matches[0]
+                    if col_real in candidate_cols:
+                        # Revisar que no sea ya incluida
+                        if col_real not in prioridad_salud:
+                            prioridad_salud.append(col_real)
+
+    st.write("DEBUG - (FLEX) prioridad_salud inicial:", prioridad_salud)
+
+    # --- 2) Buscar qué columnas *genéricamente* coinciden con la pregunta
+    # (opcional: podemos hacer un "fuzzy" con la pregunta... o no)
+    # Para simplificar, podemos suponer que Gemini sugiere nombres y
+    # nosotros validamos con fuzzy y candidate_cols.
+
+    # Llamamos a Gemini con un prompt que pida "columns that might be relevant"
     prompt_variables = f"""
-    Aquí tienes la clasificación local de columnas del DataFrame:
+    Aquí tienes las columnas del DataFrame:
+    {all_cols}
 
-    - Columnas numéricas: {columnas_numericas_str}
-    - Columnas categóricas: {columnas_categoricas_str}
+    El usuario pregunta: "{pregunta}"
+    Busca columnas de tipo '{tipo_variable}' relevantes.
 
-    La pregunta del usuario es: "{pregunta}"
-    El usuario solicita variables de tipo '{tipo_variable}'.
-
-    Basándote en esta información, menciona solo las columnas 
-    del tipo '{tipo_variable}' que sean relevantes para responder 
-    dicha pregunta. Lista las variables separadas por comas 
-    y sin explicaciones adicionales.
+    Lista sólo los nombres de columna tal cual en el DF
+    (o su match aproximado) separados por comas.
     """
-    st.write("DEBUG - Prompt que se envía a Gemini:\n", prompt_variables)
 
-    # --- 5) Llamar a Gemini ---
-    respuesta = enviar_prompt(prompt_variables)
-    st.write("DEBUG - Respuesta cruda de Gemini:", respuesta)
+    resp = enviar_prompt(prompt_variables)
+    st.write("DEBUG - (FLEX) Respuesta Gemini:", resp)
 
-    # Convertir la respuesta en una lista de columnas sugeridas
-    variables_sugeridas = [var.strip() for var in respuesta.split(',') if var.strip()]
-    st.write("DEBUG - variables_sugeridas:", variables_sugeridas)
-    
-    # --- 6) Definir qué tipo de columnas corresponde (num o cat) ---
-    if tipo_variable.lower() in ["numérica", "numerica"]:
-        vars_correspondientes = set(numeric_cols)
-    elif tipo_variable.lower() in ["categórica", "categorica"]:
-        vars_correspondientes = set(cat_cols)
-    else:
-        # Si no se especifica con claridad, permitimos cualquier columna
-        vars_correspondientes = set(df.columns)
-    
-    # Filtrar la sugerencia de Gemini para que solo sean columnas existentes y de tipo correcto
-    variables_filtradas = []
-    for var in variables_sugeridas:
-        if var in vars_correspondientes and var in df.columns:
-            variables_filtradas.append(var)
-    
-    st.write("DEBUG - variables_filtradas (tras chequear existencia y tipo):", variables_filtradas)
-    
-    # --- 7) Ajustar la 'prioridad_salud' al tipo (num o cat) ---
-    if tipo_variable.lower() in ["numérica", "numerica"]:
-        prioridad_salud = [c for c in prioridad_salud if c in numeric_cols]
-    elif tipo_variable.lower() in ["categórica", "categorica"]:
-        prioridad_salud = [c for c in prioridad_salud if c in cat_cols]
-    
-    st.write("DEBUG - prioridad_salud (tras filtrar por tipo):", prioridad_salud)
-    
-    # --- 8) Combinar la prioridad con lo sugerido, sin duplicar ---
+    # Parse la respuesta
+    suggested = [x.strip() for x in resp.split(',') if x.strip()]
+
+    # Hacer un fuzzy match con lo sugerido y candidate_cols
+    variables_sugeridas = []
+    for sug in suggested:
+        # Buscar la columna real más parecida
+        close = difflib.get_close_matches(sug, candidate_cols, n=1, cutoff=0.6)
+        if close:
+            variables_sugeridas.append(close[0])
+
+    st.write("DEBUG - (FLEX) variables_sugeridas tras fuzzy:", variables_sugeridas)
+
+    # Unir "prioridad_salud" con "variables_sugeridas" sin duplicar
     final_list = []
-    # Primero prioridad salud mental
-    for colx in prioridad_salud:
-        if colx not in final_list:
-            final_list.append(colx)
-    # Luego las sugeridas por Gemini
-    for colx in variables_filtradas:
-        if colx not in final_list:
-            final_list.append(colx)
-    
-    st.write("DEBUG - final_list (antes de descartar columnas vacías):", final_list)
-    
-    # --- 9) Quitar columnas completamente vacías (sin datos no-nulos) ---
+    for c in prioridad_salud + variables_sugeridas:
+        if c not in final_list:
+            final_list.append(c)
+
+    # Filtrar non_empty
     final_list_no_empty = []
     for col in final_list:
         non_null_count = df[col].dropna().shape[0]
-        st.write(f"DEBUG - Columna '{col}', non_null_count={non_null_count}")
         if non_null_count > 0:
             final_list_no_empty.append(col)
-    
-    st.write("DEBUG - final_list_no_empty (después de descartar vacías):", final_list_no_empty)
-    
-    # --- 10) Si tras todo lo anterior no queda nada, forzar con SALUD MENTAL del diccionario ---
+
+    # Si sigue vacío, devolvemos final_list_no_empty
     if not final_list_no_empty:
-        st.write("ADVERTENCIA: No se encontraron columnas relevantes. Se forzará un set de salud mental.")
-        # Tomar TODAS las columnas definidas en 'dimensiones'
-        # y filtrar a tipo_variable
-        fallback_cols = []
-        for dim_name, lista_cols in dimensiones.items():
-            for colx in lista_cols:
-                if colx in df.columns:
-                    fallback_cols.append(colx)
-        fallback_cols = list(set(fallback_cols))  # quitar duplicados
-        
-        # Filtrar por el tipo nuevamente
-        if tipo_variable.lower() in ["numérica", "numerica"]:
-            fallback_cols = [c for c in fallback_cols if c in numeric_cols]
-        elif tipo_variable.lower() in ["categórica", "categorica"]:
-            fallback_cols = [c for c in fallback_cols if c in cat_cols]
-        
-        # Chequear que no estén vacías
-        forced_no_empty = []
-        for col in fallback_cols:
-            non_null_count = df[col].dropna().shape[0]
-            st.write(f"DEBUG - (Fallback) Columna '{col}', non_null_count={non_null_count}")
-            if non_null_count > 0:
-                forced_no_empty.append(col)
-        
-        st.write("DEBUG - forced_no_empty (Fallback real):", forced_no_empty)
-        
-        if forced_no_empty:
-            st.write("DEBUG - Usando fallback de salud mental como columnas finales.")
-            return forced_no_empty
-        else:
-            st.write("DEBUG - Ni siquiera en fallback se encontraron columnas con datos. Se retorna vacío.")
-            return []
-    
-    # Si llegamos aquí y sí hay columnas en final_list_no_empty, retornar
+        st.write("ADVERTENCIA: No se encontraron columnas relevantes con datos.")
     return final_list_no_empty
 
 
@@ -1248,110 +1193,101 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 7: Tablas de contingencia y Chi-cuadrado (2 vars)
     # ===========================================================
     elif opcion == '7':
+        # 7) Tablas de contingencia y Chi-cuadrado
         resultados += "Análisis de Tablas de Contingencia y Chi-cuadrado.\n\n"
     
-        # Obtener listas de variables categóricas y numéricas relevantes
-        vars_cat = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
-        vars_num = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
+        # --- 1) Busca todas las columnas relevantes (sin importar si son cat o num)
+        all_relevant = obtener_variables_relevantes_flexible(pregunta_usuario, 'todas', df_filtrado)
+        st.write("DEBUG - (opción7) all_relevant:", all_relevant)
     
-        # Concatenar sin usar 'set' (preservar orden) y filtrar duplicados
-        todas_las_cols = []
-        for c in vars_cat + vars_num:
-            if c not in todas_las_cols:
-                todas_las_cols.append(c)
-    
-        # DEBUG: imprime las columnas detectadas
-        st.write("DEBUG (Opción 7) - Columnas relevantes totales:", todas_las_cols)
-    
-        if len(todas_las_cols) < 2:
-            resultados += "No hay suficientes columnas relevantes para hacer tablas de contingencia.\n"
-            st.write("DEBUG - Motivo: Se encontraron menos de 2 columnas relevantes:", todas_las_cols)
+        if len(all_relevant) < 2:
+            resultados += "No hay suficientes columnas relevantes para la tabla.\n"
             return resultados, figuras
     
-        # Tomar la primera y la segunda distinta
-        var1 = todas_las_cols[0]
-        var2 = None
-        for c in todas_las_cols[1:]:
-            if c != var1:
-                var2 = c
-                break
+        # --- 2) Separa en cat y num
+        cats_encontradas = []
+        nums_encontradas = []
+        for col in all_relevant:
+            if col in df_filtrado.select_dtypes(include=['object','category']).columns:
+                cats_encontradas.append(col)
+            else:
+                nums_encontradas.append(col)
     
-        if var2 is None:
-            resultados += "No se encontraron dos columnas diferentes (categóricas o numéricas) para la tabla.\n"
-            st.write("DEBUG - Motivo: No se halló una segunda columna distinta de var1:", var1)
+        st.write("DEBUG - cats_encontradas:", cats_encontradas)
+        st.write("DEBUG - nums_encontradas:", nums_encontradas)
+    
+        # --- 3) Lógica para “Tablas de contingencia”
+        # Casos:
+        # a) dos categóricas
+        # b) una categórica y una numérica
+        # c) dos numéricas => no aplica (si quisiéramos, habría que agrupar ambas)
+        #    o forzar la que le interese al usuario
+    
+        # Para simplificar: tomamos la 1ra cat y la 1ra num si existen,
+        # o la 1ra cat y la 2da cat si no hay num, etc.
+    
+        var1, var2 = None, None
+    
+        if len(cats_encontradas) >= 2:
+            # Con 2 categóricas se arma crosstab normal
+            var1 = cats_encontradas[0]
+            var2 = cats_encontradas[1]
+            st.write(f"DEBUG - Usando 2 categóricas: {var1}, {var2}")
+        elif len(cats_encontradas) == 1 and len(nums_encontradas) >= 1:
+            # 1 cat y 1 num => agrupar la num y crosstab
+            var1 = cats_encontradas[0]
+            var2 = nums_encontradas[0]
+            st.write(f"DEBUG - Usando cat={var1} y num={var2}")
+        else:
+            # No es posible
+            resultados += "No se pudo encontrar dos columnas adecuadas (categ y/o num) para la tabla.\n"
             return resultados, figuras
     
-        # Mostrar info de las columnas elegidas
-        st.write(f"DEBUG - var1 = {var1}, var2 = {var2}")
-    
-        # Mostrar las demás no utilizadas
-        idx_unused = todas_las_cols.index(var2) + 1
-        otras_vars = todas_las_cols[idx_unused:]
-        if otras_vars:
-            st.write(f"DEBUG - Otras columnas relevantes no utilizadas: {otras_vars}")
-    
+        # --- 4) Generar la crosstab
         import numpy as np
         from scipy.stats import chi2_contingency
     
-        def to_categorical_if_numeric(s, nbins=5):
-            # debug
-            st.write(f"DEBUG - Longitud antes de 'pd.cut': {len(s)}")
-            if np.issubdtype(s.dtype, np.number):
-                if s.empty:
-                    # imprimir debug
-                    st.write("DEBUG - Serie vacía antes de cut, retornando vacía.")
-                    return pd.Series([], dtype=str)
-                cat_series = pd.cut(s, nbins, labels=False)
-                return cat_series.astype(str)
+        def agrupar_si_es_num(s, nbins=5):
+            """Si la columna es numérica, agrupar en nbins. Si es categórica, devolver tal cual."""
+            if s.dtype in ['float64','float32','int64','int32']:
+                return pd.cut(s, nbins, labels=False).astype(str)
             else:
                 return s.astype(str)
     
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
     
-        # Debug: info de las series
-        st.write(f"DEBUG - Longitud serie1 ({var1}):", len(serie1))
-        st.write(f"DEBUG - Longitud serie2 ({var2}):", len(serie2))
-    
         if serie1.empty or serie2.empty:
-            resultados += "No hay datos suficientes para generar la tabla.\n"
-            st.write("DEBUG - Motivo: Al menos una de las series está vacía.")
+            resultados += "No hay datos suficientes (serie vacía) para generar la tabla.\n"
             return resultados, figuras
     
-        # Convertir a categóricas si num
-        serie1 = to_categorical_if_numeric(serie1)
-        serie2 = to_categorical_if_numeric(serie2)
-    
-        # Chequeo final antes de crosstab
-        if serie1.empty or serie2.empty:
-            resultados += "No hay datos suficientes para generar la tabla.\n"
-            st.write("DEBUG - Motivo: La conversión a categorías resultó en serie vacía.")
-            return resultados, figuras
+        # Agrupar si es num
+        serie1 = agrupar_si_es_num(serie1)
+        serie2 = agrupar_si_es_num(serie2)
     
         crosstab = pd.crosstab(serie1, serie2)
-        st.write("DEBUG - Crosstab shape:", crosstab.shape)
-    
         if crosstab.empty:
             resultados += "Tabla de contingencia vacía.\n"
-            st.write("DEBUG - Motivo: crosstab está vacío.")
-        else:
-            resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
-            chi2, p, dof, expected = chi2_contingency(crosstab)
-            resultados += f"**Chi-cuadrado**: {chi2:.2f}\n"
-            resultados += f"**p-value**: {p:.4f}\n"
-            resultados += f"**Grados de libertad (dof)**: {dof}\n"
-            resultados += f"**Valores Esperados**:\n{expected}\n\n"
+            return resultados, figuras
     
-            try:
-                fig_ct, ax_ct = plt.subplots()
-                sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct)
-                ax_ct.set_title(f"Heatmap de {var1} vs {var2}")
-                ax_ct.set_xlabel(var2)
-                ax_ct.set_ylabel(var1)
-                st.pyplot(fig_ct)
-                figuras.append(fig_ct)
-            except Exception as e:
-                st.write(f"No se pudo graficar la tabla de contingencia: {e}")
+        resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
+        chi2, p, dof, expected = chi2_contingency(crosstab)
+        resultados += f"**Chi-cuadrado**: {chi2:.2f}\n"
+        resultados += f"**p-value**: {p:.4f}\n"
+        resultados += f"**Grados de libertad**: {dof}\n"
+        resultados += f"**Valores esperados**:\n{expected}\n\n"
+    
+        # Plot heatmap
+        try:
+            fig_ct, ax_ct = plt.subplots()
+            sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct)
+            ax_ct.set_title(f"Heatmap de {var1} vs {var2}")
+            ax_ct.set_xlabel(var2)
+            ax_ct.set_ylabel(var1)
+            st.pyplot(fig_ct)
+            figuras.append(fig_ct)
+        except Exception as e:
+            st.write(f"No se pudo graficar la tabla de contingencia: {e}")
     
         return resultados, figuras
 
@@ -1695,7 +1631,7 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     prompt_introduccion = f"""
     Utilizando la siguiente pregunta de investigación:
 
-    "{pregunta_usuario}"
+    {pregunta_usuario}
 
     Y el método de análisis correspondiente a la opción {opcion_analisis}, recuerda que estas eran las opciones: {opciones_analisis}. 
     
@@ -1730,7 +1666,7 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
 
     Y considerando la siguiente pregunta de investigación:
 
-    "{pregunta_usuario}"
+    {pregunta_usuario}
 
     Utilizando el siguiente diccionario de datos para interpretar correctamente los valores:
 
@@ -1764,10 +1700,12 @@ respuesta_map = {
 
 # Función para mapear valores
 def mapear_valores(serie):
-    print("DEBUG - Antes de replace, unique values:", serie.unique())
-    temp = serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
-    print("DEBUG - Después de replace->to_numeric, unique values:", temp.unique())
-    return temp
+    # Solo hace el replace si la serie contiene al menos uno de esos valores
+    # y si detectamos que la intención es Likert. 
+    if serie.isin(["Nunca","Rara vez","A menudo","Siempre"]).any():
+        return serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
+    else:
+        return serie
     
 dimensiones = {
     "Control del Tiempo": [
