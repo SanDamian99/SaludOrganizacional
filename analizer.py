@@ -667,9 +667,9 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     lower_pregunta = pregunta.lower()
     sugerir_dim_salud = any(kw in lower_pregunta for kw in keywords_salud_mental)
 
-    st.write("DEBUG - (FLEX) Pregunta:", pregunta)
-    st.write("DEBUG - (FLEX) Tipo variable:", tipo_variable)
-    st.write("DEBUG - (FLEX) Menciona salud mental:", sugerir_dim_salud)
+    #st.write("DEBUG - (FLEX) Pregunta:", pregunta)
+    #st.write("DEBUG - (FLEX) Tipo variable:", tipo_variable)
+    #st.write("DEBUG - (FLEX) Menciona salud mental:", sugerir_dim_salud)
 
     # Listas reales de df
     numeric_cols = df.select_dtypes(include=['int64','float64','int32','float32']).columns.tolist()
@@ -700,7 +700,7 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
                         if col_real not in prioridad_salud:
                             prioridad_salud.append(col_real)
 
-    st.write("DEBUG - (FLEX) prioridad_salud inicial:", prioridad_salud)
+    #st.write("DEBUG - (FLEX) prioridad_salud inicial:", prioridad_salud)
 
     # --- 2) Buscar qué columnas *genéricamente* coinciden con la pregunta
     # (opcional: podemos hacer un "fuzzy" con la pregunta... o no)
@@ -724,7 +724,7 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     """
 
     resp = enviar_prompt(prompt_variables)
-    st.write("DEBUG - (FLEX) Respuesta Gemini:", resp)
+    #st.write("DEBUG - (FLEX) Respuesta Gemini:", resp)
 
     # Parse la respuesta
     suggested = [x.strip() for x in resp.split(',') if x.strip()]
@@ -737,7 +737,7 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
         if close:
             variables_sugeridas.append(close[0])
 
-    st.write("DEBUG - (FLEX) variables_sugeridas tras fuzzy:", variables_sugeridas)
+    #st.write("DEBUG - (FLEX) variables_sugeridas tras fuzzy:", variables_sugeridas)
 
     # Unir "prioridad_salud" con "variables_sugeridas" sin duplicar
     final_list = []
@@ -795,9 +795,9 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     permitir ver 3 gráficos en la misma figura.
     """
 
-    st.write("DEBUG: Entrando a realizar_analisis con opcion=", opcion)
-    st.write("DEBUG: pregunta_usuario =", pregunta_usuario)
-    st.write("DEBUG: filtros =", filtros)
+    #st.write("DEBUG: Entrando a realizar_analisis con opcion=", opcion)
+    #st.write("DEBUG: pregunta_usuario =", pregunta_usuario)
+    #st.write("DEBUG: filtros =", filtros)
 
     resultados = ""
     figuras = []
@@ -811,16 +811,16 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # (1) Manejo adicional de filtros si se proporcionan
     if filtros:
         try:
-            st.write("DEBUG: Aplicando filtro:", filtros)
+            #st.write("DEBUG: Aplicando filtro:", filtros)
             df_filtrado = df_filtrado_inicial.query(filtros)
         except Exception as e:
             st.write(f"Error al aplicar el filtro: {e}")
             df_filtrado = df_filtrado_inicial.copy()
     else:
-        st.write("DEBUG: Sin filtros adicionales.")
+        #st.write("DEBUG: Sin filtros adicionales.")
         df_filtrado = df_filtrado_inicial.copy()
 
-    st.write("DEBUG: df_filtrado.shape =", df_filtrado.shape)
+    #st.write("DEBUG: df_filtrado.shape =", df_filtrado.shape)
 
     # Función auxiliar para obtener info de una variable desde data_dictionary
     def get_variable_info(variable_name):
@@ -833,7 +833,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 1: Distribución de variable categórica
     # ===========================================================
     if opcion == '1':
-        st.write("DEBUG: Opción 1 - Distribución de variable categórica")
+        #st.write("DEBUG: Opción 1 - Distribución de variable categórica")
         variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
 
         if not variables_relevantes:
@@ -847,7 +847,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables categóricas relevantes no utilizadas:** {otras_vars}")
 
-        st.write("DEBUG: Usando la variable categórica =>", var_cat)
+        #st.write("DEBUG: Usando la variable categórica =>", var_cat)
 
         # Análisis
         conteo = df_filtrado[var_cat].value_counts(dropna=False)
@@ -903,7 +903,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 2: Estadísticas descriptivas de variable numérica
     # ===========================================================
     elif opcion == '2':
-        st.write("DEBUG: Opción 2 - Estadísticas descriptivas (numérica)")
+        #st.write("DEBUG: Opción 2 - Estadísticas descriptivas (numérica)")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
         if not vars_relevantes:
             resultados += "No se encontraron variables numéricas relevantes para la pregunta.\n"
@@ -915,7 +915,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
-        st.write("DEBUG: Usando la variable numérica =>", var_num)
+        #st.write("DEBUG: Usando la variable numérica =>", var_num)
 
         estadisticas = df_filtrado[var_num].describe()
         resultados += f"Estadísticas descriptivas de {var_num}:\n{estadisticas.to_string()}\n"
@@ -959,7 +959,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 3: Relación entre dos variables numéricas
     # ===========================================================
     elif opcion == '3':
-        st.write("DEBUG: Opción 3 - Relación entre dos variables numéricas")
+        #st.write("DEBUG: Opción 3 - Relación entre dos variables numéricas")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
 
         if len(vars_relevantes) < 2:
@@ -981,7 +981,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
-        st.write("DEBUG: Analizando la relación entre =>", var_x, "y", var_y)
+        #st.write("DEBUG: Analizando la relación entre =>", var_x, "y", var_y)
         resultados += f"Analizando la relación entre {var_x} y {var_y}.\n"
 
         # Crear 3 subplots: scatter, hexbin, kde
@@ -1027,7 +1027,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 4: Filtrar datos y mostrar estadísticas de 1 var num
     # ===========================================================
     elif opcion == '4':
-        st.write("DEBUG: Opción 4 - Filtrar datos y estadísticos de 1 var num")
+        #st.write("DEBUG: Opción 4 - Filtrar datos y estadísticos de 1 var num")
         resultados += "Datos después de aplicar los filtros proporcionados.\n"
         resultados += f"Total de registros después del filtro: {len(df_filtrado)}\n"
 
@@ -1041,7 +1041,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
-        st.write("DEBUG: Usando la variable numérica =>", var_num4)
+        #st.write("DEBUG: Usando la variable numérica =>", var_num4)
 
         estadisticas = df_filtrado[var_num4].describe()
         resultados += f"Estadísticas descriptivas de {var_num4} (después de filtros):\n{estadisticas.to_string()}\n"
@@ -1085,7 +1085,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 5: Correlación entre múltiples variables numéricas
     # ===========================================================
     elif opcion == '5':
-        st.write("DEBUG: Opción 5 - Correlación de múltiples variables numéricas")
+        #st.write("DEBUG: Opción 5 - Correlación de múltiples variables numéricas")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
         if len(vars_relevantes) < 2:
             resultados += "No se encontraron suficientes variables numéricas para calcular la correlación.\n"
@@ -1138,7 +1138,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 6: Análisis de regresión simple (2 var num)
     # ===========================================================
     elif opcion == '6':
-        st.write("DEBUG: Opción 6 - Regresión lineal simple")
+        #st.write("DEBUG: Opción 6 - Regresión lineal simple")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
 
         if len(vars_relevantes) < 2:
@@ -1161,7 +1161,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
-        st.write("DEBUG: Eje X =>", varx, ", Eje Y =>", vary)
+        #st.write("DEBUG: Eje X =>", varx, ", Eje Y =>", vary)
 
         from sklearn.linear_model import LinearRegression
         X = df_filtrado[[varx]].dropna()
@@ -1229,31 +1229,31 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         # 7) Tablas de contingencia y Chi-cuadrado
         resultados += "Análisis de Tablas de Contingencia y Chi-cuadrado.\n\n"
     
-        st.write("DEBUG: Entrando a la Opción 7 - Tablas de Contingencia")
-        st.write("DEBUG: La pregunta del usuario es:", pregunta_usuario)
-        st.write("DEBUG: df_filtrado.shape =", df_filtrado.shape)
+        #st.write("DEBUG: Entrando a la Opción 7 - Tablas de Contingencia")
+        #st.write("DEBUG: La pregunta del usuario es:", pregunta_usuario)
+        #st.write("DEBUG: df_filtrado.shape =", df_filtrado.shape)
     
         # --- 1) Busca todas las columnas relevantes (sin importar si son cat o num)
-        st.write("DEBUG: Llamando obtener_variables_relevantes con tipo='todas'")
+        #st.write("DEBUG: Llamando obtener_variables_relevantes con tipo='todas'")
         all_relevant = obtener_variables_relevantes(pregunta_usuario, 'todas', df_filtrado)
-        st.write("DEBUG - (opción7) all_relevant:", all_relevant)
+        #st.write("DEBUG - (opción7) all_relevant:", all_relevant)
     
         # Verificar si se obtuvieron columnas:
         if not all_relevant:
-            st.write("DEBUG: No se encontraron columnas en all_relevant (lista vacía).")
+            #st.write("DEBUG: No se encontraron columnas en all_relevant (lista vacía).")
         else:
-            st.write("DEBUG: Se encontraron columns en all_relevant:", all_relevant)
+            #st.write("DEBUG: Se encontraron columns en all_relevant:", all_relevant)
     
         if len(all_relevant) < 2:
             resultados += "No hay suficientes columnas relevantes para la tabla.\n"
-            st.write("DEBUG - Motivo: len(all_relevant) < 2 =>", len(all_relevant))
+            #st.write("DEBUG - Motivo: len(all_relevant) < 2 =>", len(all_relevant))
             return resultados, figuras
     
         # 2) Separa en cat y num
         cats_encontradas = []
         nums_encontradas = []
     
-        st.write("DEBUG: df_filtrado dtypes:\n", df_filtrado.dtypes)
+        #st.write("DEBUG: df_filtrado dtypes:\n", df_filtrado.dtypes)
     
         for col in all_relevant:
             if col not in df_filtrado.columns:
@@ -1268,13 +1268,13 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             else:
                 st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no es cat ni num.")
     
-        st.write("DEBUG - cats_encontradas:", cats_encontradas)
-        st.write("DEBUG - nums_encontradas:", nums_encontradas)
+        #st.write("DEBUG - cats_encontradas:", cats_encontradas)
+        #st.write("DEBUG - nums_encontradas:", nums_encontradas)
     
         # 3) Lógica para Tablas de contingencia
         var1, var2 = None, None
     
-        st.write("DEBUG: Reglas para asignar var1, var2 ...")
+        #st.write("DEBUG: Reglas para asignar var1, var2 ...")
     
         if len(cats_encontradas) >= 2:
             var1 = cats_encontradas[0]
@@ -1286,7 +1286,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             st.write(f"DEBUG - Usando cat={var1} y num={var2}")
         else:
             resultados += "No se pudo encontrar dos columnas adecuadas (categ y/o num) para la tabla.\n"
-            st.write("DEBUG - No se cumplieron las condiciones para tener var1 y var2")
+            #st.write("DEBUG - No se cumplieron las condiciones para tener var1 y var2")
             return resultados, figuras
     
         import numpy as np
@@ -1310,29 +1310,29 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         # Muestra sample
         if len(serie1) > 0:
-            st.write("DEBUG: serie1.sample(3):", serie1.sample(min(3, len(serie1))).tolist())
+            #st.write("DEBUG: serie1.sample(3):", serie1.sample(min(3, len(serie1))).tolist())
         if len(serie2) > 0:
-            st.write("DEBUG: serie2.sample(3):", serie2.sample(min(3, len(serie2))).tolist())
+            #st.write("DEBUG: serie2.sample(3):", serie2.sample(min(3, len(serie2))).tolist())
     
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes (serie vacía) para generar la tabla.\n"
-            st.write("DEBUG - Motivo: serie1/serie2 está vacía.")
+            #st.write("DEBUG - Motivo: serie1/serie2 está vacía.")
             return resultados, figuras
     
         # Agrupar si es num
         serie1 = agrupar_si_es_num(serie1)
         serie2 = agrupar_si_es_num(serie2)
     
-        st.write("DEBUG: Después de agrupar_si_es_num => unique en serie1:", serie1.unique())
-        st.write("DEBUG: Después de agrupar_si_es_num => unique en serie2:", serie2.unique())
+        #st.write("DEBUG: Después de agrupar_si_es_num => unique en serie1:", serie1.unique())
+        #st.write("DEBUG: Después de agrupar_si_es_num => unique en serie2:", serie2.unique())
     
         crosstab = pd.crosstab(serie1, serie2)
-        st.write("DEBUG - crosstab shape:", crosstab.shape)
-        st.write("DEBUG - crosstab:\n", crosstab)
+        #st.write("DEBUG - crosstab shape:", crosstab.shape)
+        #st.write("DEBUG - crosstab:\n", crosstab)
     
         if crosstab.empty:
             resultados += "Tabla de contingencia vacía.\n"
-            st.write("DEBUG - crosstab está vacío => no se genera la tabla.")
+            #st.write("DEBUG - crosstab está vacío => no se genera la tabla.")
             return resultados, figuras
     
         resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
@@ -1358,7 +1358,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         return resultados, figuras
 
     else:
-        st.write("DEBUG: Opción no reconocida =>", opcion)
+        #st.write("DEBUG: Opción no reconocida =>", opcion)
         resultados += "Opción de análisis no reconocida.\n"
 
     # -----------------------------------------------------------
@@ -1808,22 +1808,22 @@ def mapear_valores(serie):
 
     # a) Escala 7 ampliada (Nunca..Siempre con "Rara vez"/"Raramente", etc.)
     if all_in_dict(unique_vals, likert_7_extended):
-        st.write("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
+        #st.write("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
         return serie.replace(likert_7_extended).astype(float, errors='ignore')
 
     # b) Escala acuerdo 7 (Muy en desacuerdo..Totalmente de acuerdo)
     elif all_in_dict(unique_vals, acuerdo_7):
-        st.write("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
+        #st.write("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
         return serie.replace(acuerdo_7).astype(float, errors='ignore')
 
     # c) Escala Burnout 1..5
     elif all_in_dict(unique_vals, burnout_5):
-        st.write("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
+        #st.write("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
         return serie.replace(burnout_5).astype(float, errors='ignore')
 
     # d) Si no coincide con ninguna de las escalas definidas, la dejamos tal cual
     else:
-        st.write("DEBUG - No coincide con escalas definidas, se deja como 'object'.")
+        #st.write("DEBUG - No coincide con escalas definidas, se deja como 'object'.")
         return serie
     
 dimensiones = {
