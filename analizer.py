@@ -1755,9 +1755,11 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     except Exception as e:
         st.write(f"Error al generar el PDF: {e}")
 
-respuesta_map = {
+# Definimos varios "diccionarios de escalas" en un solo lugar:
+likert_7_extended = {
     "Nunca": 1,
     "Rara vez": 2,
+    "Raramente": 2,   # por si aparece "Raramente" en vez de "Rara vez"
     "Alguna vez": 3,
     "Algunas veces": 4,
     "A menudo": 5,
@@ -1765,13 +1767,63 @@ respuesta_map = {
     "Siempre": 7
 }
 
-# Función para mapear valores
+acuerdo_7 = {
+    "Muy en desacuerdo": 1,
+    "Moderadamente en desacuerdo": 2,
+    "Ligeramente en desacuerdo": 3,
+    "Ni de acuerdo ni en desacuerdo": 4,  # si existiese
+    "Ligeramente de acuerdo": 4,         # a veces se numeran 1..6
+    "Moderadamente de acuerdo": 5,
+    "Muy de acuerdo": 6,
+    "Totalmente de acuerdo": 7
+}
+
+burnout_5 = {
+    "Nunca": 1,
+    "Raramente": 2,
+    "Algunas veces": 3,
+    "A menudo": 4,
+    "Siempre": 5
+}
+
 def mapear_valores(serie):
-    # Solo hace el replace si la serie contiene al menos uno de esos valores
-    # y si detectamos que la intención es Likert. 
-    if serie.isin(["Nunca","Rara vez","A menudo","Siempre"]).any():
-        return serie.replace(respuesta_map).apply(pd.to_numeric, errors='coerce')
+    """
+    Detecta si la serie corresponde a una escala Likert conocida
+    y la convierte a valores numéricos. Si no, la deja igual.
+    Incluye prints de depuración.
+    """
+
+    # 1) Vemos valores únicos, quitando los NaN
+    unique_vals = serie.dropna().unique().tolist()
+    st.write(f"DEBUG - mapear_valores: valores únicos = {unique_vals}")
+
+    # Convertimos a string y quitamos espacios
+    serie = serie.astype(str).str.strip()
+
+    # 2) Definimos funciones auxiliares para "si todos los valores están en un dict"
+    def all_in_dict(vals, dic):
+        return all(v in dic.keys() for v in vals if v != 'nan')
+
+    # 3) Revisamos si todos los valores de la serie se ajustan a una de nuestras escalas
+
+    # a) Escala 7 ampliada (Nunca..Siempre con "Rara vez"/"Raramente", etc.)
+    if all_in_dict(unique_vals, likert_7_extended):
+        st.write("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
+        return serie.replace(likert_7_extended).astype(float, errors='ignore')
+
+    # b) Escala acuerdo 7 (Muy en desacuerdo..Totalmente de acuerdo)
+    elif all_in_dict(unique_vals, acuerdo_7):
+        st.write("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
+        return serie.replace(acuerdo_7).astype(float, errors='ignore')
+
+    # c) Escala Burnout 1..5
+    elif all_in_dict(unique_vals, burnout_5):
+        st.write("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
+        return serie.replace(burnout_5).astype(float, errors='ignore')
+
+    # d) Si no coincide con ninguna de las escalas definidas, la dejamos tal cual
     else:
+        st.write("DEBUG - No coincide con escalas definidas, se deja como 'object'.")
         return serie
     
 dimensiones = {
