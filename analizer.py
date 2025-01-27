@@ -718,8 +718,8 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     Lista sólo los nombres de columna tal cual en el DF
     (o su match aproximado) separados por comas. La primera variable debe ser la más relevante,
     seguida de la segunda más relevante, si te hacen una pregunta por dos variables importantes, 
-    los dos primeros elementos deben ser las dos variables sobre las que hace la pregunta. Luego,
-    de la tercera posición en adelante, escribe las demas variables que puedan ser relevantes. 
+    los dos primeros elementos deben ser las dos variables sobre las que hace la pregunta, en la posición 0 y 1. Luego,
+    de la tercera posición (2) en adelante, escribe las demas variables que puedan ser relevantes. 
     Escribe solo la lista de columnas en formato python, sin ningun otro tipo de comentario.
     """
 
