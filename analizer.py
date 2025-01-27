@@ -2268,7 +2268,7 @@ def main():
     df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
 
     # 2) Widgets para escoger rango de fechas
-    fecha_inicio = st.date_input("Fecha de inicio", date.today() - timedelta(days=30))
+    fecha_inicio = st.date_input("Fecha de inicio", date.today() - timedelta(days=360))
     fecha_fin = st.date_input("Fecha de fin", date.today())
 
     # 3) Opción para filtrar por código de empresa (ID)
