@@ -712,11 +712,15 @@ def obtener_variables_relevantes(pregunta, tipo_variable, df):
     Aquí tienes las columnas del DataFrame:
     {all_cols}
 
-    El usuario pregunta: "{pregunta}"
+    El usuario pregunta: '{pregunta}'
     Busca columnas de tipo '{tipo_variable}' relevantes.
 
     Lista sólo los nombres de columna tal cual en el DF
-    (o su match aproximado) separados por comas.
+    (o su match aproximado) separados por comas. La primera variable debe ser la más relevante,
+    seguida de la segunda más relevante, si te hacen una pregunta por dos variables importantes, 
+    los dos primeros elementos deben ser las dos variables sobre las que hace la pregunta. Luego,
+    de la tercera posición en adelante, escribe las demas variables que puedan ser relevantes. 
+    Escribe solo la lista de columnas en formato python, sin ningun otro tipo de comentario.
     """
 
     resp = enviar_prompt(prompt_variables)
@@ -781,13 +785,19 @@ def procesar_filtros(filtro_natural):
 def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     """
     Realiza el análisis de datos según la 'opcion' (1..7) detectada, 
-    **tomando automáticamente las dos primeras variables relevantes** 
+    tomando automáticamente las dos primeras variables relevantes 
     en caso de que la opción requiera dos variables (o si es la opción 7),
     sin que el usuario deba seleccionarlas manualmente.
     
     Además, muestra en la aplicación las variables relevantes que 
     NO fueron utilizadas, para que el usuario las conozca.
+    Incluye visualizaciones en subplots 1x3 para evitar recortes y 
+    permitir ver 3 gráficos en la misma figura.
     """
+
+    st.write("DEBUG: Entrando a realizar_analisis con opcion=", opcion)
+    st.write("DEBUG: pregunta_usuario =", pregunta_usuario)
+    st.write("DEBUG: filtros =", filtros)
 
     resultados = ""
     figuras = []
@@ -798,15 +808,19 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     else:
         df_filtrado_inicial = df.copy()
 
-    # 1) Manejo adicional de filtros si se proporcionan
+    # (1) Manejo adicional de filtros si se proporcionan
     if filtros:
         try:
+            st.write("DEBUG: Aplicando filtro:", filtros)
             df_filtrado = df_filtrado_inicial.query(filtros)
         except Exception as e:
             st.write(f"Error al aplicar el filtro: {e}")
             df_filtrado = df_filtrado_inicial.copy()
     else:
+        st.write("DEBUG: Sin filtros adicionales.")
         df_filtrado = df_filtrado_inicial.copy()
+
+    st.write("DEBUG: df_filtrado.shape =", df_filtrado.shape)
 
     # Función auxiliar para obtener info de una variable desde data_dictionary
     def get_variable_info(variable_name):
@@ -819,6 +833,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 1: Distribución de variable categórica
     # ===========================================================
     if opcion == '1':
+        st.write("DEBUG: Opción 1 - Distribución de variable categórica")
         variables_relevantes = obtener_variables_relevantes(pregunta_usuario, 'categórica', df_filtrado)
 
         if not variables_relevantes:
@@ -832,8 +847,10 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables categóricas relevantes no utilizadas:** {otras_vars}")
 
+        st.write("DEBUG: Usando la variable categórica =>", var_cat)
+
         # Análisis
-        conteo = df_filtrado[var_cat].value_counts()
+        conteo = df_filtrado[var_cat].value_counts(dropna=False)
         resultados += f"Frecuencias de {var_cat}:\n{conteo.to_string()}\n"
 
         # Intentar mapear valores según diccionario
@@ -843,45 +860,50 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             if isinstance(valores, list):
                 mapping = {i: v for i, v in enumerate(valores)}
                 df_filtrado[var_cat] = df_filtrado[var_cat].map(mapping).fillna(df_filtrado[var_cat])
-                conteo = df_filtrado[var_cat].value_counts()
+                conteo = df_filtrado[var_cat].value_counts(dropna=False)
 
-        # Gráficos
+        # Gráficos en subplots 1x3
         try:
-            fig1, ax1 = plt.subplots()
-            conteo.plot(kind='bar', ax=ax1)
-            ax1.set_title(f'Distribución de {var_cat}')
-            ax1.set_xlabel(var_cat)
-            ax1.set_ylabel('Frecuencia')
-            st.pyplot(fig1)
-            figuras.append(fig1)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico de barras: {e}")
+            fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+            plt.tight_layout()
 
-        try:
-            fig2, ax2 = plt.subplots()
-            conteo.plot(kind='pie', ax=ax2, autopct='%1.1f%%')
-            ax2.set_ylabel('')
-            ax2.set_title(f'Distribución de {var_cat}')
-            st.pyplot(fig2)
-            figuras.append(fig2)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico de pastel: {e}")
+            # Gráfico 1 (barras)
+            try:
+                conteo.plot(kind='bar', ax=axes[0])
+                axes[0].set_title(f'Distribución de {var_cat}')
+                axes[0].set_xlabel(var_cat)
+                axes[0].set_ylabel('Frecuencia')
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de barras: {e}")
 
-        try:
-            fig3, ax3 = plt.subplots()
-            conteo.plot(kind='barh', ax=ax3)
-            ax3.set_title(f'Distribución de {var_cat}')
-            ax3.set_xlabel('Frecuencia')
-            ax3.set_ylabel(var_cat)
-            st.pyplot(fig3)
-            figuras.append(fig3)
+            # Gráfico 2 (pie)
+            try:
+                conteo.plot(kind='pie', autopct='%1.1f%%', ax=axes[1])
+                axes[1].set_ylabel('')
+                axes[1].set_title(f'Distribución de {var_cat}')
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de pastel: {e}")
+
+            # Gráfico 3 (barh)
+            try:
+                conteo.plot(kind='barh', ax=axes[2])
+                axes[2].set_title(f'Distribución de {var_cat}')
+                axes[2].set_xlabel('Frecuencia')
+                axes[2].set_ylabel(var_cat)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de barras horizontal: {e}")
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            figuras.append(fig)
         except Exception as e:
-            st.write(f"No se pudo generar el gráfico de barras horizontal: {e}")
+            st.write(f"ERROR: No se pudo crear la figura de distribuciones: {e}")
 
     # ===========================================================
     # Opción 2: Estadísticas descriptivas de variable numérica
     # ===========================================================
     elif opcion == '2':
+        st.write("DEBUG: Opción 2 - Estadísticas descriptivas (numérica)")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
         if not vars_relevantes:
             resultados += "No se encontraron variables numéricas relevantes para la pregunta.\n"
@@ -889,107 +911,112 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
 
         # Tomar la primera variable
         var_num = vars_relevantes[0]
-        # Mostrar las demás no usadas
         otras_vars = vars_relevantes[1:]
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
+        st.write("DEBUG: Usando la variable numérica =>", var_num)
+
         estadisticas = df_filtrado[var_num].describe()
         resultados += f"Estadísticas descriptivas de {var_num}:\n{estadisticas.to_string()}\n"
 
-        # Gráficos
+        # Gráficos 1x3: hist, boxplot, kde
         try:
-            fig1, ax1 = plt.subplots()
-            df_filtrado[var_num].hist(bins=10, grid=False, ax=ax1)
-            ax1.set_title(f'Histograma de {var_num}')
-            ax1.set_xlabel(var_num)
-            ax1.set_ylabel('Frecuencia')
-            st.pyplot(fig1)
-            figuras.append(fig1)
-        except Exception as e:
-            st.write(f"No se pudo generar el histograma: {e}")
+            fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+            plt.tight_layout()
 
-        try:
-            fig2, ax2 = plt.subplots()
-            df_filtrado.boxplot(column=var_num, ax=ax2)
-            ax2.set_title(f'Boxplot de {var_num}')
-            st.pyplot(fig2)
-            figuras.append(fig2)
-        except Exception as e:
-            st.write(f"No se pudo generar el boxplot: {e}")
+            # Histograma
+            try:
+                df_filtrado[var_num].hist(bins=10, grid=False, ax=axes[0])
+                axes[0].set_title(f'Histograma de {var_num}')
+                axes[0].set_xlabel(var_num)
+                axes[0].set_ylabel('Frecuencia')
+            except Exception as e:
+                st.write(f"No se pudo generar el histograma: {e}")
 
-        try:
-            fig3, ax3 = plt.subplots()
-            df_filtrado[var_num].plot(kind='kde', ax=ax3)
-            ax3.set_title(f'Densidad de {var_num}')
-            ax3.set_xlabel(var_num)
-            st.pyplot(fig3)
-            figuras.append(fig3)
+            # Boxplot
+            try:
+                df_filtrado.boxplot(column=var_num, ax=axes[1])
+                axes[1].set_title(f'Boxplot de {var_num}')
+            except Exception as e:
+                st.write(f"No se pudo generar el boxplot: {e}")
+
+            # Gráfico de densidad (kde)
+            try:
+                df_filtrado[var_num].plot(kind='kde', ax=axes[2])
+                axes[2].set_title(f'Densidad de {var_num}')
+                axes[2].set_xlabel(var_num)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de densidad: {e}")
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            figuras.append(fig)
         except Exception as e:
-            st.write(f"No se pudo generar el gráfico de densidad: {e}")
+            st.write(f"ERROR: No se pudo crear la figura para estadísticos de {var_num}: {e}")
 
     # ===========================================================
     # Opción 3: Relación entre dos variables numéricas
     # ===========================================================
     elif opcion == '3':
+        st.write("DEBUG: Opción 3 - Relación entre dos variables numéricas")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
 
-        # Necesitamos al menos 2 variables distintas
         if len(vars_relevantes) < 2:
             resultados += "No se encontraron suficientes variables numéricas relevantes para la pregunta.\n"
             return resultados, figuras
 
-        # Tomar las dos primeras distintas
         var_x = vars_relevantes[0]
-        # Buscar una segunda que sea distinta
         var_y = None
         for v in vars_relevantes[1:]:
             if v != var_x:
                 var_y = v
                 break
-
         if var_y is None:
-            # Significa que todas las relevantes son la misma (raro, pero posible)
             resultados += "No se encontraron dos variables numéricas diferentes para la pregunta.\n"
             return resultados, figuras
 
-        # Otras no utilizadas
         idx_unused = vars_relevantes.index(var_y) + 1
         otras_vars = vars_relevantes[idx_unused:]
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
+        st.write("DEBUG: Analizando la relación entre =>", var_x, "y", var_y)
         resultados += f"Analizando la relación entre {var_x} y {var_y}.\n"
 
-        # Gráficos de dispersión, hexbin y densidad conjunta
+        # Crear 3 subplots: scatter, hexbin, kde
         try:
-            fig1, ax1 = plt.subplots()
-            df_filtrado.plot.scatter(x=var_x, y=var_y, ax=ax1)
-            ax1.set_title(f'Dispersión entre {var_x} y {var_y}')
-            st.pyplot(fig1)
-            figuras.append(fig1)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico de dispersión: {e}")
+            fig, axes = plt.subplots(1, 3, figsize=(13,4))
+            plt.tight_layout()
 
-        try:
-            fig2, ax2 = plt.subplots()
-            df_filtrado.plot.hexbin(x=var_x, y=var_y, gridsize=25, ax=ax2)
-            ax2.set_title(f'Hexbin entre {var_x} y {var_y}')
-            st.pyplot(fig2)
-            figuras.append(fig2)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico hexbin: {e}")
+            # Dispersión
+            try:
+                df_filtrado.plot.scatter(x=var_x, y=var_y, ax=axes[0])
+                axes[0].set_title(f'Dispersión: {var_x} vs {var_y}')
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de dispersión: {e}")
 
-        try:
-            fig3, ax3 = plt.subplots()
-            sns.kdeplot(data=df_filtrado, x=var_x, y=var_y, ax=ax3)
-            ax3.set_title(f'Densidad conjunta entre {var_x} y {var_y}')
-            st.pyplot(fig3)
-            figuras.append(fig3)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico de densidad conjunta: {e}")
+            # Hexbin
+            try:
+                df_filtrado.plot.hexbin(x=var_x, y=var_y, gridsize=25, ax=axes[1])
+                axes[1].set_title(f'Hexbin: {var_x} vs {var_y}')
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico hexbin: {e}")
 
-        # Correlación
+            # kdeplot 2D
+            try:
+                sns.kdeplot(data=df_filtrado, x=var_x, y=var_y, ax=axes[2])
+                axes[2].set_title(f'Densidad conjunta: {var_x} vs {var_y}')
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de densidad conjunta: {e}")
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            figuras.append(fig)
+        except Exception as e:
+            st.write("ERROR: No se pudo crear la figura de relación 2 num:", e)
+
+        # Correlación numérica
         try:
             correlacion = df_filtrado[[var_x, var_y]].corr().iloc[0,1]
             resultados += f"Correlación entre {var_x} y {var_y}: {correlacion}\n"
@@ -1000,6 +1027,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     # Opción 4: Filtrar datos y mostrar estadísticas de 1 var num
     # ===========================================================
     elif opcion == '4':
+        st.write("DEBUG: Opción 4 - Filtrar datos y estadísticos de 1 var num")
         resultados += "Datos después de aplicar los filtros proporcionados.\n"
         resultados += f"Total de registros después del filtro: {len(df_filtrado)}\n"
 
@@ -1013,78 +1041,84 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
 
+        st.write("DEBUG: Usando la variable numérica =>", var_num4)
+
         estadisticas = df_filtrado[var_num4].describe()
         resultados += f"Estadísticas descriptivas de {var_num4} (después de filtros):\n{estadisticas.to_string()}\n"
 
-        # Gráficos
+        # Subplots 1x3: hist, boxplot, kde
         try:
-            fig1, ax1 = plt.subplots()
-            df_filtrado[var_num4].hist(bins=10, grid=False, ax=ax1)
-            ax1.set_title(f'Histograma de {var_num4} después de filtros')
-            ax1.set_xlabel(var_num4)
-            ax1.set_ylabel('Frecuencia')
-            st.pyplot(fig1)
-            figuras.append(fig1)
-        except Exception as e:
-            st.write(f"No se pudo generar el histograma: {e}")
+            fig, axes = plt.subplots(1, 3, figsize=(13,4))
+            plt.tight_layout()
 
-        try:
-            fig2, ax2 = plt.subplots()
-            df_filtrado.boxplot(column=var_num4, ax=ax2)
-            ax2.set_title(f'Boxplot de {var_num4} después de filtros')
-            st.pyplot(fig2)
-            figuras.append(fig2)
-        except Exception as e:
-            st.write(f"No se pudo generar el boxplot: {e}")
+            # Hist
+            try:
+                df_filtrado[var_num4].hist(bins=10, grid=False, ax=axes[0])
+                axes[0].set_title(f'Histograma de {var_num4} (filtrado)')
+                axes[0].set_xlabel(var_num4)
+                axes[0].set_ylabel('Frecuencia')
+            except Exception as e:
+                st.write(f"No se pudo generar el histograma: {e}")
 
-        try:
-            fig3, ax3 = plt.subplots()
-            df_filtrado[var_num4].plot(kind='kde', ax=ax3)
-            ax3.set_title(f'Densidad de {var_num4} después de filtros')
-            ax3.set_xlabel(var_num4)
-            st.pyplot(fig3)
-            figuras.append(fig3)
+            # Boxplot
+            try:
+                df_filtrado.boxplot(column=var_num4, ax=axes[1])
+                axes[1].set_title(f'Boxplot de {var_num4} (filtrado)')
+            except Exception as e:
+                st.write(f"No se pudo generar el boxplot: {e}")
+
+            # KDE
+            try:
+                df_filtrado[var_num4].plot(kind='kde', ax=axes[2])
+                axes[2].set_title(f'Densidad de {var_num4} (filtrado)')
+                axes[2].set_xlabel(var_num4)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de densidad: {e}")
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            figuras.append(fig)
         except Exception as e:
-            st.write(f"No se pudo generar el gráfico de densidad: {e}")
+            st.write("ERROR: No se pudo crear la figura de estadísticos (opcion4):", e)
 
     # ===========================================================
     # Opción 5: Correlación entre múltiples variables numéricas
     # ===========================================================
     elif opcion == '5':
+        st.write("DEBUG: Opción 5 - Correlación de múltiples variables numéricas")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
         if len(vars_relevantes) < 2:
             resultados += "No se encontraron suficientes variables numéricas para calcular la correlación.\n"
             return resultados, figuras
 
-        # Podríamos usar todas las variables relevantes,
-        # pero si el usuario desea ver solo 2 no tendría sentido. 
-        # En la descripción original, esta opción era para multiselección.
-        # Aquí usaremos TODAS las relevantes para la matriz de correlación.
         st.write(f"**Variables numéricas relevantes para la correlación:** {vars_relevantes}")
-
         correlacion = df_filtrado[vars_relevantes].corr()
         resultados += "Matriz de correlación:\n"
         resultados += correlacion.to_string() + "\n"
 
+        # Heatmap
         try:
-            fig1, ax1 = plt.subplots()
+            fig1, ax1 = plt.subplots(figsize=(6,5))
             sns.heatmap(correlacion, annot=True, fmt='.2f', cmap='coolwarm', ax=ax1)
             ax1.set_title('Mapa de calor de la correlación')
+            plt.tight_layout()
             st.pyplot(fig1)
             figuras.append(fig1)
         except Exception as e:
             st.write(f"No se pudo generar el heatmap: {e}")
 
+        # Pairplot
         try:
-            fig2 = sns.pairplot(df_filtrado[vars_relevantes])
+            fig2 = sns.pairplot(df_filtrado[vars_relevantes], corner=True)
             st.pyplot(fig2)
             figuras.append(fig2)
         except Exception as e:
             st.write(f"No se pudo generar la matriz de dispersión: {e}")
 
+        # Matshow con anotaciones
         try:
             import numpy as np
-            fig3, ax3 = plt.subplots()
+            fig3, ax3 = plt.subplots(figsize=(6,5))
             cax = ax3.matshow(correlacion, cmap='coolwarm')
             fig3.colorbar(cax)
             ax3.set_xticks(range(len(vars_relevantes)))
@@ -1093,22 +1127,24 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             ax3.set_yticklabels(vars_relevantes)
             for (i, j), z in np.ndenumerate(correlacion):
                 ax3.text(j, i, '{:0.2f}'.format(z), ha='center', va='center')
+            ax3.set_title("Matriz de Correlación", pad=20)
+            plt.tight_layout()
             st.pyplot(fig3)
             figuras.append(fig3)
         except Exception as e:
-            st.write(f"No se pudo generar el gráfico de correlación: {e}")
+            st.write(f"No se pudo generar el gráfico de correlación matshow: {e}")
 
     # ===========================================================
     # Opción 6: Análisis de regresión simple (2 var num)
     # ===========================================================
     elif opcion == '6':
+        st.write("DEBUG: Opción 6 - Regresión lineal simple")
         vars_relevantes = obtener_variables_relevantes(pregunta_usuario, 'numérica', df_filtrado)
 
         if len(vars_relevantes) < 2:
             resultados += "No se encontraron suficientes variables numéricas para realizar la regresión.\n"
             return resultados, figuras
 
-        # Tomar las dos primeras diferentes
         varx = vars_relevantes[0]
         vary = None
         for v in vars_relevantes[1:]:
@@ -1120,11 +1156,12 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             resultados += "No se encontraron dos variables numéricas diferentes para realizar la regresión.\n"
             return resultados, figuras
 
-        # Otras no utilizadas
         idx_unused = vars_relevantes.index(vary) + 1
         otras_vars = vars_relevantes[idx_unused:]
         if otras_vars:
             st.write(f"**Otras variables numéricas relevantes no utilizadas:** {otras_vars}")
+
+        st.write("DEBUG: Eje X =>", varx, ", Eje Y =>", vary)
 
         from sklearn.linear_model import LinearRegression
         X = df_filtrado[[varx]].dropna()
@@ -1146,45 +1183,44 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         resultados += f"Intercepto: {modelo.intercept_}\n"
         resultados += f"Coeficiente (pendiente): {modelo.coef_[0]}\n"
 
-        # Gráficos
+        # Subplots 1x3: scatter con línea, residuales, hist residuales
         try:
-            fig1, ax1 = plt.subplots()
-            ax1.scatter(X, y, color='blue')
-            ax1.plot(X, modelo.predict(X), color='red')
-            ax1.set_title(f'Regresión lineal entre {varx} y {vary}')
-            ax1.set_xlabel(varx)
-            ax1.set_ylabel(vary)
-            st.pyplot(fig1)
-            figuras.append(fig1)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico de regresión: {e}")
+            fig, axes = plt.subplots(1,3, figsize=(13,4))
+            plt.tight_layout()
 
-        try:
-            residuales = y - modelo.predict(X)
-            fig2, ax2 = plt.subplots()
-            ax2.scatter(modelo.predict(X), residuales)
-            ax2.hlines(
-                y=0,
-                xmin=modelo.predict(X).min(),
-                xmax=modelo.predict(X).max(),
-                colors='red'
-            )
-            ax2.set_title('Gráfico de residuales')
-            ax2.set_xlabel('Valores predichos')
-            ax2.set_ylabel('Residuales')
-            st.pyplot(fig2)
-            figuras.append(fig2)
-        except Exception as e:
-            st.write(f"No se pudo generar el gráfico de residuales: {e}")
+            # 1) Scatter con línea
+            try:
+                axes[0].scatter(X, y, color='blue', alpha=0.7)
+                axes[0].plot(X, modelo.predict(X), color='red')
+                axes[0].set_title(f'Regresión: {varx} vs {vary}')
+                axes[0].set_xlabel(varx)
+                axes[0].set_ylabel(vary)
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de regresión lineal: {e}")
 
-        try:
-            fig3, ax3 = plt.subplots()
-            sns.histplot(residuales, kde=True, ax=ax3)
-            ax3.set_title('Distribución de los residuales')
-            st.pyplot(fig3)
-            figuras.append(fig3)
+            # 2) Gráfico de residuales
+            try:
+                residuales = y - modelo.predict(X)
+                axes[1].scatter(modelo.predict(X), residuales, alpha=0.7)
+                axes[1].axhline(y=0, color='red')
+                axes[1].set_title('Gráfico de residuales')
+                axes[1].set_xlabel('Valores predichos')
+                axes[1].set_ylabel('Residuales')
+            except Exception as e:
+                st.write(f"No se pudo generar el gráfico de residuales: {e}")
+
+            # 3) Histplot de residuales
+            try:
+                sns.histplot(residuales, kde=True, ax=axes[2])
+                axes[2].set_title('Distribución de los residuales')
+            except Exception as e:
+                st.write(f"No se pudo generar el histograma de residuales: {e}")
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            figuras.append(fig)
         except Exception as e:
-            st.write(f"No se pudo generar el histograma de residuales: {e}")
+            st.write("ERROR: No se pudo crear la figura de regresión simple:", e)
 
     # ===========================================================
     # Opción 7: Tablas de contingencia y Chi-cuadrado (2 vars)
@@ -1206,46 +1242,36 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if not all_relevant:
             st.write("DEBUG: No se encontraron columnas en all_relevant (lista vacía).")
         else:
-            st.write("DEBUG: Se encontraron columns en all_relevant.")
+            st.write("DEBUG: Se encontraron columns en all_relevant:", all_relevant)
     
         if len(all_relevant) < 2:
             resultados += "No hay suficientes columnas relevantes para la tabla.\n"
             st.write("DEBUG - Motivo: len(all_relevant) < 2 =>", len(all_relevant))
             return resultados, figuras
     
-        # --- 2) Separa en cat y num
+        # 2) Separa en cat y num
         cats_encontradas = []
         nums_encontradas = []
     
         st.write("DEBUG: df_filtrado dtypes:\n", df_filtrado.dtypes)
     
         for col in all_relevant:
-            # Mostrar el nombre y su dtype real
             if col not in df_filtrado.columns:
-                st.write(f"DEBUG: La columna '{col}' NO está en df_filtrado.columns (posible mismatch).")
+                st.write(f"DEBUG: La columna '{col}' NO está en df_filtrado.columns (mismatch).")
                 continue
             real_dtype = df_filtrado[col].dtype
             st.write(f"DEBUG: Columna '{col}', dtype -> {real_dtype}")
-    
-            # Revisamos si es object/categ o num
             if real_dtype in [object, 'category']:
                 cats_encontradas.append(col)
             elif str(real_dtype).startswith('float') or str(real_dtype).startswith('int'):
                 nums_encontradas.append(col)
             else:
-                st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no entra ni a cat ni a num.")
-    
+                st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no es cat ni num.")
     
         st.write("DEBUG - cats_encontradas:", cats_encontradas)
         st.write("DEBUG - nums_encontradas:", nums_encontradas)
     
-        # --- 3) Lógica para “Tablas de contingencia”
-        # Casos:
-        # a) dos categóricas
-        # b) una categórica y una numérica
-        # c) dos numéricas => no aplica (si quisiéramos, habría que agrupar ambas)
-        #    o forzar la que le interese al usuario
-    
+        # 3) Lógica para Tablas de contingencia
         var1, var2 = None, None
     
         st.write("DEBUG: Reglas para asignar var1, var2 ...")
@@ -1259,12 +1285,10 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             var2 = nums_encontradas[0]
             st.write(f"DEBUG - Usando cat={var1} y num={var2}")
         else:
-            # No es posible
             resultados += "No se pudo encontrar dos columnas adecuadas (categ y/o num) para la tabla.\n"
             st.write("DEBUG - No se cumplieron las condiciones para tener var1 y var2")
             return resultados, figuras
     
-        # --- 4) Generar la crosstab
         import numpy as np
         from scipy.stats import chi2_contingency
     
@@ -1276,32 +1300,31 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             else:
                 return s.astype(str)
     
-        # Mostrar la cantidad de nulos antes del dropna
         st.write(f"DEBUG: Cantidad de nulos en '{var1}': {df_filtrado[var1].isna().sum()}.")
         st.write(f"DEBUG: Cantidad de nulos en '{var2}': {df_filtrado[var2].isna().sum()}.")
-    
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
     
         st.write(f"DEBUG: serie1 (var1={var1}) length tras dropna -> {len(serie1)}")
         st.write(f"DEBUG: serie2 (var2={var2}) length tras dropna -> {len(serie2)}")
     
-        # Mostrar un head(5) para ver si hay datos
-        st.write("DEBUG: serie1.sample(5):", serie1.sample(min(5,len(serie1))).tolist() if len(serie1)>0 else "VACIO")
-        st.write("DEBUG: serie2.sample(5):", serie2.sample(min(5,len(serie2))).tolist() if len(serie2)>0 else "VACIO")
+        # Muestra sample
+        if len(serie1) > 0:
+            st.write("DEBUG: serie1.sample(3):", serie1.sample(min(3, len(serie1))).tolist())
+        if len(serie2) > 0:
+            st.write("DEBUG: serie2.sample(3):", serie2.sample(min(3, len(serie2))).tolist())
     
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes (serie vacía) para generar la tabla.\n"
-            st.write("DEBUG - Motivo: serie1/serie2 está vacía => no se genera la tabla.")
+            st.write("DEBUG - Motivo: serie1/serie2 está vacía.")
             return resultados, figuras
     
         # Agrupar si es num
         serie1 = agrupar_si_es_num(serie1)
         serie2 = agrupar_si_es_num(serie2)
     
-        st.write("DEBUG: Después de agrupar_si_es_num:")
-        st.write("DEBUG: serie1 unique values ->", serie1.unique())
-        st.write("DEBUG: serie2 unique values ->", serie2.unique())
+        st.write("DEBUG: Después de agrupar_si_es_num => unique en serie1:", serie1.unique())
+        st.write("DEBUG: Después de agrupar_si_es_num => unique en serie2:", serie2.unique())
     
         crosstab = pd.crosstab(serie1, serie2)
         st.write("DEBUG - crosstab shape:", crosstab.shape)
@@ -1309,7 +1332,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         if crosstab.empty:
             resultados += "Tabla de contingencia vacía.\n"
-            st.write("DEBUG - Motivo: crosstab está vacío (no hay registros tras agrupar).")
+            st.write("DEBUG - crosstab está vacío => no se genera la tabla.")
             return resultados, figuras
     
         resultados += f"**Tabla de Contingencia** entre {var1} y {var2}:\n{crosstab.to_string()}\n\n"
@@ -1321,11 +1344,12 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         # Plot heatmap
         try:
-            fig_ct, ax_ct = plt.subplots()
+            fig_ct, ax_ct = plt.subplots(figsize=(6,4))
             sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct)
-            ax_ct.set_title(f"Heatmap de {var1} vs {var2}")
+            ax_ct.set_title(f"Heatmap de {var1} vs {var2}", fontsize=10)
             ax_ct.set_xlabel(var2)
             ax_ct.set_ylabel(var1)
+            plt.tight_layout()
             st.pyplot(fig_ct)
             figuras.append(fig_ct)
         except Exception as e:
@@ -1334,6 +1358,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         return resultados, figuras
 
     else:
+        st.write("DEBUG: Opción no reconocida =>", opcion)
         resultados += "Opción de análisis no reconocida.\n"
 
     # -----------------------------------------------------------
