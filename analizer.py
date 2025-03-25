@@ -1251,16 +1251,16 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         for col in all_relevant:
             if col not in df_filtrado.columns:
-                st.write(f"DEBUG: La columna '{col}' NO está en df_filtrado.columns (mismatch).")
+                #st.write(f"DEBUG: La columna '{col}' NO está en df_filtrado.columns (mismatch).")
                 continue
             real_dtype = df_filtrado[col].dtype
-            st.write(f"DEBUG: Columna '{col}', dtype -> {real_dtype}")
+            #st.write(f"DEBUG: Columna '{col}', dtype -> {real_dtype}")
             if real_dtype in [object, 'category']:
                 cats_encontradas.append(col)
             elif str(real_dtype).startswith('float') or str(real_dtype).startswith('int'):
                 nums_encontradas.append(col)
             else:
-                st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no es cat ni num.")
+                #st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no es cat ni num.")
     
         #st.write("DEBUG - cats_encontradas:", cats_encontradas)
         #st.write("DEBUG - nums_encontradas:", nums_encontradas)
@@ -1273,11 +1273,11 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         if len(cats_encontradas) >= 2:
             var1 = cats_encontradas[0]
             var2 = cats_encontradas[1]
-            st.write(f"DEBUG - Usando 2 categóricas: var1={var1}, var2={var2}")
+            #st.write(f"DEBUG - Usando 2 categóricas: var1={var1}, var2={var2}")
         elif len(cats_encontradas) == 1 and len(nums_encontradas) >= 1:
             var1 = cats_encontradas[0]
             var2 = nums_encontradas[0]
-            st.write(f"DEBUG - Usando cat={var1} y num={var2}")
+            #st.write(f"DEBUG - Usando cat={var1} y num={var2}")
         else:
             resultados += "No se pudo encontrar dos columnas adecuadas (categ y/o num) para la tabla.\n"
             #st.write("DEBUG - No se cumplieron las condiciones para tener var1 y var2")
@@ -1288,19 +1288,19 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
     
         def agrupar_si_es_num(s, nbins=5):
             """Si la columna es numérica, agrupar en nbins. Si es categórica, devolver tal cual."""
-            st.write(f"DEBUG: agrupar_si_es_num -> dtype={s.dtype}, length={len(s)}")
+            #st.write(f"DEBUG: agrupar_si_es_num -> dtype={s.dtype}, length={len(s)}")
             if str(s.dtype).startswith('float') or str(s.dtype).startswith('int'):
                 return pd.cut(s, nbins, labels=False).astype(str)
             else:
                 return s.astype(str)
     
-        st.write(f"DEBUG: Cantidad de nulos en '{var1}': {df_filtrado[var1].isna().sum()}.")
-        st.write(f"DEBUG: Cantidad de nulos en '{var2}': {df_filtrado[var2].isna().sum()}.")
+        #st.write(f"DEBUG: Cantidad de nulos en '{var1}': {df_filtrado[var1].isna().sum()}.")
+        #st.write(f"DEBUG: Cantidad de nulos en '{var2}': {df_filtrado[var2].isna().sum()}.")
         serie1 = df_filtrado[var1].dropna()
         serie2 = df_filtrado[var2].dropna()
     
-        st.write(f"DEBUG: serie1 (var1={var1}) length tras dropna -> {len(serie1)}")
-        st.write(f"DEBUG: serie2 (var2={var2}) length tras dropna -> {len(serie2)}")
+        #st.write(f"DEBUG: serie1 (var1={var1}) length tras dropna -> {len(serie1)}")
+        #st.write(f"DEBUG: serie2 (var2={var2}) length tras dropna -> {len(serie2)}")
     
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes (serie vacía) para generar la tabla.\n"
@@ -1982,14 +1982,14 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     for col in df_num.columns:
         if df_num[col].dtype == object:
             # EJEMPLO: print de debug
-            print("DEBUG - Antes de mapear_valores, df_num[column].value_counts():")
+            #print("DEBUG - Antes de mapear_valores, df_num[column].value_counts():")
             print(df_num[col].value_counts(dropna=False))
             
             # Llamada a mapear_valores
             df_num[col] = mapear_valores(df_num[col])
             
             # Después
-            print("DEBUG - Después de mapear_valores, df_num[column].value_counts():")
+            #print("DEBUG - Después de mapear_valores, df_num[column].value_counts():")
             print(df_num[col].value_counts(dropna=False))
 
     # Definir umbrales
