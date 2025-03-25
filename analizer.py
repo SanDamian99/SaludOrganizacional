@@ -1983,65 +1983,59 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     df_filtrado = df[
         (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) &
         (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
-    ].copy()  # Use .copy() to avoid modifying original df
+    ].copy()
 
     if df_filtrado.empty:
         return "No se encontraron datos en el rango de fechas especificado.", []
 
     # --- AGGRESSIVE DATA CLEANING FOR LIKERT SCALE COLUMNS ---
-    likert_scale_columns = [] # <--- **DEFINE YOUR LIKERT SCALE COLUMN NAMES HERE!**
+    likert_scale_columns = []
     for dim_vars in dimensiones.values():
         likert_scale_columns.extend(dim_vars)
-    likert_scale_columns = list(set(likert_scale_columns)) # Remove duplicates
+    likert_scale_columns = list(set(likert_scale_columns))
 
     for col in df_filtrado.columns:
-        if col in likert_scale_columns: # <--- **CLEAN ONLY LIKERT COLUMNS**
+        if col in likert_scale_columns:
             print(f"DEBUG - Applying aggressive cleaning to column: {col}")
-            # 1. Lowercase and strip whitespace (as before)
             df_filtrado[col] = df_filtrado[col].astype(str).str.lower().str.strip()
+            df_filtrado[col] = df_filtrado[col].str.replace(r'\s+', ' ', regex=True)
+            df_filtrado[col] = df_filtrado[col].str.replace('\xa0', ' ', regex=False)
+            df_filtrado[col] = df_filtrado[col].str.replace('\u200b', '', regex=False)
+            df_filtrado[col] = df_filtrado[col].str.replace('nunca\.', 'nunca', regex=True)
+            df_filtrado[col] = df_filtrado[col].str.replace('raramente', 'rara vez', regex=False)
+            df_filtrado[col] = df_filtrado[col].str.replace('algunas veces\.', 'algunas veces', regex=True)
 
-            # 2. Replace non-breaking spaces and other whitespace variations more aggressively
-            df_filtrado[col] = df_filtrado[col].str.replace(r'\s+', ' ', regex=True) # Replace multiple spaces with single space
-            df_filtrado[col] = df_filtrado[col].str.replace('\xa0', ' ', regex=False) # Non-breaking space
-            df_filtrado[col] = df_filtrado[col].str.replace('\u200b', '', regex=False) # Zero-width space
-
-            # 3. Handle specific problematic values (customize this based on your data!)
-            df_filtrado[col] = df_filtrado[col].str.replace('nunca\.', 'nunca', regex=True) # Fix "nunca." typo
-            df_filtrado[col] = df_filtrado[col].str.replace('raramente', 'rara vez', regex=False) # Standardize "raramente" to "rara vez"
-            df_filtrado[col] = df_filtrado[col].str.replace('algunas veces\.', 'algunas veces', regex=True) # Fix "algunas veces." typo
-            # Add more replacements as needed based on your debug output and data exploration!
-
-    # Special handling for 'Edad' and 'Numero de hijos' (as before - keep this)
+    # Special handling for 'Edad' and 'Numero de hijos'
     if 'Edad' in df_filtrado.columns:
         df_filtrado['Edad'] = pd.to_numeric(df_filtrado['Edad'], errors='coerce')
     if 'Numero de hijos' in df_filtrado.columns:
         df_filtrado['Numero de hijos'] = df_filtrado['Numero de hijos'].replace('sin hijos', 0, regex=False).fillna(0)
         df_filtrado['Numero de hijos'] = pd.to_numeric(df_filtrado['Numero de hijos'], errors='coerce', downcast='integer')
 
-    # Convert todo a valores numéricos según la escala fija para las dimensiones (as before)
+    # Convert todo a valores numéricos según la escala fija para las dimensiones
     df_num = df_filtrado.copy()
     for col in df_num.columns:
         if df_num[col].dtype == object:
-            # EJEMPLO: print de debug (keep these for now)
-            #print("DEBUG - Antes de mapear_valores, df_num[column].value_counts():")
             print(df_num[col].value_counts(dropna=False))
-
-            # Llamada a mapear_valores
             df_num[col] = mapear_valores(df_num[col])
-
-            # Después
-            #print("DEBUG - Después de mapear_valores, df_num[column].value_counts():")
             print(df_num[col].value_counts(dropna=False))
-        elif pd.api.types.is_numeric_dtype(df_num[col]): # Explicitly convert to numeric AFTER mapping for safety
-             df_num[col] = pd.to_numeric(df_num[col], errors='coerce') # Coerce any remaining non-numeric to NaN
+        elif pd.api.types.is_numeric_dtype(df_num[col]):
+            df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
 
-    # Definir umbrales
-    # Fortaleza: >=5, Riesgo: <=3, Intermedio: (3,5)
+    # Definir umbrales and process dimensions
     resultados = {}
     for dim, vars_dim in dimensiones.items():
         vars_exist = [v for v in vars_dim if v in df_num.columns]
-        if vars_exist:
-            prom = df_num[vars_exist].mean(skipna=True, numeric_only=True).mean()
+
+        # **NEW: Filter vars_exist to keep only numeric columns**
+        numeric_vars_exist = [var for var in vars_exist if pd.api.types.is_numeric_dtype(df_num[var])]
+
+        if not numeric_vars_exist: # **Check for numeric_vars_exist instead of vars_exist**
+            print(f"WARNING: No numeric columns found for dimension '{dim}'. Skipping dimension.") # **Warning message**
+            continue # **Skip to the next dimension**
+
+        if numeric_vars_exist: # **Use numeric_vars_exist for aggregation**
+            prom = df_num[numeric_vars_exist].mean(skipna=True, numeric_only=True).mean()
             resultados[dim] = prom
 
     fortalezas = [(d,v) for d,v in resultados.items() if v >=5]
