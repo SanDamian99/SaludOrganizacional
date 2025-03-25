@@ -78,471 +78,186 @@ class RateLimiter:
 # Cargar el archivo CSV
 ruta_csv = 'Resultados Indicadores de Bienestar y Salud Mental en el Mundo del Trabajo.xlsx'
 
-# Data Dictionary
 data_dictionary = {
     "Variables Sociodemográficas": {
-        "Edad": {
-            "Tipo": "Continua",
-            "Valores": "18 a 70 o más (en el análisis se agrupan por criterios)"
-        },
-        "Sexo": {
-            "Tipo": "Categórica",
-            "Valores": ["Hombre", "Mujer", "Otro"]
-        },
-        "Estado Civil": {
-            "Tipo": "Categórica",
-            "Valores": ["Soltero", "Casado", "Separado", "Unión Libre", "Viudo"]
-        },
-        "Número de Hijos": {
-            "Tipo": "Continua",
-            "Valores": "0 a 10"
-        },
-        "Nivel Educativo": {
-            "Tipo": "Categórica",
-            "Valores": ["Bachiller", "Técnico", "Tecnológico", "Profesional", "Posgrado"]
-        },
-        "Municipio": {
-            "Tipo": "Categórica",
-            "Valores": "Departamento y Municipio (lista desplegable)"
-        },
-        "Zona de Vivienda": {
-            "Tipo": "Categórica",
-            "Valores": ["Urbana", "Rural"]
-        },
-        "Estrato Socioeconómico": {
-            "Tipo": "Categórica",
-            "Valores": [1, 2, 3, 4, 5, 6]
-        }
+        "Edad": {"Tipo": "Continua", "Valores": "18 a 70+"},
+        "Sexo": {"Tipo": "Categórica", "Valores": ["Hombre", "Mujer", "Otro", "Prefiero no decir"]},
+        "Estado Civil": {"Tipo": "Categórica", "Valores": ["Soltero", "Casado", "Separado", "Unión Libre", "Viudo"]},
+        "Numero de hijos": {"Tipo": "Continua", "Valores": "0 a 10+", "NombreExacto": "Numero de hijos"}, # Confirmar nombre exacto
+        "Nivel Educativo": {"Tipo": "Categórica", "Valores": ["Primaria", "Bachiller", "Técnico", "Tecnológico", "Tecnológo", "Profesional", "Pregrado", "Posgrado", "Maestría", "Doctorado"]},
+        "Departamento ": {"Tipo": "Categórica", "NombreExacto": "Departamento "}, # Asumiendo espacio al final
+        "Ciudad /Municipio": {"Tipo": "Categórica", "NombreExacto": "Ciudad /Municipio"},
+        "Zona de vivienda": {"Tipo": "Categórica", "Valores": ["Urbana", "Rural"], "NombreExacto": "Zona de vivienda"},
+        "Estrato socioeconomico": {"Tipo": "Categórica", "Valores": [1, 2, 3, 4, 5, 6], "NombreExacto": "Estrato socioeconomico"} # Confirmar nombre exacto
     },
     "Variables Laborales": {
-        "Sector Económico": {
-            "Tipo": "Categórica",
-            "Valores": "Sectores económicos representativos (lista desplegable)"
-        },
-        "Sector Empresa": {
-            "Tipo": "Categórica",
-            "Valores": ["Público", "Privado", "Mixto"]
-        },
-        "Tamaño Empresa": {
-            "Tipo": "Categórica",
-            "Valores": [
-                "Menos de 10 empleados",
-                "Entre 10 y 50 empleados",
-                "Entre 50 y 200 empleados",
-                "Entre 200 y 500 empleados",
-                "Más de 500 empleados"
-            ]
-        },
-        "Trabajo por Turnos": {
-            "Tipo": "Categórica",
-            "Valores": ["Sí", "No"]
-        },
-        "Tipo de Contrato": {
-            "Tipo": "Categórica",
-            "Valores": [
-                "Indefinido",
-                "Término Fijo",
-                "Obra o Labor",
-                "Aprendizaje",
-                "Prestación de Servicios"
-            ]
-        },
-        "Número horas trabajo semanal": {
-            "Tipo": "Continua",
-            "Valores": "1 a 60 horas (agrupado por criterios en análisis)"
-        },
-        "Ingreso Salarial Mensual": {
-            "Tipo": "Categórica",
-            "Valores": [
-                "Menos de 1 SMLV",
-                "Entre 1 y 3 SMLV",
-                "Entre 3 y 5 SMLV",
-                "Entre 5 y 10 SMLV",
-                "Más de 10 SMLV"
-            ]
-        },
-        "Nivel Cargo": {
-            "Tipo": "Categórica",
-            "Valores": ["Operativo", "Administrativo", "Directivo"]
-        },
-        "Personas a cargo en el trabajo": {
-            "Tipo": "Categórica",
-            "Valores": ["Sí", "No"]
-        },
-        "Años Experiencia Laboral": {
-            "Tipo": "Continua",
-            "Valores": "1 a 60 años (agrupado por criterios en análisis)"
-        },
-        "Antigüedad en el cargo/labor actual": {
-            "Tipo": "Categórica",
-            "Valores": [
-                "Menos de 1 año",
-                "Entre 1 y 3 años",
-                "Entre 3 y 7 años",
-                "Entre 7 y 10 años",
-                "Más de 10 años"
-            ]
-        },
-        "Tipo de Modalidad de Trabajo": {
-            "Tipo": "Categórica",
-            "Valores": ["Presencial", "Híbrido", "Remoto", "Teletrabajo"]
-        },
-        "Tiempo promedio de traslado al trabajo/casa al día": {
-            "Tipo": "Categórica",
-            "Valores": [
-                "Menos de 1 hora",
-                "Entre 1 y 2 horas",
-                "Entre 2 y 3 horas",
-                "Más de 3 horas"
-            ]
-        },
-        "Horas de formación recibidas (último año)": {
-            "Tipo": "Continua",
-            "Valores": "1 a 100 horas (agrupado por criterios en análisis)"
-        }
+        "Sector Económico ": {"Tipo": "Categórica", "NombreExacto": "Sector Económico "},
+        "Sector empresa": {"Tipo": "Categórica", "Valores": ["Público", "Privado", "Mixto"]},
+        "Tamaño Empresa": {"Tipo": "Categórica", "Valores": ["Menos de 10 empleados", "Entre 10 y 50 empleados", "Entre 50 y 200 empleados", "Entre 200 y 500 empleados", "Más de 500 empleados"]},
+        "Trabajo por turnos": {"Tipo": "Categórica", "Valores": ["Sí", "Si", "No"]}, # Añadir "Si"
+        "Tipo de Contrato": {"Tipo": "Categórica", "Valores": ["Indefinido", "Termino Indefinido", "Término fijo", "Obra o labor", "Aprendizaje", "Aprendizaje- SENA", "Presentación de servicios", "Temporal", "No hay información", "No hay Información"]},
+        "Número de horas de trabajo semanal ": {"Tipo": "Continua", "NombreExacto": "Número de horas de trabajo semanal "},
+        "Ingreso salarial mensual ": {"Tipo": "Categórica", "Valores": ["Menos de 1 SMLV", "Entre 1 y 3 SMLV", "Entre 3 y 5 SMLV", "Entre 5 y 10 SMLV", "Más de 10 SMLV"], "NombreExacto": "Ingreso salarial mensual "},
+        "Cargo": {"Tipo": "Categórica", "Valores": ["Operativo", "Administrativo", "Directivo", "Profesional", "Técnico", "Asistencial", "Aprendiz SENA"]}, # Confirmar si Nivel Cargo es 'Cargo'
+        "Personas a cargo en la empresa": {"Tipo": "Categórica", "Valores": ["Sí", "Si", "No"]}, # Añadir "Si"
+        "Años de experiencia laboral": {"Tipo": "Categórica", "Valores": ["Menos de 1 año", "Entre 1 a 5", "Entre 5 a 10", "Entre 10 a 15", "Entre 15 a 20", "Entre 20 a 25", "Más de 25"]},
+        "Antigüedad en el cargo/labor actual ": {"Tipo": "Categórica", "Valores": ["Menos de 1 año", "Entre 1 y 3 años", "Entre 3 y 7 años", "Entre 7 y 10 años", "Más de 10 años", "No hay información"], "NombreExacto": "Antigüedad en el cargo/labor actual "},
+        "Tipo de modalidad de trabajo": {"Tipo": "Categórica", "Valores": ["Presencial", "Híbrido", "Remoto", "Teletrabajo", "Trabajo en casa"]},
+        "Tiempo promedio de traslado al trabajo/casa al día ": {"Tipo": "Categórica", "Valores": ["Menos de 1 hora", "Entre 1 y 2 horas", "Entre 2 y 3 horas", "Más de 3 horas"], "NombreExacto": "Tiempo promedio de traslado al trabajo/casa al día "},
+        "Horas de formación recibidas (ultimo año)": {"Tipo": "Continua"} # Mucha variabilidad, tratar como continua post-limpieza
     },
     "Dimensiones de Bienestar y Salud Mental": {
+        # --- Escalas Likert 1-7 (Frecuencia General) ---
         "Control del Tiempo": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Rara vez",
-                3: "Alguna vez",
-                4: "Algunas veces",
-                5: "A menudo",
-                6: "Frecuentemente",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Tengo la opción de decidir qué hago en mi trabajo.",
-                "Tengo algo que decir sobre la forma en que hago mi trabajo.",
-                "Tengo voz y voto sobre mi propio ritmo de trabajo.",
-                "Me presionan para que trabaje muchas horas.",
-                "Tengo algunos plazos de entrega inalcanzables.",
-                "Tengo presiones de tiempo poco realistas.",
-                "Tengo que descuidar algunas tareas porque tengo mucho que hacer."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Alguna vez", 4: "Algunas veces", 5: "A menudo", 6: "Frecuentemente", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "alguna vez": 3, "algunas veces": 4, "a menudo": 5, "frecuentemente": 6, "siempre": 7},
+            "Preguntas": ["Tengo la opción de decidir qué hago en mi trabajo.", "Tengo algo que decir sobre la forma en que hago mi trabajo.", "Tengo voz y voto sobre mi propio ritmo de trabajo.", "Me presionan para que trabaje muchas horas.", "Tengo algunos plazos de entrega inalcanzables.", "Tengo presiones de tiempo poco realistas.", "Tengo que descuidar algunas tareas porque tengo mucho que hacer."]
         },
         "Compromiso del Líder": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Rara vez",
-                3: "Alguna vez",
-                4: "Algunas veces",
-                5: "A menudo",
-                6: "Frecuentemente",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Puedo confiar en mi líder para que me ayude con un problema laboral.",
-                "Si el trabajo se pone difícil, mi líder me ayudará.",
-                "Recibo la ayuda y el apoyo que necesito de mi líder.",
-                "Mi líder está dispuesto a escuchar mis problemas relacionados con el trabajo.",
-                "Siento que mi líder valora mis contribuciones a esta organización.",
-                "Mi líder me da suficiente crédito por mi trabajo duro.",
-                "Mi líder me anima en mi trabajo con elogios y agradecimientos."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Alguna vez", 4: "Algunas veces", 5: "A menudo", 6: "Frecuentemente", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "alguna vez": 3, "algunas veces": 4, "a menudo": 5, "frecuentemente": 6, "siempre": 7},
+            "Preguntas": ["Puedo confiar en mi líder para que me ayude con un problema laboral.", "Si el trabajo se pone difícil, mi líder me ayudará.", "Recibo la ayuda y el apoyo que necesito de mi líder.", "Mi líder está dispuesto a escuchar mis problemas relacionados con el trabajo.", "Siento que mi líder valora mis contribuciones a esta organización.", "Mi líder me da suficiente crédito por mi trabajo duro.", "Mi líder me anima en mi trabajo con elogios y agradecimientos."]
         },
         "Apoyo del Grupo": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Rara vez",
-                3: "Alguna vez",
-                4: "Algunas veces",
-                5: "A menudo",
-                6: "Frecuentemente",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Si el trabajo se pone difícil, mis compañeros de trabajo me ayudarán.",
-                "Recibo la ayuda y el apoyo que necesito de mis compañeros de trabajo.",
-                "Mis compañeros de trabajo están dispuestos a escuchar mis problemas laborales."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Alguna vez", 4: "Algunas veces", 5: "A menudo", 6: "Frecuentemente", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "alguna vez": 3, "algunas veces": 4, "a menudo": 5, "frecuentemente": 6, "siempre": 7},
+            "Preguntas": ["Si el trabajo se pone difícil, mis compañeros de trabajo me ayudarán.", "Recibo la ayuda y el apoyo que necesito de mis compañeros de trabajo.", "Mis compañeros de trabajo están dispuestos a escuchar mis problemas laborales."]
         },
-        "Claridad de Rol": {
+         "Claridad de Rol": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Rara vez",
-                3: "Alguna vez",
-                4: "Algunas veces",
-                5: "A menudo",
-                6: "Frecuentemente",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Tengo claro lo que se espera de mí en el trabajo.",
-                "Sé cómo hacer mi trabajo.",
-                "Tengo claro cuáles son mis deberes y responsabilidades.",
-                "Entiendo cómo mi trabajo encaja en el objetivo general de la organización.",
-                "Diferentes grupos en el trabajo me exigen cosas que son difíciles de hacer al mismo tiempo.",
-                "Diferentes personas en el trabajo esperan de mí cosas contradictorias.",
-                "Recibo solicitudes incompatibles de dos o más personas."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Alguna vez", 4: "Algunas veces", 5: "A menudo", 6: "Frecuentemente", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "alguna vez": 3, "algunas veces": 4, "a menudo": 5, "frecuentemente": 6, "siempre": 7},
+             "Preguntas": ["Tengo claro lo que se espera de mí en el trabajo.", "Sé cómo hacer mi trabajo.", "Tengo claro cuáles son mis deberes y responsabilidades.", "Entiendo cómo mi trabajo encaja en el objetivo general de la organización.", "Diferentes grupos en el trabajo me exigen cosas que son difíciles de hacer al mismo tiempo.", "Diferentes personas en el trabajo esperan de mí cosas contradictorias.", "Recibo solicitudes incompatibles de dos o más personas."]
         },
         "Cambio Organizacional": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Rara vez",
-                3: "Alguna vez",
-                4: "Algunas veces",
-                5: "A menudo",
-                6: "Frecuentemente",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Me consultan sobre cambios propuestos en el trabajo.",
-                "Cuando se realizan cambios en el trabajo, tengo claro cómo funcionarán en la práctica.",
-                "Estoy claramente informado sobre la naturaleza de los cambios que se producen en esta organización.",
-                "Puedo expresar inquietudes sobre cambios que afectan mi trabajo."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Alguna vez", 4: "Algunas veces", 5: "A menudo", 6: "Frecuentemente", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "alguna vez": 3, "algunas veces": 4, "a menudo": 5, "frecuentemente": 6, "siempre": 7},
+            "Preguntas": ["Me consultan sobre cambios propuestos en el trabajo.", "Cuando se realizan cambios en el trabajo, tengo claro cómo funcionarán en la práctica.", "Estoy claramente informado sobre la naturaleza de los cambios que se producen en esta organización.", "Puedo expresar inquietudes sobre cambios que afectan mi trabajo."]
         },
         "Responsabilidad Organizacional": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Rara vez",
-                3: "Alguna vez",
-                4: "Algunas veces",
-                5: "A menudo",
-                6: "Frecuentemente",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "En mi lugar de trabajo la salud física y mental es una prioridad de los líderes.",
-                "En mi lugar de trabajo se hacen mediciones periódicas de los niveles de salud mental de las personas.",
-                "En mi lugar de trabajo existen recursos accesibles y fáciles de usar para las necesidades relacionadas con la salud mental de las personas.",
-                "Recibo entrenamiento periódico sobre pautas para el cuidado de mi salud mental en el trabajo.",
-                "En mi lugar de trabajo se comunican claramente los resultados de las acciones implementadas para el cuidado de la salud mental de las personas."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Alguna vez", 4: "Algunas veces", 5: "A menudo", 6: "Frecuentemente", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "alguna vez": 3, "algunas veces": 4, "a menudo": 5, "frecuentemente": 6, "siempre": 7},
+            "Preguntas": ["En mi lugar de trabajo la salud física y mental es un prioridad de los líderes.", "En mi lugar de trabajo se hacen mediciones periódicas de los niveles de salud mental de las personas.", "En mi lugar de trabajo existen recursos accesibles y fáciles de usar para las necesidades relacionadas con la salud mental de las personas.", "Recibo entrenamiento periódico sobre pautas para el cuidado de mi salud mental en el trabajo.", "En mi lugar de trabajo se comunican claramente los resultados de las acciones implementadas para el cuidado de la salud mental de las personas."]
         },
+        # --- Escala Likert 1-7 (Acuerdo) ---
         "Conflicto Familia-Trabajo": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Totalmente en desacuerdo",
-                2: "Muy en desacuerdo",
-                3: "Algo en desacuerdo",
-                4: "Ni de acuerdo ni en desacuerdo",
-                5: "Algo de acuerdo",
-                6: "Muy de acuerdo",
-                7: "Totalmente de acuerdo"
-            },
-            "Preguntas": [
-                "Las demandas de mi familia o cónyuge/pareja interfieren con las actividades relacionadas con el trabajo.",
-                "Tengo que posponer las tareas en el trabajo debido a las exigencias de mi tiempo en casa.",
-                "Las cosas que quiero hacer en el trabajo no se hacen debido a las demandas de mi familia o mi cónyuge/pareja.",
-                "Mi vida hogareña interfiere con mis responsabilidades en el trabajo, como llegar al trabajo a tiempo, realizar las tareas diarias y trabajar.",
-                "La tensión relacionada con la familia interfiere con mi capacidad para realizar tareas relacionadas con el trabajo.",
-                "Las exigencias de mi trabajo interfieren con mi hogar y mi vida familiar.",
-                "La cantidad de tiempo que ocupa mi trabajo dificulta el cumplimiento de las responsabilidades familiares.",
-                "Las cosas que quiero hacer en casa no se hacen debido a las exigencias que me impone mi trabajo.",
-                "Mi trabajo produce tensión que dificulta el cumplimiento de los deberes familiares.",
-                "Debido a deberes relacionados con el trabajo, tengo que hacer cambios en mis planes para las actividades familiares."
-            ]
+            "Escala": {1: "Totalmente en desacuerdo", 2: "Muy en desacuerdo", 3: "Algo en desacuerdo", 4: "Ni de acuerdo ni en desacuerdo", 5: "Algo de acuerdo", 6: "Muy de acuerdo", 7: "Totalmente de acuerdo"},
+            "ValorNumerico": {"totalmente en desacuerdo": 1, "muy en desacuerdo": 2, "moderadamente en desacuerdo": 2, "algo en desacuerdo": 3, "ligeramente en desacuerdo": 3, "ni de acuerdo ni en desacuerdo": 4, "algo de acuerdo": 5, "ligeramente de acuerdo": 5, "moderadamente de acuerdo": 6, "muy de acuerdo": 6, "totalmente de acuerdo": 7},
+            "Preguntas": ["Las demandas de mi familia o cónyuge / pareja interfieren con las actividades relacionadas con el trabajo.", "Tengo que posponer las tareas en el trabajo debido a las exigencias de mi tiempo en casa.", "Las cosas que quiero hacer en el trabajo no se hacen debido a las demandas de mi familia o mi cónyuge / pareja.", "Mi vida hogareña interfiere con mis responsabilidades en el trabajo, como llegar al trabajo a tiempo, realizar las tareas diarias y trabajar.", "La tensión relacionada con la familia interfiere con mi capacidad para realizar tareas relacionadas con el trabajo.", "Las exigencias de mi trabajo interfieren con mi hogar y mi vida familiar.", "La cantidad de tiempo que ocupa mi trabajo dificulta el cumplimiento de las responsabilidades familiares.", "Las cosas que quiero hacer en casa no se hacen debido a las exigencias que me impone mi trabajo.", "Mi trabajo produce tensión que dificulta el cumplimiento de los deberes familiares.", "Debido a deberes relacionados con el trabajo, tengo que hacer cambios en mis planes para las actividades familiares."]
         },
+        # --- Escala Likert 1-5 (Burnout) ---
         "Síntomas de Burnout": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                2: "Raramente",
-                3: "Algunas veces",
-                4: "A menudo",
-                5: "Siempre"
-            },
-            "Preguntas": [
-                "En mi trabajo, me siento agotado/a emocionalmente.",
-                "Al final del día de trabajo, me resulta difícil recuperar mi energía.",
-                "Me siento físicamente agotado/a en mi trabajo.",
-                "Me cuesta encontrar entusiasmo por mi trabajo.",
-                "Siento una fuerte aversión hacia mi trabajo.",
-                "Soy cínico sobre lo que mi trabajo significa para los demás.",
-                "Tengo problemas para mantenerme enfocado en mi trabajo.",
-                "Cuando estoy trabajando, tengo dificultades para concentrarme.",
-                "Cometo errores en mi trabajo porque tengo mi mente en otras cosas.",
-                "En mi trabajo, me siento incapaz de controlar mis emociones.",
-                "No me reconozco en la forma que reacciono en el trabajo.",
-                "Puedo reaccionar exageradamente sin querer."
-            ]
+            "Escala": {1: "Nunca", 2: "Raramente", 3: "Algunas veces", 4: "A menudo", 5: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "raramente": 2, "rara vez": 2, "alguna veces": 3, "a menudo": 4, "siempre": 5}, # Añadido rara vez por si acaso
+            "Preguntas": ["En mi trabajo, me siento agotado/a emocionalmente.", "Al final del día de trabajo, me resulta difícil recuperar mi energía.", "Me siento físicamente agotado/a en mi trabajo.", "Me cuesta encontrar entusiasmo por mi trabajo.", "Siento una fuerte aversión hacia mi trabajo.", "Soy cínico (despreocupado) sobre lo que mi trabajo significa para los demás.", "Tengo problemas para mantenerme enfocado en mi trabajo.", "Cuando estoy trabajando, tengo dificultades para concentrarme.", "Cometo errores en mi trabajo, porque tengo mi mente en otras cosas.", "En mi trabajo, me siento incapaz de controlar mis emociones.", "No me reconozco en la forma que reacciono en el trabajo.", "Puedo reaccionar exageradamente sin querer."]
         },
+        # --- Escala Likert 1-6 (Acuerdo - Compromiso, Defensa, Satisfacción, Retiro) ---
         "Compromiso": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Muy en desacuerdo",
-                2: "Moderadamente en desacuerdo",
-                3: "Ligeramente en desacuerdo",
-                4: "Ligeramente de acuerdo",
-                5: "Moderadamente de acuerdo",
-                6: "Muy de acuerdo"
-            },
-            "Preguntas": [
-                "Mi labor contribuye a la misión y visión de la empresa para la que laboro.",
-                "Me siento entusiasmado por mi trabajo.",
-                "Cuando me levanto en la mañana tengo ganas de ir a trabajar."
-            ]
+            "Escala": {1: "Muy en desacuerdo", 2: "Moderadamente en desacuerdo", 3: "Ligeramente en desacuerdo", 4: "Ligeramente de acuerdo", 5: "Moderadamente de acuerdo", 6: "Muy de acuerdo"},
+            "ValorNumerico": {"muy en desacuerdo": 1, "moderadamente en desacuerdo": 2, "ligeramente en desacuerdo": 3, "ligeramente de acuerdo": 4, "moderadamente de acuerdo": 5, "muy de acuerdo": 6},
+            "Preguntas": ["Mi labor contribuye a la misión y visión de la empresa para la que laboro.", "Me siento entusiasmado por mi trabajo.", "Cuando me levanto en la mañana tengo ganas de ir a trabajar."]
         },
         "Defensa de la Organización": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Muy en desacuerdo",
-                2: "Moderadamente en desacuerdo",
-                3: "Ligeramente en desacuerdo",
-                4: "Ligeramente de acuerdo",
-                5: "Moderadamente de acuerdo",
-                6: "Muy de acuerdo"
-            },
-            "Preguntas": [
-                "Me siento orgulloso de la empresa en la que laboro.",
-                "Recomendaría ampliamente a otros trabajar en la empresa en la que laboro.",
-                "Me molesta que otros hablen mal de la empresa en la que laboro."
-            ]
+             "Escala": {1: "Muy en desacuerdo", 2: "Moderadamente en desacuerdo", 3: "Ligeramente en desacuerdo", 4: "Ligeramente de acuerdo", 5: "Moderadamente de acuerdo", 6: "Muy de acuerdo"},
+            "ValorNumerico": {"muy en desacuerdo": 1, "moderadamente en desacuerdo": 2, "ligeramente en desacuerdo": 3, "ligeramente de acuerdo": 4, "moderadamente de acuerdo": 5, "muy de acuerdo": 6},
+            "Preguntas": ["Me siento orgulloso de la empresa en la que laboro.", "Recomendaría ampliamente a otros trabajar en la empresa en la que laboro.", "Me molesta que otros hablen mal de la empresa en la que laboro."]
         },
         "Satisfacción": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Muy en desacuerdo",
-                2: "Moderadamente en desacuerdo",
-                3: "Ligeramente en desacuerdo",
-                4: "Ligeramente de acuerdo",
-                5: "Moderadamente de acuerdo",
-                6: "Muy de acuerdo"
-            },
-            "Preguntas": [
-                "Considero mi trabajo significativo.",
-                "Me gusta hacer las tareas y actividades de mi trabajo.",
-                "Me siento satisfecho por el salario y los beneficios que recibo en mi trabajo."
-            ]
+             "Escala": {1: "Muy en desacuerdo", 2: "Moderadamente en desacuerdo", 3: "Ligeramente en desacuerdo", 4: "Ligeramente de acuerdo", 5: "Moderadamente de acuerdo", 6: "Muy de acuerdo"},
+            "ValorNumerico": {"muy en desacuerdo": 1, "moderadamente en desacuerdo": 2, "ligeramente en desacuerdo": 3, "ligeramente de acuerdo": 4, "moderadamente de acuerdo": 5, "muy de acuerdo": 6},
+            "Preguntas": ["Considero mi trabajo significativo.", "Me gusta hacer las tareas y actividades de mi trabajo.", "Me siento satisfecho por el salario y los beneficios que recibo en mi trabajo."]
         },
         "Intención de Retiro": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Muy en desacuerdo",
-                2: "Moderadamente en desacuerdo",
-                3: "Ligeramente en desacuerdo",
-                4: "Ligeramente de acuerdo",
-                5: "Moderadamente de acuerdo",
-                6: "Muy de acuerdo"
-            },
-            "Preguntas": [
-                "Me veo trabajando en este lugar en el próximo año.",
-                "A menudo considero seriamente dejar mi trabajo actual.",
-                "Tengo la intención de dejar mi trabajo actual en los próximos 3 a 6 meses.",
-                "He empezado a buscar activamente otro trabajo."
-            ]
+             "Escala": {1: "Muy en desacuerdo", 2: "Moderadamente en desacuerdo", 3: "Ligeramente en desacuerdo", 4: "Ligeramente de acuerdo", 5: "Moderadamente de acuerdo", 6: "Muy de acuerdo"},
+            "ValorNumerico": {"muy en desacuerdo": 1, "moderadamente en desacuerdo": 2, "ligeramente en desacuerdo": 3, "ligeramente de acuerdo": 4, "moderadamente de acuerdo": 5, "muy de acuerdo": 6},
+            "Preguntas": ["Me veo trabajando en este lugar en el próximo año.", "A menudo considero seriamente dejar mi trabajo actual.", "Tengo la intención de dejar mi trabajo actual en los próximos 3 a 6 meses.", "He empezado a buscar activamente otro trabajo."]
         },
+        # --- Escalas Diferencial Semántico 1-7 (Se espera numérico o string '1'-'7') ---
+        # Asumimos que las columnas se llaman '2' a '10' para Afectos
         "Bienestar Psicosocial (Escala de Afectos)": {
             "Tipo": "Diferencial Semántico",
-            "Escala": {
-                1: "Insatisfecho",
-                7: "Satisfecho"
-            },
-            "Pares de Adjetivos": [
-                "Insatisfecho - Satisfecho",
-                "Inseguridad - Seguridad",
-                "Intranquilidad - Tranquilidad",
-                "Impotencia - Potencia",
-                "Malestar - Bienestar",
-                "Desconfianza - Confianza",
-                "Incertidumbre - Certidumbre",
-                "Confusión - Claridad",
-                "Desesperanza - Esperanza",
-                "Dificultad - Facilidad"
-            ]
+            "Escala": {1: "Extremo Izq", 7: "Extremo Der"}, # Ejemplo genérico
+            "ValorNumerico": {}, # No se usa mapeo de texto, se espera conversión directa
+            "Preguntas": [str(i) for i in range(2, 11)] # Columnas '2' a '10'
         },
+         # Asumimos que las columnas se llaman '11' a '20' para Competencias
         "Bienestar Psicosocial (Escala de Competencias)": {
             "Tipo": "Diferencial Semántico",
-            "Escala": {
-                1: "Insensibilidad",
-                7: "Sensibilidad"
-            },
-            "Pares de Adjetivos": [
-                "Insensibilidad - Sensibilidad",
-                "Irracionalidad - Racionalidad",
-                "Incompetencia - Competencia",
-                "Inmoralidad - Moralidad",
-                "Maldad - Bondad",
-                "Fracaso - Éxito",
-                "Incapacidad - Capacidad",
-                "Pesimismo - Optimismo",
-                "Ineficacia - Eficacia",
-                "Inutilidad - Utilidad"
-            ]
+            "Escala": {1: "Extremo Izq", 7: "Extremo Der"},
+            "ValorNumerico": {},
+            "Preguntas": [str(i) for i in range(11, 21)] # Columnas '11' a '20'
         },
+        # --- Escala Likert 1-7 (Expectativas - Se espera numérico o string '1'-'7') ---
         "Bienestar Psicosocial (Escala de Expectativas)": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Bajando",
-                7: "Subiendo"
-            },
-            "Preguntas": [
-                "Mi motivación por el trabajo.",
-                "Mi identificación con los valores de la organización.",
-                "Mi rendimiento profesional.",
-                "Mi capacidad para responder a mi carga de trabajo.",
-                "La calidad de mis condiciones de trabajo.",
-                "Mi autoestima profesional.",
-                "La cordialidad en mi ambiente social de trabajo.",
-                "El equilibrio entre mi trabajo y mi vida privada.",
-                "Mi confianza en mi futuro profesional.",
-                "Mi calidad de vida laboral.",
-                "El sentido de mi trabajo.",
-                "Mi cumplimiento de las normas de la dirección.",
-                "Mi estado de ánimo laboral.",
-                "Mis oportunidades de promoción laboral.",
-                "Mi sensación de seguridad en el trabajo.",
-                "Mi participación en las decisiones de la organización.",
-                "Mi satisfacción con el trabajo.",
-                "Mi relación profesional.",
-                "El nivel de excelencia de mi organización.",
-                "Mi eficacia profesional.",
-                "Mi compromiso con el trabajo.",
-                "Mis competencias profesionales."
+            "Escala": {1: "Bajando", 7: "Subiendo"},
+            "ValorNumerico": {}, # No se usa mapeo de texto, se espera conversión directa
+            "Preguntas": [ # Nombres exactos de las columnas, ¡VERIFICAR!
+                "Mi motivación por el trabajo", "Mi identificación con los valores de la organización.", # Asumiendo esta existe
+                "Mi rendimiento profesional.", "Mi capacidad para responder a mi carga de trabajo.",
+                "La calidad de mis condiciones de trabajo.", "Mi autoestima profesional", # Ojo: sin punto al final?
+                "La cordialidad en mi ambiente social de trabajo.", "El equilibrio entre mi trabajo y mi vida privada.",
+                "Mi confianza en mi futuro profesional", # Ojo: sin punto al final?
+                "Mi calidad de vida laboral.", "El sentido de mi trabajo", # Ojo: sin punto al final?
+                "Mi cumplimiento de las normas de la dirección.", "Mi estado de ánimo laboral ", # Espacio al final?
+                "Mis oportunidades de promoción laboral.", "Mi sensación de seguridad en el trabajo", # Ojo: sin punto al final?
+                "Mi participación en las decisiones de la organización.", "Mi satisfacción con el trabajo.",
+                "Mi relación profesional.", "El nivel de excelencia de mi organización.",
+                "MI eficacia profesional", # 'MI' en mayúscula?
+                "Mi compromiso con el trabajo", # Ojo: sin punto al final?
+                "Mis competencias profesionales" # Ojo: sin punto al final?
             ]
         },
+        # --- Escala Likert 1-7 (Efectos Colaterales) ---
         "Factores de Efectos Colaterales (Escala de Somatización)": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Trastornos digestivos.",
-                "Dolores de cabeza.",
-                "Alteraciones de sueño.",
-                "Dolores de espalda.",
-                "Tensiones musculares."
-            ]
+            "Escala": {1: "Nunca", 2: "Rara vez", 3: "Ocasionalmente", 4: "Algunas veces", 5: "Frecuentemente", 6: "Casi siempre", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "ocasionalmente": 3, "alguna vez": 3, "algunas veces": 4, "frecuentemente": 5, "a menudo": 5, "casi siempre": 6, "siempre": 7},
+            "Preguntas": ["Trastornos digestivos", "Dolores de cabeza", "Alteraciones de sueño", "Dolores de espalda", "Tensiones musculares"] # Quitar puntos al final si así están en el Excel
         },
         "Factores de Efectos Colaterales (Escala de Desgaste)": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Sobrecarga de trabajo.",
-                "Desgaste emocional.",
-                "Agotamiento físico.",
-                "Cansancio mental."
-            ]
+             "Escala": {1: "Nunca", 2: "Rara vez", 3: "Ocasionalmente", 4: "Algunas veces", 5: "Frecuentemente", 6: "Casi siempre", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "ocasionalmente": 3, "alguna vez": 3, "algunas veces": 4, "frecuentemente": 5, "a menudo": 5, "casi siempre": 6, "siempre": 7},
+            "Preguntas": ["Sobrecarga de trabajo", "Desgaste emocional", "Agotamiento físico", "Cansancio mental "] # Espacio al final?
         },
         "Factores de Efectos Colaterales (Escala de Alienación)": {
             "Tipo": "Likert",
-            "Escala": {
-                1: "Nunca",
-                7: "Siempre"
-            },
-            "Preguntas": [
-                "Mal humor.",
-                "Baja realización personal.",
-                "Trato distante.",
-                "Frustración."
-            ]
+             "Escala": {1: "Nunca", 2: "Rara vez", 3: "Ocasionalmente", 4: "Algunas veces", 5: "Frecuentemente", 6: "Casi siempre", 7: "Siempre"},
+            "ValorNumerico": {"nunca": 1, "rara vez": 2, "raramente": 2, "ocasionalmente": 3, "alguna vez": 3, "algunas veces": 4, "frecuentemente": 5, "a menudo": 5, "casi siempre": 6, "siempre": 7},
+            "Preguntas": ["Mal humor ", "Baja realización personal", "Trato distante", "Frustración "] # Espacio al final?
         }
     }
 }
+
+# --- Asegurar que nombres en 'Preguntas' sean strings ---
+for dim_cat, dim_content in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+    if "Preguntas" in dim_content:
+        dim_content["Preguntas"] = [str(p).strip() for p in dim_content["Preguntas"]] # Convertir a str y strip
+
+# --- Limpiar claves de ValorNumerico ---
+for dim_cat, dim_content in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+     if "ValorNumerico" in dim_content and isinstance(dim_content["ValorNumerico"], dict):
+         dim_content["ValorNumerico"] = {str(k).lower().strip(): v for k, v in dim_content["ValorNumerico"].items()}
+
+# --- También definir 'dimensiones' para compatibilidad si aún se usa ---
+# (Aunque idealmente se usaría solo data_dictionary)
+dimensiones = {}
+for dim_name, details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+    if "Preguntas" in details:
+        dimensiones[dim_name] = details["Preguntas"]
+    # Nota: Esto pierde la info de Tipo y Escala si solo se usa 'dimensiones'
 
 df = pd.read_excel(ruta_csv)
 
@@ -1996,421 +1711,447 @@ dimensiones = {
     ]
 }
 
-def generar_informe_general(df, fecha_inicio, fecha_fin):
-    import math
-    # 0. Limpiar nombres de columnas en el DF original una vez
-    df.columns = df.columns.str.strip()
+def clean_and_convert_to_numeric(series, escala_info=None):
+    """
+    Función auxiliar para convertir una serie a numérica,
+    intentando primero conversión directa y luego mapeo si se proporciona.
+    """
+    if pd.api.types.is_numeric_dtype(series):
+        return series.astype(float) # Asegurar float
 
-    # 1. Filtrar por rango de fechas usando 'Hora de inicio'
+    # 1. Intento de conversión numérica directa (para '1', '7', etc.)
+    converted_direct = pd.to_numeric(series, errors='coerce')
+
+    # Si la conversión directa funcionó para una mayoría de no-nulos, usarla
+    original_non_na = series.notna().sum()
+    direct_non_na = converted_direct.notna().sum()
+
+    # Umbral: si al menos el 80% de los valores originales no nulos se convirtieron bien
+    if original_non_na > 0 and direct_non_na >= original_non_na * 0.8:
+        st.write(f"DEBUG - Columna '{series.name}': Conversión numérica directa exitosa.")
+        return converted_direct.astype(float)
+
+    # 2. Si la conversión directa falló o fue insuficiente, intentar mapeo
+    if escala_info and isinstance(escala_info, dict) and escala_info:
+        # Limpiar la serie (string, lower, strip)
+        try:
+            s_cleaned = series.astype(str).str.lower().str.strip()
+        except Exception as e:
+             st.warning(f"WARNING - Error limpiando strings en '{series.name}': {e}. Se devolverán NaNs.")
+             return pd.Series([np.nan] * len(series), index=series.index) # Devolver NaNs
+
+        # Crear mapeo inverso (texto limpio -> número)
+        mapping_dict = {str(v).lower().strip(): k for k, v in escala_info.items()}
+
+        # Intentar mapeo más robusto con .map()
+        mapped_series = s_cleaned.map(mapping_dict)
+
+        # Forzar a numérico al final (coerce errores a NaN)
+        final_series = pd.to_numeric(mapped_series, errors='coerce')
+
+        mapped_non_na = final_series.notna().sum()
+        if original_non_na > 0 and mapped_non_na < original_non_na * 0.5: # Umbral más estricto para mapeo
+            st.warning(f"WARNING - Mapeo para '{series.name}' resultó en muchos NaNs ({original_non_na - mapped_non_na}). Verificar escala y datos.")
+        elif mapped_non_na > 0:
+             st.write(f"DEBUG - Columna '{series.name}': Mapeo con diccionario exitoso.")
+
+        return final_series.astype(float) # Asegurar float
+
+    # 3. Si no hay escala o el mapeo también falló masivamente, devolver NaNs
+    st.warning(f"WARNING - Columna '{series.name}': No se pudo convertir a numérico (ni directo ni por mapeo). Se devolverán NaNs.")
+    # Devolver una serie de NaNs con el mismo índice
+    return pd.Series([np.nan] * len(series), index=series.index)
+
+
+def generar_informe_general(df_original, fecha_inicio, fecha_fin):
+    # 0. Copia y Limpieza Inicial
+    df = df_original.copy()
+    df.columns = df.columns.str.strip() # Limpiar nombres de columnas
+
+    # 1. Filtrar por Fechas
     try:
-        # Asegurarse de que la columna de fecha es datetime
         df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
         df_filtrado = df[
             (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) &
             (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
-        ].copy() # Usar .copy() para evitar SettingWithCopyWarning
+        ].copy()
     except KeyError:
-        return "Error: La columna 'Hora de inicio' no se encuentra en el DataFrame.", []
+        st.error("Error Fatal: La columna 'Hora de inicio' no se encuentra.")
+        return "Error: Columna 'Hora de inicio' no encontrada.", []
     except Exception as e:
+        st.error(f"Error Fatal al filtrar por fecha: {e}")
         return f"Error al filtrar por fecha: {e}", []
 
-
     if df_filtrado.empty:
+        st.warning("No se encontraron datos en el rango de fechas especificado.")
         return "No se encontraron datos en el rango de fechas especificado.", []
 
-    st.write(f"DEBUG - Datos filtrados por fecha: {df_filtrado.shape[0]} filas.")
+    st.write(f"DEBUG - Filas después de filtrar por fecha: {df_filtrado.shape[0]}")
 
-    # 2. Convertir columnas de dimensiones a numérico de forma selectiva y robusta
-    df_num = df_filtrado.copy()
-    columnas_procesadas_numericamente = []
+    # 2. Conversión Numérica Guiada por data_dictionary
+    df_numeric = df_filtrado.copy()
+    columnas_numericas_ok = []
 
-    # Columnas que DEBEN ser numéricas (escalas semánticas 1-7, etc.)
-    # Convertimos los nombres de columna 2-20 a string para buscar
-    semantic_cols_potential = [str(i) for i in range(2, 21)]
-    cols_a_forzar_numeric = []
+    for category, variables in data_dictionary.items():
+        for var_key, var_details in variables.items():
+            # Determinar el nombre exacto de la columna
+            col_name = var_details.get("NombreExacto", var_key).strip()
 
-    # Identificar columnas de dimensiones y aplicar mapeo/conversión
-    for dim, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
-        if "Preguntas" in dim_details:
-            vars_dim = dim_details["Preguntas"]
-            # También incluir pares de adjetivos si existen (limpiando el formato)
-        elif "Pares de Adjetivos" in dim_details:
-             # Asumimos que los nombres de columna son los números '2' a '20' o similar
-             # OJO: Esta parte es FRÁGIL si los nombres reales no coinciden.
-             # Necesitamos saber los nombres REALES de estas columnas en el Excel.
-             # Por ahora, usaremos los nombres '2' a '20' si existen.
-             vars_dim = [col_name for col_name in semantic_cols_potential if col_name in df_num.columns]
-             cols_a_forzar_numeric.extend(vars_dim) # Marcar para conversión directa
-        else:
-            vars_dim = [] # Si no hay preguntas ni pares, no hay columnas asociadas aquí
+            if col_name not in df_numeric.columns:
+                # st.warning(f"DEBUG - Columna '{col_name}' (definida como '{var_key}') no encontrada en el DataFrame.")
+                continue # Pasar a la siguiente variable
 
-        st.write(f"DEBUG - Procesando Dimensión: {dim}")
-        vars_exist = [v for v in vars_dim if isinstance(v, str) and v.strip() in df_num.columns]
-        st.write(f"DEBUG - Columnas existentes para {dim}: {vars_exist}")
+            tipo = var_details.get("Tipo")
+            escala_map = var_details.get("ValorNumerico") # El diccionario texto->número
+            escala_def = var_details.get("Escala")       # El diccionario número->texto
 
-        for col in vars_exist:
-            if col in cols_a_forzar_numeric: # Si es semántica, forzar numérico
-                 st.write(f"DEBUG - Forzando conversión numérica directa para (semántica?): {col}")
-                 df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
-            elif df_num[col].dtype == 'object' or pd.api.types.is_string_dtype(df_num[col]):
-                 # Solo aplicar mapeo Likert si es object/string y NO es semántica
-                 st.write(f"DEBUG - Aplicando map_likert_to_numeric a: {col}")
-                 df_num[col] = map_likert_to_numeric(df_num[col])
-            elif pd.api.types.is_numeric_dtype(df_num[col]):
-                 st.write(f"DEBUG - Columna {col} ya es numérica.")
-                 # Asegurarse de que sea float para consistencia
-                 df_num[col] = df_num[col].astype(float)
+            if tipo in ["Likert", "Diferencial Semántico", "Continua"]:
+                st.write(f"DEBUG - Procesando columna '{col_name}' (Tipo: {tipo})...")
+                original_series = df_numeric[col_name]
+
+                # Usar escala_def si existe ValorNumerico, sino None
+                map_dict_to_use = escala_map if escala_map else None
+
+                # Intentar la conversión
+                converted_series = clean_and_convert_to_numeric(original_series, map_dict_to_use)
+
+                # Reemplazar la columna en df_numeric SOLO si la conversión fue exitosa
+                if converted_series is not None and converted_series.notna().sum() > 0:
+                    df_numeric[col_name] = converted_series
+                    columnas_numericas_ok.append(col_name)
+                    st.write(f"DEBUG - Columna '{col_name}' convertida a numérica.")
+                elif converted_series is not None: # Se devolvió serie de NaNs
+                    df_numeric[col_name] = converted_series # Asignar NaNs
+                    st.warning(f"WARNING - Columna '{col_name}' ahora contiene solo NaNs después del intento de conversión.")
+                # Si converted_series es None (error inesperado), la columna original permanece
+            elif tipo == "Categórica":
+                # Asegurar que sea tipo 'category' para eficiencia
+                try:
+                    df_numeric[col_name] = df_numeric[col_name].astype('category')
+                except TypeError:
+                     # Puede fallar si hay tipos mixtos (raro), intentar convertir a string primero
+                     df_numeric[col_name] = df_numeric[col_name].astype(str).astype('category')
+                # st.write(f"DEBUG - Columna '{col_name}' es Categórica, no se convierte.")
+                pass # No hacer nada numéricamente
             else:
-                 st.warning(f"WARNING - Tipo inesperado {df_num[col].dtype} para columna {col}. Intentando convertir a numérico.")
-                 df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
+                st.warning(f"WARNING - Tipo '{tipo}' no reconocido para columna '{col_name}'.")
 
-            if df_num[col].notna().sum() > 0: # Solo añadir si tiene algún dato numérico
-                columnas_procesadas_numericamente.append(col)
-            else:
-                st.warning(f"WARNING - Columna {col} quedó vacía después de la conversión numérica.")
+    # --- Fin Bucle Conversión ---
 
+    # Quitar duplicados por si acaso
+    columnas_numericas_ok = list(set(columnas_numericas_ok))
+    st.write(f"DEBUG - Total columnas convertidas/confirmadas como numéricas: {len(columnas_numericas_ok)}")
 
-    # Asegurar que las columnas semánticas (2-20) sean numéricas si existen
-    for col_sem in cols_a_forzar_numeric:
-        if col_sem in df_num.columns:
-             if not pd.api.types.is_numeric_dtype(df_num[col_sem]):
-                 st.write(f"DEBUG - Forzando conversión numérica final para (semántica?): {col_sem}")
-                 df_num[col_sem] = pd.to_numeric(df_num[col_sem], errors='coerce')
-             if df_num[col_sem].notna().sum() > 0 and col_sem not in columnas_procesadas_numericamente:
-                 columnas_procesadas_numericamente.append(col_sem)
+    if not columnas_numericas_ok:
+        st.error("Error Fatal: No se pudo convertir ninguna columna relevante a formato numérico.")
+        return "Error: No hay columnas numéricas válidas para el análisis.", []
 
-    # Eliminar duplicados
-    columnas_procesadas_numericamente = list(set(columnas_procesadas_numericamente))
-    st.write(f"DEBUG - Columnas procesadas y consideradas numéricas: {len(columnas_procesadas_numericamente)}")
-
-    if not columnas_procesadas_numericamente:
-         return "Error: Ninguna columna de dimensión pudo ser convertida a formato numérico.", []
-
-    # 3. Calcular promedios por dimensión usando SOLO columnas procesadas
+    # 3. Calcular Promedios por Dimensión (Usando SOLO columnas_numericas_ok)
     resultados = {}
-    # Recalcular vars_exist SOLO con las columnas que SÍ son numéricas ahora
-    for dim, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
-        vars_dim_original = []
+    for dim_name, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+        # Obtener los nombres *originales* definidos en Preguntas/Pares
+        vars_originales = []
         if "Preguntas" in dim_details:
-            vars_dim_original = dim_details["Preguntas"]
-        elif "Pares de Adjetivos" in dim_details:
-            # Usar las columnas semánticas que sabemos que existen y son numéricas
-             vars_dim_original = [col_name for col_name in cols_a_forzar_numeric if col_name in columnas_procesadas_numericamente]
+            vars_originales = dim_details["Preguntas"] # Ya son strings limpios
 
-        # Filtrar solo las que existen Y fueron procesadas como numéricas
-        vars_exist_numeric = [v for v in vars_dim_original if isinstance(v, str) and v.strip() in df_num.columns and v.strip() in columnas_procesadas_numericamente]
+        # Filtrar: solo las que existen Y están en columnas_numericas_ok
+        vars_dim_numeric = [v for v in vars_originales if v in df_numeric.columns and v in columnas_numericas_ok]
 
-        if vars_exist_numeric:
-            # Calcular la media de las medias de las columnas válidas
+        if vars_dim_numeric:
             try:
-                 # numeric_only=True es crucial aquí por si acaso
-                 # mean(skipna=True) para las columnas, luego mean(skipna=True) para el promedio de esas medias
-                 prom = df_num[vars_exist_numeric].mean(skipna=True, numeric_only=True).mean(skipna=True)
-                 if pd.notna(prom):
-                     resultados[dim] = prom
-                     st.write(f"DEBUG - Promedio para {dim}: {prom:.2f} (basado en {len(vars_exist_numeric)} columnas)")
-                 else:
-                     st.warning(f"WARNING - Promedio para {dim} es NaN (datos insuficientes en columnas: {vars_exist_numeric})")
+                # Calcular media de las columnas válidas (numeric_only por si acaso)
+                # axis=0 calcula la media por columna, luego calculamos la media de esas medias
+                mean_of_columns = df_numeric[vars_dim_numeric].mean(axis=0, skipna=True, numeric_only=True)
+                # Calcular la media general de la dimensión
+                prom_dim = mean_of_columns.mean(skipna=True)
+
+                if pd.notna(prom_dim):
+                    resultados[dim_name] = prom_dim
+                    st.write(f"DEBUG - Promedio para '{dim_name}': {prom_dim:.2f} (basado en {len(vars_dim_numeric)} columnas: {vars_dim_numeric})")
+                else:
+                    st.warning(f"WARNING - Promedio para '{dim_name}' es NaN (datos insuficientes en columnas válidas).")
             except Exception as e:
-                 st.error(f"Error calculando promedio para {dim}: {e}")
+                st.error(f"ERROR calculando promedio para '{dim_name}': {e}")
         else:
-             st.warning(f"WARNING - No hay columnas numéricas válidas para calcular el promedio de {dim}.")
+             st.warning(f"WARNING - No hay columnas numéricas válidas encontradas para '{dim_name}'.")
 
 
     if not resultados:
-        return "No se pudieron calcular promedios para ninguna dimensión.", []
+        st.error("Error Fatal: No se pudo calcular el promedio para ninguna dimensión.")
+        return "Error: No se calcularon promedios dimensionales.", []
 
-    # 4. Clasificar Fortalezas, Riesgos, Intermedios (basado en 'resultados')
-    # (Tu lógica de umbrales parece correcta)
-    fortalezas = [(d,v) for d,v in resultados.items() if pd.notna(v) and v >= 5]
-    riesgos = [(d,v) for d,v in resultados.items() if pd.notna(v) and v <= 3]
-    intermedios = [(d,v) for d,v in resultados.items() if pd.notna(v) and 3 < v < 5]
+    # 4. Clasificar Fortalezas, Riesgos, Intermedios
+    # (Misma lógica que antes, usando 'resultados')
+    fortalezas = [(d, v) for d, v in resultados.items() if pd.notna(v) and v >= 5]
+    riesgos = [(d, v) for d, v in resultados.items() if pd.notna(v) and v <= 3]
+    intermedios = [(d, v) for d, v in resultados.items() if pd.notna(v) and 3 < v < 5]
 
-    # 5. Crear resumen ejecutivo con Gemini (sin cambios)
-    prompt_resumen = f"""
-    Estas son las dimensiones y sus promedios:
-    Fortalezas: {fortalezas}
-    Riesgos: {riesgos}
-    Intermedios: {intermedios}
+    # 5. Generar Textos con Gemini (Resumen y Conclusiones)
+    # (Misma lógica que antes)
+    try:
+        prompt_resumen = f"""
+        Resultados promedio de las dimensiones de bienestar (escala 1-7 o similar):
+        Fortalezas (promedio >= 5): {fortalezas}
+        Riesgos (promedio <= 3): {riesgos}
+        Intermedios (3 < promedio < 5): {intermedios}
 
-    Genera un resumen ejecutivo conciso (máximo 2 párrafos) describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias,
-    ofreciendo una visión general de la situación y 1-2 recomendaciones generales clave basadas en los riesgos principales.
-    """
-    # Asumiendo que enviar_prompt está definido y funciona
-    resumen_ejecutivo = enviar_prompt(prompt_resumen)
+        Genera un resumen ejecutivo conciso (1-2 párrafos) interpretando estos resultados. Destaca las áreas más fuertes y las más débiles. Incluye 1-2 recomendaciones generales clave basadas en los riesgos principales.
+        """
+        resumen_ejecutivo = enviar_prompt(prompt_resumen)
 
-    prompt_conclusiones = f"""
-    Basándote en los resultados detallados:
-    Fortalezas identificadas: {fortalezas}
-    Principales Riesgos identificados: {riesgos}
-    Áreas Intermedias: {intermedios}
+        prompt_conclusiones = f"""
+        Análisis detallado de dimensiones de bienestar:
+        Fortalezas: {fortalezas}
+        Riesgos: {riesgos}
+        Intermedios: {intermedios}
 
-    Proporciona conclusiones detalladas (1-2 párrafos) y recomendaciones prácticas (3-5 bullets) para mejorar las áreas en riesgo y mantener las fortalezas,
-    desde una perspectiva de psicología organizacional y bienestar laboral. Enfócate en acciones concretas.
-    """
-     # Asumiendo que enviar_prompt está definido y funciona
-    conclusiones = enviar_prompt(prompt_conclusiones)
+        Proporciona conclusiones detalladas (1-2 párrafos) sobre el estado general del bienestar y la salud mental. Luego, ofrece recomendaciones prácticas (3-5 bullets) desde la psicología organizacional para abordar los riesgos identificados y potenciar las fortalezas. Sé específico en las acciones sugeridas.
+        """
+        conclusiones = enviar_prompt(prompt_conclusiones)
+    except Exception as e:
+        st.error(f"Error al generar textos con Gemini: {e}")
+        resumen_ejecutivo = "Error al generar resumen."
+        conclusiones = "Error al generar conclusiones."
 
     # 6. Generar Gráficos
     figuras = []
     fig_titles = []
 
-    # --- 6.1 Semáforo de Dimensiones (Sin cambios, usa 'resultados') ---
-    # ... (tu código del semáforo, asegurándote que usa 'resultados')
-    # Copiando tu código del semáforo aquí:
-    inverse_dims = { # Definir qué dimensiones se interpretan inversamente
-        "Conflicto Familia-Trabajo": True,
-        "Síntomas de Burnout": True,
-        "Factores de Efectos Colaterales (Escala de Desgaste)": True,
-        "Factores de Efectos Colaterales (Escala de Alienación)": True,
-        "Intención de Retiro": True, # Intención alta es negativa
-        # "Control del Tiempo": Podría ser inversa si preguntas negativas dominan
-    }
+    # --- 6.1 Semáforo ---
+    try:
+        # (Misma lógica del semáforo que antes, usando 'resultados')
+        inverse_dims = { # Definir qué dimensiones se interpretan inversamente
+            "Conflicto Familia-Trabajo": True,
+            "Síntomas de Burnout": True,
+            "Factores de Efectos Colaterales (Escala de Desgaste)": True,
+            "Factores de Efectos Colaterales (Escala de Alienación)": True,
+            "Intención de Retiro": True, # Intención alta es negativa
+             "Factores de Efectos Colaterales (Escala de Somatización)": True, # Somatización alta es negativa
+            # "Control del Tiempo": Podría ser inversa si preguntas negativas dominan
+        }
 
-    def estado_dimension(valor, es_inversa=False):
-        if pd.isna(valor):
-            return ('Sin Datos', 'grey')
-        # Invertir valor si es necesario ANTES de aplicar umbrales
-        # Asumiendo escala 1-7, el punto medio es 4. Invertir: 8 - valor
-        # Asumiendo escala 1-5, el punto medio es 3. Invertir: 6 - valor
-        # Asumiendo escala 1-6, el punto medio es 3.5. Invertir: 7 - valor
-        # ---> NECESITAMOS SABER LA ESCALA ORIGINAL PARA INVERTIR CORRECTAMENTE <---
-        # ---> Asumamos por ahora una escala genérica 1-7 para la inversión <--
-        valor_display = (8 - valor) if es_inversa else valor
+        def get_scale_range(dim_name):
+             # Devuelve el rango (min, max) de la escala según data_dictionary
+             details = data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).get(dim_name, {})
+             escala = details.get("Escala", {})
+             if escala:
+                 valores_num = [k for k in escala.keys() if isinstance(k, (int, float))]
+                 if valores_num:
+                     return min(valores_num), max(valores_num)
+             # Valores por defecto si no se encuentra escala
+             if "Burnout" in dim_name: return 1, 5
+             if "Compromiso" in dim_name or "Defensa" in dim_name or "Satisfacción" in dim_name or "Retiro" in dim_name: return 1, 6
+             return 1, 7 # Default a 1-7
 
-        if valor_display >= 5:
-            return ('Fortaleza', 'green')
-        elif valor_display <= 3:
-            return ('Riesgo', 'red')
+        def estado_dimension(valor, dim_name):
+            if pd.isna(valor):
+                return ('Sin Datos', 'grey')
+
+            min_escala, max_escala = get_scale_range(dim_name)
+            punto_medio = (min_escala + max_escala) / 2.0
+            # Umbrales proporcionales (aproximados para escalas 1-5, 1-6, 1-7)
+            umbral_riesgo = punto_medio - (max_escala - min_escala) / 6.0
+            umbral_fortaleza = punto_medio + (max_escala - min_escala) / 6.0
+
+            es_inversa = inverse_dims.get(dim_name, False)
+            valor_interpretar = valor
+
+            # Invertir valor si es necesario ANTES de aplicar umbrales
+            if es_inversa:
+                 # Inversión genérica: (max + min) - valor
+                 valor_interpretar = (max_escala + min_escala) - valor
+
+            if valor_interpretar >= umbral_fortaleza:
+                return ('Fortaleza', 'green')
+            elif valor_interpretar <= umbral_riesgo:
+                return ('Riesgo', 'red')
+            else:
+                return ('Intermedio', 'yellow')
+
+        dims_list = list(resultados.items())
+        n_dims = len(dims_list)
+        if n_dims > 0:
+            cols = 3
+            rows = math.ceil(n_dims / cols)
+            fig_semaforo, axes_semaforo = plt.subplots(rows, cols, figsize=(cols * 3.5, rows * 2.5))
+            if n_dims == 1: axes_semaforo = np.array([axes_semaforo])
+            axes_semaforo = axes_semaforo.flatten()
+
+            for idx, (dim, val) in enumerate(dims_list):
+                 ax = axes_semaforo[idx]
+                 est, color = estado_dimension(val, dim)
+                 ax.set_facecolor(color)
+                 texto_promedio = f"{val:.2f}" if pd.notna(val) else "N/A"
+                 nota_inversa = "(Invertida)" if inverse_dims.get(dim, False) else ""
+                 text_content = f"{dim}\n{est}\nProm: {texto_promedio} {nota_inversa}"
+                 ax.text(0.5, 0.5, text_content, ha='center', va='center', fontsize=8, color='black' if color != 'grey' else 'white', wrap=True)
+                 ax.set_xticks([])
+                 ax.set_yticks([])
+                 ax.set_xlim(0, 1)
+                 ax.set_ylim(0, 1)
+
+            for j in range(n_dims, len(axes_semaforo)): axes_semaforo[j].set_visible(False)
+            fig_semaforo.suptitle("Semáforo de Dimensiones (Resumen)", fontsize=12)
+            fig_semaforo.tight_layout(rect=[0, 0.03, 1, 0.95])
+            figuras.append(fig_semaforo)
+            fig_titles.append("Figura: Semáforo de Dimensiones")
         else:
-            return ('Intermedio', 'yellow')
+            st.warning("No hay datos suficientes para generar el semáforo.")
 
-    dims_list = list(resultados.items())
-    n_dims = len(dims_list)
-    if n_dims == 0:
-        st.warning("No hay datos de resultados para generar el semáforo.")
+    except Exception as e:
+        st.error(f"Error generando gráfico Semáforo: {e}")
+
+
+    # --- 6.2 Gráficos por Grupo (Sexo, Edad, Hijos) ---
+    # Usar df_numeric que tiene las columnas convertidas
+    df_plot_groups = df_numeric.copy()
+
+    # Añadir columnas categóricas para agrupar (Sexo, Rango Edad, Hijos)
+    # Sexo: Asegurar que existe y es categórica
+    col_sexo = 'Sexo'
+    if col_sexo in df_plot_groups:
+         df_plot_groups[col_sexo] = df_plot_groups[col_sexo].astype('category')
     else:
-        cols = 3
-        rows = math.ceil(n_dims / cols)
-        fig_semaforo, axes_semaforo = plt.subplots(rows, cols, figsize=(cols * 3.5, rows * 2.5)) # Ajustar tamaño
-        if n_dims == 1:
-             axes_semaforo = np.array([axes_semaforo]) # Convertir a array para flatten
-        axes_semaforo = axes_semaforo.flatten()
+         st.warning("Columna 'Sexo' no encontrada para gráficos grupales.")
+         col_sexo = None # Marcar como no disponible
 
-        for idx, (dim, val) in enumerate(dims_list):
-             ax = axes_semaforo[idx]
-             es_inversa = inverse_dims.get(dim, False)
-             # Corrección para invertir valor antes de determinar estado
-             val_invertido_si_aplica = (8 - val) if es_inversa and pd.notna(val) else val
-             est, color = estado_dimension(val_invertido_si_aplica, False) # Ya invertimos, pasamos False aquí
-
-             ax.set_facecolor(color)
-             # Mostrar el valor promedio ORIGINAL en el texto
-             texto_promedio = f"{val:.2f}" if pd.notna(val) else "N/A"
-             # Añadir nota si es invertida
-             nota_inversa = "(Invertida)" if es_inversa else ""
-             text_content = f"{dim}\n{est}\nProm: {texto_promedio} {nota_inversa}"
-             ax.text(0.5, 0.5, text_content, ha='center', va='center', fontsize=8, color='black', wrap=True)
-             ax.set_xticks([])
-             ax.set_yticks([])
-             ax.set_xlim(0, 1)
-             ax.set_ylim(0, 1)
-
-        # Ocultar ejes sobrantes
-        for j in range(n_dims, len(axes_semaforo)):
-             axes_semaforo[j].set_visible(False)
-
-        fig_semaforo.suptitle("Semáforo de Dimensiones (Resumen)", fontsize=12)
-        fig_semaforo.tight_layout(rect=[0, 0.03, 1, 0.95]) # Ajustar layout
-        figuras.append(fig_semaforo)
-        fig_titles.append("Figura: Semáforo de Dimensiones")
-
-
-    # --- 6.2 Análisis por Sexo, Rango de Edad y Hijos ---
-    # Crear df_mix A PARTIR de df_num (que ya tiene las conversiones)
-    df_mix = df_num.copy()
-
-    # Añadir Rango_Edad (revisar columna 'Edad' en df_num)
-    if 'Edad' in df_mix.columns:
-        df_mix['EdadNum'] = pd.to_numeric(df_mix['Edad'], errors='coerce')
-        bins = [0, 24, 34, 44, 54, 64, 200] # Rangos más detallados?
-        labels = ['<25', '25-34', '35-44', '45-54', '55-64', '65+']
-        df_mix['Rango_Edad'] = pd.cut(df_mix['EdadNum'], bins=bins, labels=labels, right=False) # right=False: [0, 25), [25, 35), ...
+    # Rango Edad: Crear a partir de 'Edad' si existe y es numérica
+    col_edad = 'Edad'
+    col_rango_edad = 'Rango_Edad'
+    if col_edad in df_plot_groups and pd.api.types.is_numeric_dtype(df_plot_groups[col_edad]):
+        bins_edad = [0, 24, 34, 44, 54, 64, df_plot_groups[col_edad].max() + 1] # Usar max() + 1
+        labels_edad = ['<25', '25-34', '35-44', '45-54', '55-64', '65+']
+        df_plot_groups[col_rango_edad] = pd.cut(df_plot_groups[col_edad], bins=bins_edad, labels=labels_edad, right=False)
     else:
-        st.warning("Columna 'Edad' no encontrada para crear 'Rango_Edad'.")
-        df_mix['Rango_Edad'] = 'SinDatoEdad'
+        st.warning("Columna 'Edad' no es numérica o no existe. No se creará 'Rango_Edad'.")
+        col_rango_edad = None
 
-    # Añadir Hijos (revisar columna 'Numero de hijos')
-    # Necesita limpieza: 'Sin hijos', 0, 1, 2, ... pueden ser strings o números
-    col_hijos = 'Numero de hijos' # Confirmar nombre exacto
-    if col_hijos in df_mix.columns:
-        def tiene_hijos(x):
-            if pd.isna(x): return 'Sin Dato'
-            val_str = str(x).lower().strip()
-            if val_str in ['0', 'sin hijos', 'no', 'ninguno']:
-                return 'Sin hijos'
-            # Intentar convertir a número, si es > 0, tiene hijos
+    # Tiene Hijos: Crear a partir de 'Numero de hijos' (ya procesada?)
+    col_num_hijos = 'Numero de hijos' # Usar nombre exacto
+    col_tiene_hijos = 'Tiene_Hijos'
+    if col_num_hijos in df_plot_groups and pd.api.types.is_numeric_dtype(df_plot_groups[col_num_hijos]):
+         # Convertir NaN a -1 antes de comparar para evitar errores
+         df_plot_groups[col_tiene_hijos] = np.where(df_plot_groups[col_num_hijos].fillna(-1) > 0, 'Con hijos', 'Sin hijos')
+         df_plot_groups[col_tiene_hijos] = df_plot_groups[col_tiene_hijos].astype('category')
+    else:
+         st.warning(f"Columna '{col_num_hijos}' no es numérica o no existe. No se creará '{col_tiene_hijos}'.")
+         col_tiene_hijos = None
+
+    # Iterar por dimensiones para graficar
+    for dim_name, prom_general in resultados.items():
+        if pd.isna(prom_general): continue # Saltar si el promedio general es NaN
+
+        # Identificar columnas numéricas válidas para ESTA dimensión
+        dim_details = data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).get(dim_name, {})
+        vars_originales = dim_details.get("Preguntas", [])
+        vars_dim_numeric = [v for v in vars_originales if v in df_plot_groups.columns and v in columnas_numericas_ok]
+
+        if not vars_dim_numeric: continue # Saltar si no hay columnas numéricas para esta dim
+
+        min_escala, max_escala = get_scale_range(dim_name) # Obtener rango para ylim
+
+        # Crear figura 1x3
+        fig_dim, axs_dim = plt.subplots(1, 3, figsize=(15, 4.5), sharey=True)
+        fig_dim.suptitle(f"{dim_name}\n(Promedio General: {prom_general:.2f})", fontsize=10)
+        plot_count = 0
+
+        # Graficar por Sexo
+        if col_sexo:
             try:
-                if int(x) > 0: return 'Con hijos'
-                else: return 'Sin hijos' # Caso 0 numérico
-            except (ValueError, TypeError):
-                # Si no es '0' ni convertible a número > 0, podría ser texto como 'si'
-                if val_str in ['si', 'sí']: return 'Con hijos'
-                return 'Sin Dato' # Otros casos no claros
-        df_mix['Tiene_Hijos'] = df_mix[col_hijos].apply(tiene_hijos)
-    else:
-        st.warning(f"Columna '{col_hijos}' no encontrada para crear 'Tiene_Hijos'.")
-        df_mix['Tiene_Hijos'] = 'Sin Dato'
-
-    # Recorrer dimensiones para graficar por grupos
-    for dim, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
-        # Re-identificar columnas numéricas válidas para esta dimensión
-        vars_dim_original = []
-        if "Preguntas" in dim_details: vars_dim_original = dim_details["Preguntas"]
-        elif "Pares de Adjetivos" in dim_details: vars_dim_original = [c for c in cols_a_forzar_numeric if c in columnas_procesadas_numericamente]
-
-        vars_exist_numeric = [v for v in vars_dim_original if isinstance(v, str) and v.strip() in df_mix.columns and v.strip() in columnas_procesadas_numericamente]
-
-        if not vars_exist_numeric:
-            st.write(f"Skipping plots for {dim}: No valid numeric columns.")
-            continue
-
-        if dim not in resultados or pd.isna(resultados[dim]):
-            st.write(f"Skipping plots for {dim}: Average is NaN.")
-            continue
-
-
-        fig_dim, axs_dim = plt.subplots(1, 3, figsize=(15, 4.5), sharey=True) # 1x3 para Sexo, Edad, Hijos
-        fig_dim.suptitle(f"{dim}\n(Promedio General: {resultados[dim]:.2f})", fontsize=10)
-
-        plot_successful = 0
-
-        # a) Por Sexo
-        col_sexo = 'Sexo' # Confirmar nombre exacto
-        if col_sexo in df_mix.columns:
-            try:
-                # numeric_only=True es VITAL aquí
-                df_plot = df_mix.groupby(col_sexo)[vars_exist_numeric].mean(numeric_only=True).mean(axis=1, skipna=True)
-                df_plot = df_plot.dropna() # Quitar grupos sin datos
-                if not df_plot.empty:
-                    df_plot.plot(kind='bar', color='lightblue', ax=axs_dim[0])
+                # Agrupar y calcular media de medias
+                grouped_data = df_plot_groups.groupby(col_sexo, observed=False)[vars_dim_numeric].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
+                if not grouped_data.empty:
+                    grouped_data.plot(kind='bar', color='lightblue', ax=axs_dim[0])
                     axs_dim[0].set_title("Por Sexo", fontsize=9)
                     axs_dim[0].set_xlabel('')
                     axs_dim[0].set_ylabel('Promedio Dimensión')
                     axs_dim[0].tick_params(axis='x', rotation=45, labelsize=8)
                     axs_dim[0].grid(axis='y', linestyle='--', alpha=0.7)
-                    plot_successful += 1
-                else:
-                    axs_dim[0].set_visible(False)
+                    axs_dim[0].set_ylim(bottom=min_escala, top=max_escala) # Aplicar Y lim
+                    plot_count += 1
+                else: axs_dim[0].set_visible(False)
             except Exception as e:
-                st.error(f"Error graficando {dim} por Sexo: {e}")
+                st.error(f"Error graficando {dim_name} por Sexo: {e}")
                 axs_dim[0].set_visible(False)
-        else:
-            st.warning("Columna 'Sexo' no encontrada para graficar.")
-            axs_dim[0].set_visible(False)
+        else: axs_dim[0].set_visible(False)
 
-        # b) Por Rango de Edad
-        col_rango_edad = 'Rango_Edad'
-        if col_rango_edad in df_mix.columns and df_mix[col_rango_edad].nunique() > 1:
-             try:
-                 # numeric_only=True es VITAL aquí
-                 # Usar observed=False si la columna es Categórica y quieres incluir categorías sin datos
-                 df_plot = df_mix.groupby(col_rango_edad, observed=False)[vars_exist_numeric].mean(numeric_only=True).mean(axis=1, skipna=True)
-                 df_plot = df_plot.dropna()
-                 if not df_plot.empty:
-                     df_plot.plot(kind='bar', color='lightgreen', ax=axs_dim[1])
-                     axs_dim[1].set_title("Por Rango de Edad", fontsize=9)
-                     axs_dim[1].set_xlabel('')
-                     axs_dim[1].set_ylabel('') # Compartido
-                     axs_dim[1].tick_params(axis='x', rotation=45, labelsize=8)
-                     axs_dim[1].grid(axis='y', linestyle='--', alpha=0.7)
-                     plot_successful += 1
-                 else:
-                     axs_dim[1].set_visible(False)
-             except Exception as e:
-                 st.error(f"Error graficando {dim} por Rango Edad: {e}")
-                 axs_dim[1].set_visible(False)
-        else:
-             axs_dim[1].set_visible(False)
-
-
-        # c) Por Tiene_Hijos
-        col_tiene_hijos = 'Tiene_Hijos'
-        if col_tiene_hijos in df_mix.columns and df_mix[col_tiene_hijos].nunique() > 1:
+        # Graficar por Rango Edad
+        if col_rango_edad:
             try:
-                # numeric_only=True es VITAL aquí
-                df_plot = df_mix.groupby(col_tiene_hijos)[vars_exist_numeric].mean(numeric_only=True).mean(axis=1, skipna=True)
-                df_plot = df_plot.dropna()
-                if not df_plot.empty:
-                    df_plot.plot(kind='bar', color='salmon', ax=axs_dim[2])
-                    axs_dim[2].set_title("Por Hijos", fontsize=9)
-                    axs_dim[2].set_xlabel('')
-                    axs_dim[2].set_ylabel('') # Compartido
-                    axs_dim[2].tick_params(axis='x', rotation=0, labelsize=8) # Rotación 0 aquí
-                    axs_dim[2].grid(axis='y', linestyle='--', alpha=0.7)
-                    plot_successful += 1
-                else:
-                    axs_dim[2].set_visible(False)
+                grouped_data = df_plot_groups.groupby(col_rango_edad, observed=False)[vars_dim_numeric].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
+                if not grouped_data.empty:
+                    grouped_data.plot(kind='bar', color='lightgreen', ax=axs_dim[1])
+                    axs_dim[1].set_title("Por Rango de Edad", fontsize=9)
+                    axs_dim[1].set_xlabel('')
+                    axs_dim[1].set_ylabel('') # Y label compartido
+                    axs_dim[1].tick_params(axis='x', rotation=45, labelsize=8)
+                    axs_dim[1].grid(axis='y', linestyle='--', alpha=0.7)
+                    plot_count += 1
+                else: axs_dim[1].set_visible(False)
             except Exception as e:
-                st.error(f"Error graficando {dim} por Hijos: {e}")
-                axs_dim[2].set_visible(False)
-        else:
-             axs_dim[2].set_visible(False)
+                st.error(f"Error graficando {dim_name} por Rango Edad: {e}")
+                axs_dim[1].set_visible(False)
+        else: axs_dim[1].set_visible(False)
 
+        # Graficar por Tiene Hijos
+        if col_tiene_hijos:
+             try:
+                 grouped_data = df_plot_groups.groupby(col_tiene_hijos, observed=False)[vars_dim_numeric].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
+                 if not grouped_data.empty:
+                     grouped_data.plot(kind='bar', color='salmon', ax=axs_dim[2])
+                     axs_dim[2].set_title("Por Hijos", fontsize=9)
+                     axs_dim[2].set_xlabel('')
+                     axs_dim[2].set_ylabel('') # Y label compartido
+                     axs_dim[2].tick_params(axis='x', rotation=0, labelsize=8)
+                     axs_dim[2].grid(axis='y', linestyle='--', alpha=0.7)
+                     plot_count += 1
+                 else: axs_dim[2].set_visible(False)
+             except Exception as e:
+                 st.error(f"Error graficando {dim_name} por Hijos: {e}")
+                 axs_dim[2].set_visible(False)
+        else: axs_dim[2].set_visible(False)
 
-        # Añadir figura solo si se graficó algo
-        if plot_successful > 0:
-            # Ajustar Y lim si es necesario (ej. 1 a 7 o 1 a 5) - Determinar escala
-            # Esto es complejo sin saber la escala exacta de CADA dimensión
-            # Por ahora, dejamos que matplotlib ajuste, pero podríamos fijarlo a [1, 7] o [1, 5]
-            max_val_dim = 7 # Asumir 7 por defecto
-            if dim == "Síntomas de Burnout": max_val_dim = 5
-            if dim == "Compromiso" or dim == "Defensa de la Organización" or dim == "Satisfacción" or dim == "Intención de Retiro": max_val_dim = 6
-            axs_dim[0].set_ylim(bottom=1, top=max_val_dim) # Aplicar a la primera (las demás comparten)
-
-            plt.tight_layout(rect=[0, 0.03, 1, 0.93]) # Ajustar layout para título
+        # Añadir figura si se graficó algo
+        if plot_count > 0:
+            plt.tight_layout(rect=[0, 0.03, 1, 0.93])
             figuras.append(fig_dim)
-            fig_titles.append(f"Figura: Comparación {dim} por Grupos")
+            fig_titles.append(f"Figura: Comparación {dim_name} por Grupos")
         else:
             plt.close(fig_dim) # Cerrar figura si no se usó
 
-
-    # 7. Generar Informe Texto (Sin cambios)
+    # 7. Generar Texto del Informe Final
     informe = []
     informe.append("Este informe presenta un análisis general de las dimensiones "
                    "de bienestar laboral en el rango de fechas especificado.\n")
     informe.append("**Resumen Ejecutivo:**\n")
     informe.append(resumen_ejecutivo + "\n\n")
     informe.append("**Clasificación de Dimensiones (Según Promedio):**\n")
-    # ... (tu código para listar fortalezas, riesgos, intermedios) ...
+    # ... (código para listar fortalezas, riesgos, intermedios ordenados) ...
     if fortalezas:
-        informe.append("**Fortalezas (Promedio >= 5):**\n")
-        for f, val in sorted(fortalezas, key=lambda item: item[1], reverse=True): # Ordenar
+        informe.append("**Fortalezas:**\n")
+        for f, val in sorted(fortalezas, key=lambda item: item[1], reverse=True):
             informe.append(f"- {f} (Promedio: {val:.2f})\n")
-    else:
-        informe.append("No se identificaron fortalezas claras (Promedio >= 5).\n")
-
+    else: informe.append("No se identificaron fortalezas claras.\n")
     informe.append("\n")
     if riesgos:
-        informe.append("**Riesgos (Promedio <= 3):**\n")
-        for r, val in sorted(riesgos, key=lambda item: item[1]): # Ordenar
+        informe.append("**Riesgos:**\n")
+        for r, val in sorted(riesgos, key=lambda item: item[1]):
             informe.append(f"- {r} (Promedio: {val:.2f})\n")
-    else:
-        informe.append("No se identificaron riesgos claros (Promedio <= 3).\n")
-
+    else: informe.append("No se identificaron riesgos claros.\n")
     informe.append("\n")
     if intermedios:
-        informe.append("**Intermedios (3 < Promedio < 5):**\n")
-        for i, val in sorted(intermedios, key=lambda item: item[1]): # Ordenar
+        informe.append("**Intermedios:**\n")
+        for i, val in sorted(intermedios, key=lambda item: item[1]):
             informe.append(f"- {i} (Promedio: {val:.2f})\n")
-    else:
-        informe.append("No se identificaron dimensiones en nivel intermedio.\n")
+    else: informe.append("No se identificaron dimensiones en nivel intermedio.\n")
 
     informe.append("\n**Conclusiones y Recomendaciones:**\n")
     informe.append(conclusiones)
-    informe.append("\n---\n*Nota: Los promedios y clasificaciones se basan en las escalas numéricas asignadas. Las dimensiones marcadas como (Invertida) en el semáforo tienen una interpretación opuesta (valores altos son negativos).*")
+    informe.append("\n---\n*Nota: La clasificación se basa en umbrales sobre el promedio. Dimensiones marcadas (Invertida) tienen interpretación opuesta.*")
 
     informe_texto = "".join(informe)
+
+    st.success("Informe general generado exitosamente.")
     return informe_texto, figuras
     
 def main():
