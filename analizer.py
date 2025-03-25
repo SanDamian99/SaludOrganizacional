@@ -1666,7 +1666,7 @@ def clean_text(text):
     text = break_long_words(text, max_length=50)
     return text
 
-def generar_informe(pregunta_usuario, opcion_analisis, resultados, figuras):
+def informe(pregunta_usuario, opcion_analisis, resultados, figuras):
     pdf = PDFReport('informe_analisis_datos.pdf')
 
     # Extraer variables relevantes
@@ -2023,9 +2023,10 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     df_num = df_filtrado.copy()
     for col in df_num.columns:
         if df_num[col].dtype == object:
-            print(df_num[col].value_counts(dropna=False))
+            # Primero mapeamos los valores según la función mapear_valores
             df_num[col] = mapear_valores(df_num[col])
-            print(df_num[col].value_counts(dropna=False))
+            # Luego, convertimos a numérico: los errores se convierten en NaN
+            df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
         elif pd.api.types.is_numeric_dtype(df_num[col]):
             df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
 
