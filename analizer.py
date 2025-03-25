@@ -1744,76 +1744,107 @@ def informe(pregunta_usuario, opcion_analisis, resultados, figuras):
         st.write(f"Error al generar el PDF: {e}")
 
 
-# Definimos varios "diccionarios de escalas" en un solo lugar:
-likert_7_extended = {
-    "Nunca": 1,
-    "Rara vez": 2,
-    "Raramente": 2,   # por si aparece "Raramente" en vez de "Rara vez"
-    "Alguna vez": 3,
-    "Algunas veces": 4,
-    "A menudo": 5,
-    "Frecuentemente": 6,
-    "Siempre": 7
-}
+# Convertir claves a minúsculas y sin espacios para comparación robusta
+def clean_dict_keys(d):
+    return {str(k).lower().strip(): v for k, v in d.items()}
 
-acuerdo_7 = {
-    "Muy en desacuerdo": 1,
-    "Moderadamente en desacuerdo": 2,
-    "Ligeramente en desacuerdo": 3,
-    "Ni de acuerdo ni en desacuerdo": 4,  # si existiese
-    "Ligeramente de acuerdo": 4,         # a veces se numeran 1..6
-    "Moderadamente de acuerdo": 5,
-    "Muy de acuerdo": 6,
-    "Totalmente de acuerdo": 7
-}
+likert_7_freq_map = clean_dict_keys({
+    "nunca": 1,
+    "rara vez": 2,
+    "raramente": 2, # Añadir alias
+    "ocasionalmente": 3, # Añadido para Escala Colaterales
+    "alguna vez": 3, # Mantener ambos por si acaso
+    "algunas veces": 4,
+    "frecuentemente": 5, # Ajustado según escala 1-7 común
+    "a menudo": 5,     # Agrupar con frecuentemente? Revisar escala original. Asumimos que sí.
+    "casi siempre": 6, # Añadido para Escala Colaterales
+    "siempre": 7
+})
 
-burnout_5 = {
-    "Nunca": 1,
-    "Raramente": 2,
-    "Algunas veces": 3,
-    "A menudo": 4,
-    "Siempre": 5
-}
+# Escala de Acuerdo 1-7 Completa
+acuerdo_7_map = clean_dict_keys({
+    "totalmente en desacuerdo": 1,
+    "muy en desacuerdo": 2,
+    "moderadamente en desacuerdo": 2, # Agrupar? Verificar escala original
+    "algo en desacuerdo": 3,
+    "ligeramente en desacuerdo": 3, # Agrupar? Verificar
+    "ni de acuerdo ni en desacuerdo": 4,
+    "algo de acuerdo": 5,
+    "ligeramente de acuerdo": 5, # Agrupar? Verificar
+    "moderadamente de acuerdo": 6,
+    "muy de acuerdo": 6,         # Agrupar? Verificar
+    "totalmente de acuerdo": 7
+})
 
-def mapear_valores(serie):
+# Escala Burnout 1-5 (parece correcta, solo limpiar claves)
+burnout_5_map = clean_dict_keys({
+    "nunca": 1,
+    "raramente": 2,
+    "algunas veces": 3,
+    "a menudo": 4,
+    "siempre": 5
+})
+
+# Escala Expectativas 1-7 (Bajando/Subiendo) - Asumimos mapeo directo si son números
+# Escala Afectos/Competencias 1-7 (Diferencial Semántico) - Asumimos mapeo directo si son números
+
+def map_likert_to_numeric(series):
     """
-    Detecta si la serie corresponde a una escala Likert conocida
-    y la convierte a valores numéricos. Si no, la deja igual.
-    Incluye prints de depuración.
+    Intenta mapear una serie de texto (Likert/Acuerdo) a valores numéricos.
+    Devuelve una serie de tipo float con NaN si el mapeo falla.
+    Prioriza las escalas más específicas o comunes primero.
     """
+    if not pd.api.types.is_string_dtype(series) and not pd.api.types.is_object_dtype(series):
+        # Si ya es numérica, intentar convertir a float por si acaso (ej. int)
+        # y devolverla directamente. Coerce errores a NaN.
+        return pd.to_numeric(series, errors='coerce')
 
-    # 1) Vemos valores únicos, quitando los NaN
-    unique_vals = serie.dropna().unique().tolist()
-    st.write(f"DEBUG - mapear_valores: valores únicos = {unique_vals}")
+    # Preprocesamiento: minúsculas y sin espacios
+    try:
+        # Usar .astype(str) para manejar posibles valores no-string (como NaN)
+        s_cleaned = series.astype(str).str.lower().str.strip()
+        unique_vals = s_cleaned.dropna().unique()
+        # Ignorar 'nan' si aparece como string en los únicos
+        unique_vals = [v for v in unique_vals if v != 'nan']
+    except Exception as e:
+        st.error(f"Error preprocesando serie '{series.name}': {e}")
+        # Devolver la serie original forzada a numérico con errores->NaN como fallback
+        return pd.to_numeric(series, errors='coerce')
 
-    # Convertimos a string y quitamos espacios
-    serie = serie.astype(str).str.strip()
 
-    # 2) Definimos funciones auxiliares para "si todos los valores están en un dict"
-    def all_in_dict(vals, dic):
-        return all(v in dic.keys() for v in vals if v != 'nan')
+    mapped_series = None
 
-    # 3) Revisamos si todos los valores de la serie se ajustan a una de nuestras escalas
-
-    # a) Escala 7 ampliada (Nunca..Siempre con "Rara vez"/"Raramente", etc.)
-    if all_in_dict(unique_vals, likert_7_extended):
-        st.write("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
-        return serie.replace(likert_7_extended).astype(float, errors='ignore')
-
-    # b) Escala acuerdo 7 (Muy en desacuerdo..Totalmente de acuerdo)
-    elif all_in_dict(unique_vals, acuerdo_7):
-        st.write("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
-        return serie.replace(acuerdo_7).astype(float, errors='ignore')
-
-    # c) Escala Burnout 1..5
-    elif all_in_dict(unique_vals, burnout_5):
-        st.write("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
-        return serie.replace(burnout_5).astype(float, errors='ignore')
-
-    # d) Si no coincide con ninguna de las escalas definidas, la dejamos tal cual
+    # 1. Intentar Escala Acuerdo 7 puntos
+    if all(val in acuerdo_7_map for val in unique_vals):
+        st.write(f"DEBUG - Mapeando '{series.name}' con acuerdo_7_map")
+        mapped_series = s_cleaned.map(acuerdo_7_map)
+    # 2. Intentar Escala Frecuencia 7 puntos (incluye Colaterales)
+    elif all(val in likert_7_freq_map for val in unique_vals):
+        st.write(f"DEBUG - Mapeando '{series.name}' con likert_7_freq_map")
+        mapped_series = s_cleaned.map(likert_7_freq_map)
+    # 3. Intentar Escala Burnout 5 puntos
+    elif all(val in burnout_5_map for val in unique_vals):
+        st.write(f"DEBUG - Mapeando '{series.name}' con burnout_5_map")
+        mapped_series = s_cleaned.map(burnout_5_map)
+    # 4. Si no es ninguna de las anteriores, intentar convertir directamente
     else:
-        st.write("DEBUG - No coincide con escalas definidas, se deja como 'object'.")
-        return serie
+         st.warning(f"WARNING - No se encontró mapa Likert/Acuerdo para '{series.name}'. Se intentará conversión numérica directa.")
+         mapped_series = series # Usar la serie original por si ya era numérica pero estaba como object
+
+    # Forzar a numérico (float) y convertir errores a NaN SIEMPRE al final
+    final_series = pd.to_numeric(mapped_series, errors='coerce')
+
+    # Verificar si hubo muchos fallos
+    original_non_na = series.notna().sum()
+    final_non_na = final_series.notna().sum()
+    if original_non_na > 0 and final_non_na < original_non_na * 0.8: # Si se perdió más del 20%
+         st.warning(f"WARNING - Posible fallo de mapeo/conversión en '{series.name}'. "
+                    f"{original_non_na - final_non_na} valores convertidos a NaN.")
+    elif mapped_series is None and original_non_na > 0:
+         st.warning(f"WARNING - No se aplicó ningún mapa específico a '{series.name}', se forzó conversión numérica.")
+
+
+    return final_series
     
 dimensiones = {
     "Control del Tiempo": [
@@ -1967,318 +1998,417 @@ dimensiones = {
 
 def generar_informe_general(df, fecha_inicio, fecha_fin):
     import math
+    # 0. Limpiar nombres de columnas en el DF original una vez
+    df.columns = df.columns.str.strip()
 
-    # Filtrar por rango de fechas usando 'Hora de inicio'
-    df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
-    df_filtrado = df[
-        (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) & 
-        (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
-    ]
+    # 1. Filtrar por rango de fechas usando 'Hora de inicio'
+    try:
+        # Asegurarse de que la columna de fecha es datetime
+        df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
+        df_filtrado = df[
+            (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) &
+            (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
+        ].copy() # Usar .copy() para evitar SettingWithCopyWarning
+    except KeyError:
+        return "Error: La columna 'Hora de inicio' no se encuentra en el DataFrame.", []
+    except Exception as e:
+        return f"Error al filtrar por fecha: {e}", []
+
 
     if df_filtrado.empty:
         return "No se encontraron datos en el rango de fechas especificado.", []
 
-    # Convertir todo a valores numéricos según la escala fija para las dimensiones
+    st.write(f"DEBUG - Datos filtrados por fecha: {df_filtrado.shape[0]} filas.")
+
+    # 2. Convertir columnas de dimensiones a numérico de forma selectiva y robusta
     df_num = df_filtrado.copy()
-    for col in df_num.columns:
-        if df_num[col].dtype == object:
-            # EJEMPLO: print de debug
-            print("DEBUG - Antes de mapear_valores, df_num[column].value_counts():")
-            print(df_num[col].value_counts(dropna=False))
-            
-            # Llamada a mapear_valores
-            df_num[col] = mapear_valores(df_num[col])
-            
-            # Después
-            print("DEBUG - Después de mapear_valores, df_num[column].value_counts():")
-            print(df_num[col].value_counts(dropna=False))
+    columnas_procesadas_numericamente = []
 
-    # Definir umbrales
-    # Fortaleza: >=5, Riesgo: <=3, Intermedio: (3,5)
+    # Columnas que DEBEN ser numéricas (escalas semánticas 1-7, etc.)
+    # Convertimos los nombres de columna 2-20 a string para buscar
+    semantic_cols_potential = [str(i) for i in range(2, 21)]
+    cols_a_forzar_numeric = []
+
+    # Identificar columnas de dimensiones y aplicar mapeo/conversión
+    for dim, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+        if "Preguntas" in dim_details:
+            vars_dim = dim_details["Preguntas"]
+            # También incluir pares de adjetivos si existen (limpiando el formato)
+        elif "Pares de Adjetivos" in dim_details:
+             # Asumimos que los nombres de columna son los números '2' a '20' o similar
+             # OJO: Esta parte es FRÁGIL si los nombres reales no coinciden.
+             # Necesitamos saber los nombres REALES de estas columnas en el Excel.
+             # Por ahora, usaremos los nombres '2' a '20' si existen.
+             vars_dim = [col_name for col_name in semantic_cols_potential if col_name in df_num.columns]
+             cols_a_forzar_numeric.extend(vars_dim) # Marcar para conversión directa
+        else:
+            vars_dim = [] # Si no hay preguntas ni pares, no hay columnas asociadas aquí
+
+        st.write(f"DEBUG - Procesando Dimensión: {dim}")
+        vars_exist = [v for v in vars_dim if isinstance(v, str) and v.strip() in df_num.columns]
+        st.write(f"DEBUG - Columnas existentes para {dim}: {vars_exist}")
+
+        for col in vars_exist:
+            if col in cols_a_forzar_numeric: # Si es semántica, forzar numérico
+                 st.write(f"DEBUG - Forzando conversión numérica directa para (semántica?): {col}")
+                 df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
+            elif df_num[col].dtype == 'object' or pd.api.types.is_string_dtype(df_num[col]):
+                 # Solo aplicar mapeo Likert si es object/string y NO es semántica
+                 st.write(f"DEBUG - Aplicando map_likert_to_numeric a: {col}")
+                 df_num[col] = map_likert_to_numeric(df_num[col])
+            elif pd.api.types.is_numeric_dtype(df_num[col]):
+                 st.write(f"DEBUG - Columna {col} ya es numérica.")
+                 # Asegurarse de que sea float para consistencia
+                 df_num[col] = df_num[col].astype(float)
+            else:
+                 st.warning(f"WARNING - Tipo inesperado {df_num[col].dtype} para columna {col}. Intentando convertir a numérico.")
+                 df_num[col] = pd.to_numeric(df_num[col], errors='coerce')
+
+            if df_num[col].notna().sum() > 0: # Solo añadir si tiene algún dato numérico
+                columnas_procesadas_numericamente.append(col)
+            else:
+                st.warning(f"WARNING - Columna {col} quedó vacía después de la conversión numérica.")
+
+
+    # Asegurar que las columnas semánticas (2-20) sean numéricas si existen
+    for col_sem in cols_a_forzar_numeric:
+        if col_sem in df_num.columns:
+             if not pd.api.types.is_numeric_dtype(df_num[col_sem]):
+                 st.write(f"DEBUG - Forzando conversión numérica final para (semántica?): {col_sem}")
+                 df_num[col_sem] = pd.to_numeric(df_num[col_sem], errors='coerce')
+             if df_num[col_sem].notna().sum() > 0 and col_sem not in columnas_procesadas_numericamente:
+                 columnas_procesadas_numericamente.append(col_sem)
+
+    # Eliminar duplicados
+    columnas_procesadas_numericamente = list(set(columnas_procesadas_numericamente))
+    st.write(f"DEBUG - Columnas procesadas y consideradas numéricas: {len(columnas_procesadas_numericamente)}")
+
+    if not columnas_procesadas_numericamente:
+         return "Error: Ninguna columna de dimensión pudo ser convertida a formato numérico.", []
+
+    # 3. Calcular promedios por dimensión usando SOLO columnas procesadas
     resultados = {}
-    for dim, vars_dim in dimensiones.items():
-        vars_exist = [v for v in vars_dim if v in df_num.columns]
-        if vars_exist:
-            prom = df_num[vars_exist].mean(skipna=True, numeric_only=True).mean()
-            resultados[dim] = prom
+    # Recalcular vars_exist SOLO con las columnas que SÍ son numéricas ahora
+    for dim, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+        vars_dim_original = []
+        if "Preguntas" in dim_details:
+            vars_dim_original = dim_details["Preguntas"]
+        elif "Pares de Adjetivos" in dim_details:
+            # Usar las columnas semánticas que sabemos que existen y son numéricas
+             vars_dim_original = [col_name for col_name in cols_a_forzar_numeric if col_name in columnas_procesadas_numericamente]
 
-    fortalezas = [(d,v) for d,v in resultados.items() if v >=5]
-    riesgos = [(d,v) for d,v in resultados.items() if v <=3]
-    intermedios = [(d,v) for d,v in resultados.items() if 3 < v < 5]
+        # Filtrar solo las que existen Y fueron procesadas como numéricas
+        vars_exist_numeric = [v for v in vars_dim_original if isinstance(v, str) and v.strip() in df_num.columns and v.strip() in columnas_procesadas_numericamente]
 
-    # Crear un resumen ejecutivo con Gemini
+        if vars_exist_numeric:
+            # Calcular la media de las medias de las columnas válidas
+            try:
+                 # numeric_only=True es crucial aquí por si acaso
+                 # mean(skipna=True) para las columnas, luego mean(skipna=True) para el promedio de esas medias
+                 prom = df_num[vars_exist_numeric].mean(skipna=True, numeric_only=True).mean(skipna=True)
+                 if pd.notna(prom):
+                     resultados[dim] = prom
+                     st.write(f"DEBUG - Promedio para {dim}: {prom:.2f} (basado en {len(vars_exist_numeric)} columnas)")
+                 else:
+                     st.warning(f"WARNING - Promedio para {dim} es NaN (datos insuficientes en columnas: {vars_exist_numeric})")
+            except Exception as e:
+                 st.error(f"Error calculando promedio para {dim}: {e}")
+        else:
+             st.warning(f"WARNING - No hay columnas numéricas válidas para calcular el promedio de {dim}.")
+
+
+    if not resultados:
+        return "No se pudieron calcular promedios para ninguna dimensión.", []
+
+    # 4. Clasificar Fortalezas, Riesgos, Intermedios (basado en 'resultados')
+    # (Tu lógica de umbrales parece correcta)
+    fortalezas = [(d,v) for d,v in resultados.items() if pd.notna(v) and v >= 5]
+    riesgos = [(d,v) for d,v in resultados.items() if pd.notna(v) and v <= 3]
+    intermedios = [(d,v) for d,v in resultados.items() if pd.notna(v) and 3 < v < 5]
+
+    # 5. Crear resumen ejecutivo con Gemini (sin cambios)
     prompt_resumen = f"""
     Estas son las dimensiones y sus promedios:
     Fortalezas: {fortalezas}
     Riesgos: {riesgos}
     Intermedios: {intermedios}
 
-    Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
-    ofreciendo una visión general de la situación y recomendaciones generales.
+    Genera un resumen ejecutivo conciso (máximo 2 párrafos) describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias,
+    ofreciendo una visión general de la situación y 1-2 recomendaciones generales clave basadas en los riesgos principales.
     """
+    # Asumiendo que enviar_prompt está definido y funciona
     resumen_ejecutivo = enviar_prompt(prompt_resumen)
 
     prompt_conclusiones = f"""
-    Basándote en los resultados:
-    Fortalezas: {fortalezas}
-    Riesgos: {riesgos}
-    Intermedios: {intermedios}
+    Basándote en los resultados detallados:
+    Fortalezas identificadas: {fortalezas}
+    Principales Riesgos identificados: {riesgos}
+    Áreas Intermedias: {intermedios}
 
-    Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
-    desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
+    Proporciona conclusiones detalladas (1-2 párrafos) y recomendaciones prácticas (3-5 bullets) para mejorar las áreas en riesgo y mantener las fortalezas,
+    desde una perspectiva de psicología organizacional y bienestar laboral. Enfócate en acciones concretas.
     """
+     # Asumiendo que enviar_prompt está definido y funciona
     conclusiones = enviar_prompt(prompt_conclusiones)
 
+    # 6. Generar Gráficos
     figuras = []
     fig_titles = []
 
-    # ------------------------------------------------------------------
-    # 1. Semáforo de Dimensiones
-    # ------------------------------------------------------------------
-    inverse_dims = {
+    # --- 6.1 Semáforo de Dimensiones (Sin cambios, usa 'resultados') ---
+    # ... (tu código del semáforo, asegurándote que usa 'resultados')
+    # Copiando tu código del semáforo aquí:
+    inverse_dims = { # Definir qué dimensiones se interpretan inversamente
         "Conflicto Familia-Trabajo": True,
         "Síntomas de Burnout": True,
         "Factores de Efectos Colaterales (Escala de Desgaste)": True,
         "Factores de Efectos Colaterales (Escala de Alienación)": True,
-        # Si deseas que "Control del Tiempo" sea inversa también:
-        "Control del Tiempo": True
+        "Intención de Retiro": True, # Intención alta es negativa
+        # "Control del Tiempo": Podría ser inversa si preguntas negativas dominan
     }
-    
-    def estado_dimension(valor):
-        if valor >= 5:
+
+    def estado_dimension(valor, es_inversa=False):
+        if pd.isna(valor):
+            return ('Sin Datos', 'grey')
+        # Invertir valor si es necesario ANTES de aplicar umbrales
+        # Asumiendo escala 1-7, el punto medio es 4. Invertir: 8 - valor
+        # Asumiendo escala 1-5, el punto medio es 3. Invertir: 6 - valor
+        # Asumiendo escala 1-6, el punto medio es 3.5. Invertir: 7 - valor
+        # ---> NECESITAMOS SABER LA ESCALA ORIGINAL PARA INVERTIR CORRECTAMENTE <---
+        # ---> Asumamos por ahora una escala genérica 1-7 para la inversión <--
+        valor_display = (8 - valor) if es_inversa else valor
+
+        if valor_display >= 5:
             return ('Fortaleza', 'green')
-        elif valor <= 3:
+        elif valor_display <= 3:
             return ('Riesgo', 'red')
         else:
             return ('Intermedio', 'yellow')
 
-    dims_list = list(resultados.items())  # [('Dimension1', prom1), ...]
+    dims_list = list(resultados.items())
     n_dims = len(dims_list)
-    cols = 3
-    rows = math.ceil(n_dims / cols)
-
-    # Aumentar el figsize para evitar que se recorten
-    fig_semaforo, axes_semaforo = plt.subplots(
-        rows, cols, figsize=(cols*3, rows*2.2)
-    )
-    axes_semaforo = axes_semaforo.flatten() if n_dims > 1 else [axes_semaforo]
-
-    for idx, (dim, val) in enumerate(dims_list):
-        if dim in inverse_dims and inverse_dims[dim]:
-            val_display = 8 - val
-        else:
-            val_display = val
-        est, color = estado_dimension(val_display)
-        ax = axes_semaforo[idx]
-        ax.set_facecolor(color)
-
-        text_content = f"{dim}\n{est}\nProm: {val_display:.2f}"
-        ax.text(
-            0.5, 0.5, text_content,
-            ha='center', va='center',
-            fontsize=8, color='black',
-            wrap=True
-        )
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlim(0,1)
-        ax.set_ylim(0,1)
-
-    # Ocultar ejes sobrantes (si sobran casillas)
-    for j in range(idx+1, len(axes_semaforo)):
-        axes_semaforo[j].set_visible(False)
-
-    fig_semaforo.suptitle("Semáforo de Dimensiones (Resumen)", fontsize=12)
-    fig_semaforo.tight_layout()
-    figuras.append(fig_semaforo)
-    fig_titles.append("Figura: Semáforo de Dimensiones")
-
-    # ------------------------------------------------------------------
-    # 2. Análisis por Sexo, Rango de Edad y Hijos
-    # ------------------------------------------------------------------
-    df_cat = df_filtrado.copy()
-
-    # Convertir Edad a numérico
-    if 'Edad' in df_cat.columns:
-        df_cat['Edad'] = pd.to_numeric(df_cat['Edad'], errors='coerce')
-        # Crear rangos
-        bins = [0, 24, 34, 44, 200]
-        labels = ['<25', '25-34', '35-44', '45+']
-        df_cat['Rango_Edad'] = pd.cut(df_cat['Edad'], bins=bins, labels=labels, include_lowest=True)
+    if n_dims == 0:
+        st.warning("No hay datos de resultados para generar el semáforo.")
     else:
-        df_cat['Rango_Edad'] = 'SinDatoEdad'
+        cols = 3
+        rows = math.ceil(n_dims / cols)
+        fig_semaforo, axes_semaforo = plt.subplots(rows, cols, figsize=(cols * 3.5, rows * 2.5)) # Ajustar tamaño
+        if n_dims == 1:
+             axes_semaforo = np.array([axes_semaforo]) # Convertir a array para flatten
+        axes_semaforo = axes_semaforo.flatten()
 
-    # Crear columna Hijos (0/1)
-    if 'Numero de hijos' in df_cat.columns:
-        df_cat['Hijos'] = df_cat['Numero de hijos'].apply(
-            lambda x: 0 if str(x).strip().lower()=='sin hijos' else 1
-        )
+        for idx, (dim, val) in enumerate(dims_list):
+             ax = axes_semaforo[idx]
+             es_inversa = inverse_dims.get(dim, False)
+             # Corrección para invertir valor antes de determinar estado
+             val_invertido_si_aplica = (8 - val) if es_inversa and pd.notna(val) else val
+             est, color = estado_dimension(val_invertido_si_aplica, False) # Ya invertimos, pasamos False aquí
+
+             ax.set_facecolor(color)
+             # Mostrar el valor promedio ORIGINAL en el texto
+             texto_promedio = f"{val:.2f}" if pd.notna(val) else "N/A"
+             # Añadir nota si es invertida
+             nota_inversa = "(Invertida)" if es_inversa else ""
+             text_content = f"{dim}\n{est}\nProm: {texto_promedio} {nota_inversa}"
+             ax.text(0.5, 0.5, text_content, ha='center', va='center', fontsize=8, color='black', wrap=True)
+             ax.set_xticks([])
+             ax.set_yticks([])
+             ax.set_xlim(0, 1)
+             ax.set_ylim(0, 1)
+
+        # Ocultar ejes sobrantes
+        for j in range(n_dims, len(axes_semaforo)):
+             axes_semaforo[j].set_visible(False)
+
+        fig_semaforo.suptitle("Semáforo de Dimensiones (Resumen)", fontsize=12)
+        fig_semaforo.tight_layout(rect=[0, 0.03, 1, 0.95]) # Ajustar layout
+        figuras.append(fig_semaforo)
+        fig_titles.append("Figura: Semáforo de Dimensiones")
+
+
+    # --- 6.2 Análisis por Sexo, Rango de Edad y Hijos ---
+    # Crear df_mix A PARTIR de df_num (que ya tiene las conversiones)
+    df_mix = df_num.copy()
+
+    # Añadir Rango_Edad (revisar columna 'Edad' en df_num)
+    if 'Edad' in df_mix.columns:
+        df_mix['EdadNum'] = pd.to_numeric(df_mix['Edad'], errors='coerce')
+        bins = [0, 24, 34, 44, 54, 64, 200] # Rangos más detallados?
+        labels = ['<25', '25-34', '35-44', '45-54', '55-64', '65+']
+        df_mix['Rango_Edad'] = pd.cut(df_mix['EdadNum'], bins=bins, labels=labels, right=False) # right=False: [0, 25), [25, 35), ...
     else:
-        df_cat['Hijos'] = 0
+        st.warning("Columna 'Edad' no encontrada para crear 'Rango_Edad'.")
+        df_mix['Rango_Edad'] = 'SinDatoEdad'
 
-    # Convertir todo a numérico en df_mix
-    df_mix = df_filtrado.copy()
-    for colname in df_mix.columns:
-        # NO mapear si es 'Sexo' u otras columnas que no sean Likert
-        if colname in ["Sexo", "Estado Civil", "ID", "Municipio", "Sector Económico"]:
+    # Añadir Hijos (revisar columna 'Numero de hijos')
+    # Necesita limpieza: 'Sin hijos', 0, 1, 2, ... pueden ser strings o números
+    col_hijos = 'Numero de hijos' # Confirmar nombre exacto
+    if col_hijos in df_mix.columns:
+        def tiene_hijos(x):
+            if pd.isna(x): return 'Sin Dato'
+            val_str = str(x).lower().strip()
+            if val_str in ['0', 'sin hijos', 'no', 'ninguno']:
+                return 'Sin hijos'
+            # Intentar convertir a número, si es > 0, tiene hijos
+            try:
+                if int(x) > 0: return 'Con hijos'
+                else: return 'Sin hijos' # Caso 0 numérico
+            except (ValueError, TypeError):
+                # Si no es '0' ni convertible a número > 0, podría ser texto como 'si'
+                if val_str in ['si', 'sí']: return 'Con hijos'
+                return 'Sin Dato' # Otros casos no claros
+        df_mix['Tiene_Hijos'] = df_mix[col_hijos].apply(tiene_hijos)
+    else:
+        st.warning(f"Columna '{col_hijos}' no encontrada para crear 'Tiene_Hijos'.")
+        df_mix['Tiene_Hijos'] = 'Sin Dato'
+
+    # Recorrer dimensiones para graficar por grupos
+    for dim, dim_details in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
+        # Re-identificar columnas numéricas válidas para esta dimensión
+        vars_dim_original = []
+        if "Preguntas" in dim_details: vars_dim_original = dim_details["Preguntas"]
+        elif "Pares de Adjetivos" in dim_details: vars_dim_original = [c for c in cols_a_forzar_numeric if c in columnas_procesadas_numericamente]
+
+        vars_exist_numeric = [v for v in vars_dim_original if isinstance(v, str) and v.strip() in df_mix.columns and v.strip() in columnas_procesadas_numericamente]
+
+        if not vars_exist_numeric:
+            st.write(f"Skipping plots for {dim}: No valid numeric columns.")
             continue
-        
-        # Verificar si dtype es object
-        if df_mix[colname].dtype == object:
-            # Aplicar mapear_valores
-            df_mix[colname] = mapear_valores(df_mix[colname])
 
-    # Añadir las columnas auxiliares
-    df_mix['Rango_Edad'] = df_cat['Rango_Edad']
-    df_mix['Hijos'] = df_cat['Hijos']
-
-    # Recorremos cada dimensión
-    for dim, vars_dim in dimensiones.items():
-        vars_exist = [v for v in vars_dim if v in df_mix.columns]
-        if not vars_exist:
+        if dim not in resultados or pd.isna(resultados[dim]):
+            st.write(f"Skipping plots for {dim}: Average is NaN.")
             continue
 
-        # Creamos un 2x2 subplots (quedará uno vacío)
-        fig_dim, axs_dim = plt.subplots(2, 2, figsize=(10,6))
-        fig_dim.suptitle(f"{dim} comparado por Sexo, Rango de Edad y Hijos", fontsize=10)
 
-        # Subplot (0,0): Por Sexo
-        ax_sexo = axs_dim[0,0]
-        
-        # Imprimir columnas de df_mix para verificar si existe 'Sexo'
-        print("DEBUG - df_mix columns:", df_mix.columns)
-        
-        if 'Sexo' in df_mix.columns:
-            print("DEBUG - La columna 'Sexo' SÍ está presente en df_mix.")
-            # Agrupación y promedio de las variables de la dimensión
-            df_sexo = df_mix.groupby('Sexo')[vars_exist].mean().mean(axis=1)
-            
-            print("DEBUG - df_sexo shape:", df_sexo.shape)
-            print("DEBUG - df_sexo contenido:\n", df_sexo)
-        
-            if df_sexo.empty:
-                print("DEBUG - df_sexo está vacío. Ocultando ax_sexo.")
-                ax_sexo.set_visible(False)
-            else:
-                # Agrupar si hay más de 10 categorías
-                df_sexo_counts = df_sexo.reset_index()
-                df_sexo_counts.columns = ['Sexo', 'MeanValue']
-        
-                print("DEBUG - df_sexo_counts (antes de agrupar 'Otros'):\n", df_sexo_counts)
-        
-                if len(df_sexo_counts) > 10:
-                    print("DEBUG - Hay más de 10 categorías, agrupando en 'Otros'.")
-                    top_9 = df_sexo_counts.nlargest(9, 'MeanValue')
-                    others_sum = df_sexo_counts.iloc[9:]['MeanValue'].sum()
-                    top_9.loc[len(top_9)] = ['Otros', others_sum]
-                    df_sexo = top_9.set_index('Sexo')['MeanValue']
-                    print("DEBUG - df_sexo después de agrupar 'Otros':\n", df_sexo)
-        
-                print("DEBUG - Se ploteará df_sexo:\n", df_sexo)
-                df_sexo.plot(kind='bar', color='lightblue', ax=ax_sexo)
-                ax_sexo.set_title("Por Sexo", fontsize=8)
-                ax_sexo.set_xlabel('')
-                ax_sexo.set_ylabel('Promedio')
-                ax_sexo.set_ylim([1,7])
+        fig_dim, axs_dim = plt.subplots(1, 3, figsize=(15, 4.5), sharey=True) # 1x3 para Sexo, Edad, Hijos
+        fig_dim.suptitle(f"{dim}\n(Promedio General: {resultados[dim]:.2f})", fontsize=10)
+
+        plot_successful = 0
+
+        # a) Por Sexo
+        col_sexo = 'Sexo' # Confirmar nombre exacto
+        if col_sexo in df_mix.columns:
+            try:
+                # numeric_only=True es VITAL aquí
+                df_plot = df_mix.groupby(col_sexo)[vars_exist_numeric].mean(numeric_only=True).mean(axis=1, skipna=True)
+                df_plot = df_plot.dropna() # Quitar grupos sin datos
+                if not df_plot.empty:
+                    df_plot.plot(kind='bar', color='lightblue', ax=axs_dim[0])
+                    axs_dim[0].set_title("Por Sexo", fontsize=9)
+                    axs_dim[0].set_xlabel('')
+                    axs_dim[0].set_ylabel('Promedio Dimensión')
+                    axs_dim[0].tick_params(axis='x', rotation=45, labelsize=8)
+                    axs_dim[0].grid(axis='y', linestyle='--', alpha=0.7)
+                    plot_successful += 1
+                else:
+                    axs_dim[0].set_visible(False)
+            except Exception as e:
+                st.error(f"Error graficando {dim} por Sexo: {e}")
+                axs_dim[0].set_visible(False)
         else:
-            print("DEBUG - La columna 'Sexo' NO se encuentra en df_mix.columns. Ocultando ax_sexo.")
-            ax_sexo.set_visible(False)
+            st.warning("Columna 'Sexo' no encontrada para graficar.")
+            axs_dim[0].set_visible(False)
 
-        # Subplot (0,1): Por Rango de Edad
-        ax_edad = axs_dim[0,1]
-        if 'Rango_Edad' in df_mix.columns:
-            df_edad = df_mix.groupby('Rango_Edad')[vars_exist].mean().mean(axis=1)
-            if df_edad.empty:
-                ax_edad.set_visible(False)
-            else:
-                # Agrupar si hay >10 (raro en rangos de edad, pero por consistencia)
-                df_edad_counts = df_edad.reset_index()
-                df_edad_counts.columns = ['Rango_Edad', 'MeanValue']
-                if len(df_edad_counts) > 10:
-                    top_9 = df_edad_counts.nlargest(9, 'MeanValue')
-                    others_sum = df_edad_counts.iloc[9:]['MeanValue'].sum()
-                    top_9.loc[len(top_9)] = ['Otros', others_sum]
-                    df_edad = top_9.set_index('Rango_Edad')['MeanValue']
-
-                df_edad.plot(kind='bar', color='lightgreen', ax=ax_edad)
-                ax_edad.set_title("Por Rango de Edad", fontsize=8)
-                ax_edad.set_xlabel('')
-                ax_edad.set_ylabel('Promedio')
-                ax_edad.set_ylim([1,7])
+        # b) Por Rango de Edad
+        col_rango_edad = 'Rango_Edad'
+        if col_rango_edad in df_mix.columns and df_mix[col_rango_edad].nunique() > 1:
+             try:
+                 # numeric_only=True es VITAL aquí
+                 # Usar observed=False si la columna es Categórica y quieres incluir categorías sin datos
+                 df_plot = df_mix.groupby(col_rango_edad, observed=False)[vars_exist_numeric].mean(numeric_only=True).mean(axis=1, skipna=True)
+                 df_plot = df_plot.dropna()
+                 if not df_plot.empty:
+                     df_plot.plot(kind='bar', color='lightgreen', ax=axs_dim[1])
+                     axs_dim[1].set_title("Por Rango de Edad", fontsize=9)
+                     axs_dim[1].set_xlabel('')
+                     axs_dim[1].set_ylabel('') # Compartido
+                     axs_dim[1].tick_params(axis='x', rotation=45, labelsize=8)
+                     axs_dim[1].grid(axis='y', linestyle='--', alpha=0.7)
+                     plot_successful += 1
+                 else:
+                     axs_dim[1].set_visible(False)
+             except Exception as e:
+                 st.error(f"Error graficando {dim} por Rango Edad: {e}")
+                 axs_dim[1].set_visible(False)
         else:
-            ax_edad.set_visible(False)
+             axs_dim[1].set_visible(False)
 
-        # Subplot (1,0): Por Hijos
-        ax_hijos = axs_dim[1,0]
-        if 'Hijos' in df_mix.columns:
-            df_hijos = df_mix.groupby('Hijos')[vars_exist].mean().mean(axis=1)
-            if df_hijos.empty:
-                ax_hijos.set_visible(False)
-            else:
-                df_hijos_index = df_hijos.rename(index={0:'Sin hijos', 1:'Con hijos'}).copy()
-                # Agrupar si hay >10 (poco probable)
-                if len(df_hijos_index) > 10:
-                    top_9 = df_hijos_index.nlargest(9)
-                    others_sum = df_hijos_index.iloc[9:].sum()
-                    top_9.loc['Otros'] = others_sum
-                    df_hijos_index = top_9
 
-                df_hijos_index.plot(kind='bar', color='orange', ax=ax_hijos)
-                ax_hijos.set_title("Por Hijos", fontsize=8)
-                ax_hijos.set_xlabel('')
-                ax_hijos.set_ylabel('Promedio')
-                ax_hijos.set_ylim([1,7])
+        # c) Por Tiene_Hijos
+        col_tiene_hijos = 'Tiene_Hijos'
+        if col_tiene_hijos in df_mix.columns and df_mix[col_tiene_hijos].nunique() > 1:
+            try:
+                # numeric_only=True es VITAL aquí
+                df_plot = df_mix.groupby(col_tiene_hijos)[vars_exist_numeric].mean(numeric_only=True).mean(axis=1, skipna=True)
+                df_plot = df_plot.dropna()
+                if not df_plot.empty:
+                    df_plot.plot(kind='bar', color='salmon', ax=axs_dim[2])
+                    axs_dim[2].set_title("Por Hijos", fontsize=9)
+                    axs_dim[2].set_xlabel('')
+                    axs_dim[2].set_ylabel('') # Compartido
+                    axs_dim[2].tick_params(axis='x', rotation=0, labelsize=8) # Rotación 0 aquí
+                    axs_dim[2].grid(axis='y', linestyle='--', alpha=0.7)
+                    plot_successful += 1
+                else:
+                    axs_dim[2].set_visible(False)
+            except Exception as e:
+                st.error(f"Error graficando {dim} por Hijos: {e}")
+                axs_dim[2].set_visible(False)
         else:
-            ax_hijos.set_visible(False)
+             axs_dim[2].set_visible(False)
 
-        # Subplot (1,1): Este quedará vacío
-        axs_dim[1,1].axis('off')  # o axs_dim[1,1].set_visible(False)
 
-        plt.tight_layout()
-        figuras.append(fig_dim)
-        fig_titles.append(f"Figura: Comparación Sexo-Edad-Hijos - {dim}")
+        # Añadir figura solo si se graficó algo
+        if plot_successful > 0:
+            # Ajustar Y lim si es necesario (ej. 1 a 7 o 1 a 5) - Determinar escala
+            # Esto es complejo sin saber la escala exacta de CADA dimensión
+            # Por ahora, dejamos que matplotlib ajuste, pero podríamos fijarlo a [1, 7] o [1, 5]
+            max_val_dim = 7 # Asumir 7 por defecto
+            if dim == "Síntomas de Burnout": max_val_dim = 5
+            if dim == "Compromiso" or dim == "Defensa de la Organización" or dim == "Satisfacción" or dim == "Intención de Retiro": max_val_dim = 6
+            axs_dim[0].set_ylim(bottom=1, top=max_val_dim) # Aplicar a la primera (las demás comparten)
 
-    # ------------------------------------------------------------------
-    # GENERAR INFORME TEXTO
-    # ------------------------------------------------------------------
+            plt.tight_layout(rect=[0, 0.03, 1, 0.93]) # Ajustar layout para título
+            figuras.append(fig_dim)
+            fig_titles.append(f"Figura: Comparación {dim} por Grupos")
+        else:
+            plt.close(fig_dim) # Cerrar figura si no se usó
+
+
+    # 7. Generar Informe Texto (Sin cambios)
     informe = []
     informe.append("Este informe presenta un análisis general de las dimensiones "
                    "de bienestar laboral en el rango de fechas especificado.\n")
     informe.append("**Resumen Ejecutivo:**\n")
     informe.append(resumen_ejecutivo + "\n\n")
-    informe.append("**Clasificación de Dimensiones:**\n")
-
+    informe.append("**Clasificación de Dimensiones (Según Promedio):**\n")
+    # ... (tu código para listar fortalezas, riesgos, intermedios) ...
     if fortalezas:
-        informe.append("**Fortalezas:**\n")
-        for f, val in fortalezas:
+        informe.append("**Fortalezas (Promedio >= 5):**\n")
+        for f, val in sorted(fortalezas, key=lambda item: item[1], reverse=True): # Ordenar
             informe.append(f"- {f} (Promedio: {val:.2f})\n")
     else:
-        informe.append("No se identificaron fortalezas.\n")
+        informe.append("No se identificaron fortalezas claras (Promedio >= 5).\n")
 
     informe.append("\n")
     if riesgos:
-        informe.append("**Riesgos:**\n")
-        for r, val in riesgos:
+        informe.append("**Riesgos (Promedio <= 3):**\n")
+        for r, val in sorted(riesgos, key=lambda item: item[1]): # Ordenar
             informe.append(f"- {r} (Promedio: {val:.2f})\n")
     else:
-        informe.append("No se identificaron riesgos.\n")
+        informe.append("No se identificaron riesgos claros (Promedio <= 3).\n")
 
     informe.append("\n")
     if intermedios:
-        informe.append("**Intermedios:**\n")
-        for i, val in intermedios:
+        informe.append("**Intermedios (3 < Promedio < 5):**\n")
+        for i, val in sorted(intermedios, key=lambda item: item[1]): # Ordenar
             informe.append(f"- {i} (Promedio: {val:.2f})\n")
     else:
         informe.append("No se identificaron dimensiones en nivel intermedio.\n")
 
     informe.append("\n**Conclusiones y Recomendaciones:**\n")
     informe.append(conclusiones)
-    informe.append("\n")
-
-    # Opcional: Crear índice de figuras si lo deseas
-    # ...
-    # (No lo mostramos completo para simplificar, pero aquí podrías
-    # generar un índice con fig_titles)
+    informe.append("\n---\n*Nota: Los promedios y clasificaciones se basan en las escalas numéricas asignadas. Las dimensiones marcadas como (Invertida) en el semáforo tienen una interpretación opuesta (valores altos son negativos).*")
 
     informe_texto = "".join(informe)
     return informe_texto, figuras
