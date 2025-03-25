@@ -1774,45 +1774,56 @@ burnout_5 = {
     "Siempre": 5
 }
 
+likert_7_extended_map = {k.lower().strip(): v for k, v in likert_7_extended.items()}
+acuerdo_7_map = {k.lower().strip(): v for k, v in acuerdo_7.items()}
+burnout_5_map = {k.lower().strip(): v for k, v in burnout_5.items()}
+
 def mapear_valores(serie):
     """
     Detecta si la serie corresponde a una escala Likert conocida
-    y la convierte a valores numéricos. Si no, la deja igual.
-    Incluye prints de depuración.
+    y la convierte a valores numéricos. Si no, intenta mapear valores similares.
+    Si no se puede mapear, devuelve la serie original.
     """
 
-    # 1) Vemos valores únicos, quitando los NaN
     unique_vals = serie.dropna().unique().tolist()
-    st.write(f"DEBUG - mapear_valores: valores únicos = {unique_vals}")
+    print(f"DEBUG - mapear_valores: valores únicos = {unique_vals}")
 
-    # Convertimos a string y quitamos espacios
-    serie = serie.astype(str).str.strip()
+    serie_limpia = serie.astype(str).str.strip().str.lower()
 
-    # 2) Definimos funciones auxiliares para "si todos los valores están en un dict"
-    def all_in_dict(vals, dic):
-        return all(v in dic.keys() for v in vals if v != 'nan')
+    def safe_map_replace(series, mapping_dict):
+        mapped_series = series.replace(mapping_dict)
+        # Check if any values failed to map and print a warning (for debugging)
+        unmapped_values = series[~series.isin(mapping_dict.keys())].unique()
+        if len(unmapped_values) > 0 and not all(pd.isna(unmapped_values)): # Check if unmapped_values is not just NaNs
+            print(f"WARNING - Unmapped values in series: {unmapped_values}")
+        return mapped_series
 
-    # 3) Revisamos si todos los valores de la serie se ajustan a una de nuestras escalas
+    def all_in_dict_keys(vals, dic):
+        dic_keys_lower = set(dic.keys())
+        return all(str(v).lower().strip() in dic_keys_lower for v in vals if not pd.isna(v))
 
-    # a) Escala 7 ampliada (Nunca..Siempre con "Rara vez"/"Raramente", etc.)
-    if all_in_dict(unique_vals, likert_7_extended):
-        #st.write("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
-        return serie.replace(likert_7_extended).astype(float, errors='ignore')
+    if all_in_dict_keys(unique_vals, likert_7_extended_map):
+        print("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
+        return safe_map_replace(serie_limpia, likert_7_extended_map).astype(float, errors='ignore')
 
-    # b) Escala acuerdo 7 (Muy en desacuerdo..Totalmente de acuerdo)
-    elif all_in_dict(unique_vals, acuerdo_7):
-        #st.write("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
-        return serie.replace(acuerdo_7).astype(float, errors='ignore')
+    elif all_in_dict_keys(unique_vals, acuerdo_7_map):
+        print("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
+        return safe_map_replace(serie_limpia, acuerdo_7_map).astype(float, errors='ignore')
 
-    # c) Escala Burnout 1..5
-    elif all_in_dict(unique_vals, burnout_5):
-        #st.write("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
-        return serie.replace(burnout_5).astype(float, errors='ignore')
+    elif all_in_dict_keys(unique_vals, burnout_5_map):
+        print("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
+        return safe_map_replace(serie_limpia, burnout_5_map).astype(float, errors='ignore')
 
-    # d) Si no coincide con ninguna de las escalas definidas, la dejamos tal cual
     else:
-        #st.write("DEBUG - No coincide con escalas definidas, se deja como 'object'.")
-        return serie
+        print("DEBUG - No coincide con escalas definidas, intentando mapeo aproximado...")
+        # Attempt approximate mapping for Likert 7 extended as a fallback
+        mapped_serie = safe_map_replace(serie_limpia, likert_7_extended_map).astype(float, errors='ignore')
+        if not mapped_serie.isna().all(): # If at least some values were mapped, return mapped series
+            print("DEBUG - Mapeo aproximado Likert 7 aplicado.")
+            return mapped_serie
+        else:
+            print("DEBUG - No se aplicó mapeo, se devuelve serie original.")
+            return serie # Return original if no mapping applied
     
 dimensiones = {
     "Control del Tiempo": [
@@ -1970,24 +1981,36 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     # Filtrar por rango de fechas usando 'Hora de inicio'
     df['Hora de inicio'] = pd.to_datetime(df['Hora de inicio'], errors='coerce')
     df_filtrado = df[
-        (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) & 
+        (df['Hora de inicio'] >= pd.to_datetime(fecha_inicio)) &
         (df['Hora de inicio'] <= pd.to_datetime(fecha_fin))
-    ]
+    ].copy() # Use .copy() to avoid modifying original df
 
     if df_filtrado.empty:
         return "No se encontraron datos en el rango de fechas especificado.", []
 
-    # Convertir todo a valores numéricos según la escala fija para las dimensiones
+    # --- DATA CLEANING AND STANDARDIZATION ---
+    for col in df_filtrado.select_dtypes(include='object').columns:
+        # Strip whitespace and non-breaking spaces, convert to lowercase
+        df_filtrado[col] = df_filtrado[col].str.strip().str.replace('\xa0', ' ', regex=False).str.lower()
+
+    # Special handling for 'Edad' and 'Numero de hijos'
+    if 'Edad' in df_filtrado.columns:
+        df_filtrado['Edad'] = pd.to_numeric(df_filtrado['Edad'], errors='coerce')
+    if 'Numero de hijos' in df_filtrado.columns:
+        df_filtrado['Numero de hijos'] = df_filtrado['Numero de hijos'].replace('sin hijos', 0, regex=False).fillna(0) # Replace 'sin hijos' with 0 and handle NaN
+        df_filtrado['Numero de hijos'] = pd.to_numeric(df_filtrado['Numero de hijos'], errors='coerce', downcast='integer') # Convert to numeric, coerce errors to NaN
+
+    # Convert todo a valores numéricos según la escala fija para las dimensiones
     df_num = df_filtrado.copy()
     for col in df_num.columns:
         if df_num[col].dtype == object:
             # EJEMPLO: print de debug
             #print("DEBUG - Antes de mapear_valores, df_num[column].value_counts():")
             print(df_num[col].value_counts(dropna=False))
-            
+
             # Llamada a mapear_valores
             df_num[col] = mapear_valores(df_num[col])
-            
+
             # Después
             #print("DEBUG - Después de mapear_valores, df_num[column].value_counts():")
             print(df_num[col].value_counts(dropna=False))
@@ -2012,7 +2035,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     Riesgos: {riesgos}
     Intermedios: {intermedios}
 
-    Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
+    Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias,
     ofreciendo una visión general de la situación y recomendaciones generales.
     """
     resumen_ejecutivo = enviar_prompt(prompt_resumen)
@@ -2023,7 +2046,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
     Riesgos: {riesgos}
     Intermedios: {intermedios}
 
-    Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
+    Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas,
     desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
     """
     conclusiones = enviar_prompt(prompt_conclusiones)
@@ -2042,7 +2065,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
         # Si deseas que "Control del Tiempo" sea inversa también:
         "Control del Tiempo": True
     }
-    
+
     def estado_dimension(valor):
         if valor >= 5:
             return ('Fortaleza', 'green')
@@ -2121,7 +2144,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
         # NO mapear si es 'Sexo' u otras columnas que no sean Likert
         if colname in ["Sexo", "Estado Civil", "ID", "Municipio", "Sector Económico"]:
             continue
-        
+
         # Verificar si dtype es object
         if df_mix[colname].dtype == object:
             # Aplicar mapear_valores
@@ -2143,18 +2166,18 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
 
         # Subplot (0,0): Por Sexo
         ax_sexo = axs_dim[0,0]
-        
+
         # Imprimir columnas de df_mix para verificar si existe 'Sexo'
         print("DEBUG - df_mix columns:", df_mix.columns)
-        
+
         if 'Sexo' in df_mix.columns:
             print("DEBUG - La columna 'Sexo' SÍ está presente en df_mix.")
             # Agrupación y promedio de las variables de la dimensión
             df_sexo = df_mix.groupby('Sexo')[vars_exist].mean().mean(axis=1)
-            
+
             print("DEBUG - df_sexo shape:", df_sexo.shape)
             print("DEBUG - df_sexo contenido:\n", df_sexo)
-        
+
             if df_sexo.empty:
                 print("DEBUG - df_sexo está vacío. Ocultando ax_sexo.")
                 ax_sexo.set_visible(False)
@@ -2162,9 +2185,9 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
                 # Agrupar si hay más de 10 categorías
                 df_sexo_counts = df_sexo.reset_index()
                 df_sexo_counts.columns = ['Sexo', 'MeanValue']
-        
+
                 print("DEBUG - df_sexo_counts (antes de agrupar 'Otros'):\n", df_sexo_counts)
-        
+
                 if len(df_sexo_counts) > 10:
                     print("DEBUG - Hay más de 10 categorías, agrupando en 'Otros'.")
                     top_9 = df_sexo_counts.nlargest(9, 'MeanValue')
@@ -2172,7 +2195,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
                     top_9.loc[len(top_9)] = ['Otros', others_sum]
                     df_sexo = top_9.set_index('Sexo')['MeanValue']
                     print("DEBUG - df_sexo después de agrupar 'Otros':\n", df_sexo)
-        
+
                 print("DEBUG - Se ploteará df_sexo:\n", df_sexo)
                 df_sexo.plot(kind='bar', color='lightblue', ax=ax_sexo)
                 ax_sexo.set_title("Por Sexo", fontsize=8)
