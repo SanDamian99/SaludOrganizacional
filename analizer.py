@@ -1260,7 +1260,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
             elif str(real_dtype).startswith('float') or str(real_dtype).startswith('int'):
                 nums_encontradas.append(col)
             else:
-                #st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no es cat ni num.")
+                st.write(f"DEBUG: '{col}' es dtype {real_dtype}, no es cat ni num.")
     
         #st.write("DEBUG - cats_encontradas:", cats_encontradas)
         #st.write("DEBUG - nums_encontradas:", nums_encontradas)
