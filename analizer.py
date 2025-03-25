@@ -1238,12 +1238,6 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         all_relevant = obtener_variables_relevantes(pregunta_usuario, 'todas', df_filtrado)
         #st.write("DEBUG - (opción7) all_relevant:", all_relevant)
     
-        # Verificar si se obtuvieron columnas:
-        if not all_relevant:
-            #st.write("DEBUG: No se encontraron columnas en all_relevant (lista vacía).")
-        else:
-            #st.write("DEBUG: Se encontraron columns en all_relevant:", all_relevant)
-    
         if len(all_relevant) < 2:
             resultados += "No hay suficientes columnas relevantes para la tabla.\n"
             #st.write("DEBUG - Motivo: len(all_relevant) < 2 =>", len(all_relevant))
