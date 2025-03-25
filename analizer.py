@@ -1777,6 +1777,7 @@ burnout_5 = {
 likert_7_extended_map = {k.lower().strip(): v for k, v in likert_7_extended.items()}
 acuerdo_7_map = {k.lower().strip(): v for k, v in acuerdo_7.items()}
 burnout_5_map = {k.lower().strip(): v for k, v in burnout_5.items()}
+likert_7_extended_map['alguna veces'] = 4 # Handle "Alguna Veces" variation
 
 def mapear_valores(serie):
     """
@@ -1792,38 +1793,44 @@ def mapear_valores(serie):
 
     def safe_map_replace(series, mapping_dict):
         mapped_series = series.replace(mapping_dict)
-        # Check if any values failed to map and print a warning (for debugging)
         unmapped_values = series[~series.isin(mapping_dict.keys())].unique()
-        if len(unmapped_values) > 0 and not all(pd.isna(unmapped_values)): # Check if unmapped_values is not just NaNs
+        if len(unmapped_values) > 0 and not all(pd.isna(unmapped_values)):
             print(f"WARNING - Unmapped values in series: {unmapped_values}")
         return mapped_series
 
-    def all_in_dict_keys(vals, dic):
+    def all_in_dict_keys_heuristic(vals, dic, threshold=0.8): # Heuristic threshold
         dic_keys_lower = set(dic.keys())
-        return all(str(v).lower().strip() in dic_keys_lower for v in vals if not pd.isna(v))
+        valid_vals = [str(v).lower().strip() for v in vals if not pd.isna(v)]
+        match_count = sum(1 for v in valid_vals if v in dic_keys_lower)
+        return match_count / len(valid_vals) >= threshold if valid_vals else False # Avoid division by zero
 
-    if all_in_dict_keys(unique_vals, likert_7_extended_map):
+    is_likert_scale = False # Flag to track if mapping occurred
+
+    if all_in_dict_keys_heuristic(unique_vals, likert_7_extended_map):
         print("DEBUG - Se detectó una escala Likert 1..7 (Nunca..Siempre).")
-        return safe_map_replace(serie_limpia, likert_7_extended_map).astype(float, errors='ignore')
-
-    elif all_in_dict_keys(unique_vals, acuerdo_7_map):
-        print("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
-        return safe_map_replace(serie_limpia, acuerdo_7_map).astype(float, errors='ignore')
-
-    elif all_in_dict_keys(unique_vals, burnout_5_map):
-        print("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
-        return safe_map_replace(serie_limpia, burnout_5_map).astype(float, errors='ignore')
-
-    else:
-        print("DEBUG - No coincide con escalas definidas, intentando mapeo aproximado...")
-        # Attempt approximate mapping for Likert 7 extended as a fallback
         mapped_serie = safe_map_replace(serie_limpia, likert_7_extended_map).astype(float, errors='ignore')
-        if not mapped_serie.isna().all(): # If at least some values were mapped, return mapped series
-            print("DEBUG - Mapeo aproximado Likert 7 aplicado.")
+        if not mapped_serie.isna().all(): # Check if mapping was successful
+            is_likert_scale = True
             return mapped_serie
-        else:
-            print("DEBUG - No se aplicó mapeo, se devuelve serie original.")
-            return serie # Return original if no mapping applied
+
+    if not is_likert_scale and all_in_dict_keys_heuristic(unique_vals, acuerdo_7_map):
+        print("DEBUG - Se detectó una escala de Acuerdo 1..7 (Muy/Totalmente de acuerdo...).")
+        mapped_serie = safe_map_replace(serie_limpia, acuerdo_7_map).astype(float, errors='ignore')
+        if not mapped_serie.isna().all():
+            is_likert_scale = True
+            return mapped_serie
+
+    if not is_likert_scale and all_in_dict_keys_heuristic(unique_vals, burnout_5_map):
+        print("DEBUG - Se detectó escala de Burnout 1..5 (Nunca..Siempre).")
+        mapped_serie = safe_map_replace(serie_limpia, burnout_5_map).astype(float, errors='ignore')
+        if not mapped_serie.isna().all():
+            is_likert_scale = True
+            return mapped_serie
+
+    if not is_likert_scale:
+        print("DEBUG - No coincide con escalas definidas.")
+        print("WARNING - Column NOT mapped to Likert scale:", serie.name) # Warning for unmapped columns
+        return serie # Return original if no mapping applied
     
 dimensiones = {
     "Control del Tiempo": [
