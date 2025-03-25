@@ -1998,7 +1998,7 @@ def generar_informe_general(df, fecha_inicio, fecha_fin):
         if col in likert_scale_columns: # <--- **CLEAN ONLY LIKERT COLUMNS**
             print(f"DEBUG - Applying aggressive cleaning to column: {col}")
             # 1. Lowercase and strip whitespace (as before)
-            df_filtrado[col] = df_filtrado[col].str.lower().str.strip()
+            df_filtrado[col] = df_filtrado[col].astype(str).str.lower().str.strip()
 
             # 2. Replace non-breaking spaces and other whitespace variations more aggressively
             df_filtrado[col] = df_filtrado[col].str.replace(r'\s+', ' ', regex=True) # Replace multiple spaces with single space
