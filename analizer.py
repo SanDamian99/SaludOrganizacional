@@ -1302,12 +1302,6 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
         st.write(f"DEBUG: serie1 (var1={var1}) length tras dropna -> {len(serie1)}")
         st.write(f"DEBUG: serie2 (var2={var2}) length tras dropna -> {len(serie2)}")
     
-        # Muestra sample
-        if len(serie1) > 0:
-            #st.write("DEBUG: serie1.sample(3):", serie1.sample(min(3, len(serie1))).tolist())
-        if len(serie2) > 0:
-            #st.write("DEBUG: serie2.sample(3):", serie2.sample(min(3, len(serie2))).tolist())
-    
         if serie1.empty or serie2.empty:
             resultados += "No hay datos suficientes (serie vacía) para generar la tabla.\n"
             #st.write("DEBUG - Motivo: serie1/serie2 está vacía.")
