@@ -96,44 +96,6 @@ class RateLimiter:
                 self.call_times = [t for t in self.call_times if t > now - self.period]
         self.call_times.append(time.time())
 
-# --- Cargar el archivo CSV limpio ---
-ruta_csv = 'cleaned_data.csv'
-try:
-    # Especificar tipos de datos conocidos durante la carga si es posible
-    df = pd.read_csv(ruta_csv, parse_dates=['Hora de inicio', 'Hora de finalización'], dayfirst=False)
-    df.dropna(axis=1, how='all', inplace=True)
-    # Limpiar nombres de columnas por si acaso (muy importante)
-    df.columns = df.columns.str.strip()
-    st.success(f"Datos cargados correctamente desde {ruta_csv}")
-
-    # Convertir columnas que deberían ser categóricas (basado en data_dictionary)
-    potential_cats = []
-    for category, variables in data_dictionary.items():
-         for var_key, var_details in variables.items():
-              if var_details.get("Tipo") == "Categórica":
-                   col_name = var_details.get("NombreExacto", var_key).strip()
-                   if col_name in df.columns:
-                        potential_cats.append(col_name)
-
-    potential_cats = list(set(potential_cats)) # Únicos
-    for col in potential_cats:
-        try:
-            if not pd.api.types.is_categorical_dtype(df[col]):
-                 df[col] = df[col].astype('category')
-        except Exception as e:
-            st.warning(f"No se pudo convertir '{col}' a categórica: {e}. Se dejará como {df[col].dtype}.")
-
-except FileNotFoundError:
-    st.error(f"Error: No se encontró el archivo '{ruta_csv}'. Asegúrate de que el archivo esté en el mismo directorio.")
-    st.stop()
-except Exception as e:
-    st.error(f"Error al cargar o procesar el archivo CSV '{ruta_csv}': {e}")
-    st.stop()
-
-
-# --- Diccionario de Datos (Verificar Nombres vs CSV) ---
-# Asegúrate de que los nombres en "Preguntas" y "NombreExacto"
-# COINCIDAN EXACTAMENTE con las columnas en cleaned_data.csv
 data_dictionary = {
     "Variables Sociodemográficas": {
         "Edad": {"Tipo": "Continua", "NombreExacto": "Edad"},
@@ -383,6 +345,44 @@ data_dictionary = {
         }
     }
 }
+
+
+# --- Cargar el archivo CSV limpio ---
+ruta_csv = 'cleaned_data.csv'
+try:
+    # Especificar tipos de datos conocidos durante la carga si es posible
+    df = pd.read_csv(ruta_csv, parse_dates=['Hora de inicio', 'Hora de finalización'], dayfirst=False)
+    df.dropna(axis=1, how='all', inplace=True)
+    # Limpiar nombres de columnas por si acaso (muy importante)
+    df.columns = df.columns.str.strip()
+    st.success(f"Datos cargados correctamente desde {ruta_csv}")
+
+    # Convertir columnas que deberían ser categóricas (basado en data_dictionary)
+    potential_cats = []
+    for category, variables in data_dictionary.items():
+         for var_key, var_details in variables.items():
+              if var_details.get("Tipo") == "Categórica":
+                   col_name = var_details.get("NombreExacto", var_key).strip()
+                   if col_name in df.columns:
+                        potential_cats.append(col_name)
+
+    potential_cats = list(set(potential_cats)) # Únicos
+    for col in potential_cats:
+        try:
+            if not pd.api.types.is_categorical_dtype(df[col]):
+                 df[col] = df[col].astype('category')
+        except Exception as e:
+            st.warning(f"No se pudo convertir '{col}' a categórica: {e}. Se dejará como {df[col].dtype}.")
+
+except FileNotFoundError:
+    st.error(f"Error: No se encontró el archivo '{ruta_csv}'. Asegúrate de que el archivo esté en el mismo directorio.")
+    st.stop()
+except Exception as e:
+    st.error(f"Error al cargar o procesar el archivo CSV '{ruta_csv}': {e}")
+    st.stop()
+
+
+
 
 # --- Limpiar nombres en 'Preguntas' (asegurar strip) ---
 for dim_cat, dim_content in data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {}).items():
