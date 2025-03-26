@@ -1527,21 +1527,24 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                 # else: # No se encontró ni exacto ni similar
 
             # 3. Si se encontró un nombre de columna en el DF (exacto o fuzzy)
-            if actual_col_name_in_df:
-                # Validar si es numérico y tiene datos
-                if pd.api.types.is_numeric_dtype(df_informe[actual_col_name_in_df]):
-                    if df_informe[actual_col_name_in_df].notna().any():
-                        cols_validas_para_dim.append(actual_col_name_in_df) # Usar el nombre REAL del DF
-                        if actual_col_name_in_df not in columnas_numericas_ok:
-                             columnas_numericas_ok.append(actual_col_name_in_df)
-                    # else: # Numérico pero solo NaNs (ignorar silenciosamente)
-                else:
-                    # Si se encontró pero NO es numérico (¡Problema!)
-                    st.error(f"¡ERROR! [{dim_name}]: Columna '{actual_col_name_in_df}' encontrada pero NO es numérica (tipo: {df_informe[actual_col_name_in_df].dtype}). ¡Revisar CSV/Diccionario!")
-            # else: # No se encontró la columna del diccionario en el DF
-                 # st.info(f"INFO [{dim_name}]: Columna '{col_name_dict_clean}' del diccionario no encontrada en el DataFrame.")
-                 pass # Ignorar silenciosamente
-
+    # 3. Si se encontró un nombre de columna en el DF (exacto o fuzzy)
+    if actual_col_name_in_df:
+        # Validar si es numérico y tiene datos
+        if pd.api.types.is_numeric_dtype(df_informe[actual_col_name_in_df]):
+            if df_informe[actual_col_name_in_df].notna().any():
+                cols_validas_para_dim.append(actual_col_name_in_df)  # Usar el nombre REAL del DF
+                if actual_col_name_in_df not in columnas_numericas_ok:
+                    columnas_numericas_ok.append(actual_col_name_in_df)
+            # else: # Numérico pero solo NaNs (ignorar silenciosamente)
+        else:
+            # Si se encontró pero NO es numérico (¡Problema!)
+            st.error(
+                f"¡ERROR! [{dim_name}]: Columna '{actual_col_name_in_df}' encontrada pero NO es numérica (tipo: {df_informe[actual_col_name_in_df].dtype}). ¡Revisar CSV/Diccionario!"
+            )
+    else:
+        # No se encontró la columna del diccionario en el DF
+        st.info(f"INFO [{dim_name}]: Columna '{col_name_dict_clean}' del diccionario no encontrada en el DataFrame.")
+        pass  # Ignorar silenciosamente
 
         if cols_validas_para_dim:
             mapa_dim_cols[dim_name] = cols_validas_para_dim
