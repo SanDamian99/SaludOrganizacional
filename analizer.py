@@ -28,6 +28,8 @@ import math
 from scipy.stats import chi2_contingency
 import numpy as np # Asegurarse de importar numpy
 
+st.set_page_config(layout="wide") # Usar página ancha
+
 # Importar la librería de Gemini
 import google.generativeai as genai
 
@@ -2045,7 +2047,6 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
 
 # --- Función Main (AJUSTADA) ---
 def main():
-    st.set_page_config(layout="wide") # Usar página ancha
     st.title("Aplicación de Análisis de Datos sobre Salud Organizacional")
 
     # 0) Mostrar el resumen de la base de datos
