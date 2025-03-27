@@ -399,7 +399,7 @@ for dim_cat, dim_content in data_dictionary.items():
 # --- Cargar el archivo CSV limpio ---
 ruta_csv = 'cleaned_data.csv'
 try:
-    df = pd.read_csv(ruta_csv, parse_dates=['Hora de inicio', 'Hora de finalización'], dayfirst=False)
+    df = pd.read_csv(ruta_csv, sep=";" , parse_dates=['Hora de inicio', 'Hora de finalización'], dayfirst=False)
     df.dropna(axis=1, how='all', inplace=True)
     df.columns = df.columns.str.strip() # Asegurar limpieza de nombres de columna
     st.success(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas.")
