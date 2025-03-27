@@ -15,6 +15,8 @@ import markdown
 import io
 import base64
 import os
+import supabase
+from supabase import create_client
 # from fpdf.enums import XPos, YPos # No se usan con ReportLab
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.pagesizes import A4
@@ -396,41 +398,48 @@ for dim_cat, dim_content in data_dictionary.items():
                               # st.write(f"DEBUG: Label map (desde Escala) asignado a '{col_clean}'")
 
 
-# --- Cargar el archivo CSV limpio ---
-ruta_csv = 'cleaned_data.csv'
+# --- Configuración de Supabase usando los secretos de Streamlit ---
+supabase_url = st.secrets["SUPABASE_URL"]
+supabase_key = st.secrets["SUPABASE_KEY"]
+bucket_name = st.secrets["SUPABASE_BUCKET"]
+
+# Crear el cliente de Supabase
+supabase = create_client(supabase_url, supabase_key)
+
+# Ruta del archivo en el bucket de Supabase
+file_path = "cleaned_data.csv"
+
 try:
-    df = pd.read_csv(ruta_csv, sep=";")
+    # Descargar el archivo desde Supabase Storage
+    # Esto devuelve el contenido del archivo en bytes
+    response = supabase.storage.from_(bucket_name).download(file_path)
+    
+    # Leer el CSV desde los bytes descargados
+    df = pd.read_csv(BytesIO(response), sep=";")
     df.dropna(axis=1, how='all', inplace=True)
-    df.columns = df.columns.str.strip() # Asegurar limpieza de nombres de columna
+    df.columns = df.columns.str.strip()  # Limpieza de nombres de columna
     st.success(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas.")
 
-    # Convertir columnas a Categórica BASADO EN LAS CLAVES DEL NUEVO data_dictionary
+    # Convertir columnas a tipo categórico basado en el diccionario de datos
     st.write("Convirtiendo tipos categóricos...")
     converted_count = 0
     for category, variables in data_dictionary.items():
-         for col_name_key, var_details in variables.items(): # col_name_key ES el nombre con prefijo
-              if var_details.get("Tipo") == "Categórica":
-                   col_name_key = col_name_key.strip() # Asegurar limpieza
-                   if col_name_key in df.columns:
-                       try:
-                           # Convertir solo si no lo es ya
-                           if not pd.api.types.is_categorical_dtype(df[col_name_key]):
-                               df[col_name_key] = df[col_name_key].astype('category')
-                               converted_count += 1
-                       except Exception as e:
-                           st.warning(f"No se pudo convertir '{col_name_key}' a categórica: {e}. Tipo actual: {df[col_name_key].dtype}.")
-                   # else: # Advertir si una columna categórica del dict no está en el df
-                   #     st.warning(f"Columna categórica '{col_name_key}' del diccionario no encontrada en el CSV.")
+        for col_name_key, var_details in variables.items():
+            if var_details.get("Tipo") == "Categórica":
+                col_name_key = col_name_key.strip()  # Asegurar limpieza
+                if col_name_key in df.columns:
+                    try:
+                        # Convertir solo si no lo es ya
+                        if not pd.api.types.is_categorical_dtype(df[col_name_key]):
+                            df[col_name_key] = df[col_name_key].astype('category')
+                            converted_count += 1
+                    except Exception as e:
+                        st.warning(f"No se pudo convertir '{col_name_key}' a categórica: {e}. Tipo actual: {df[col_name_key].dtype}.")
     st.write(f"Conversión a categórico intentada. {converted_count} columnas convertidas.")
 
-
-except FileNotFoundError:
-    st.error(f"Error: No se encontró '{ruta_csv}'.")
-    st.stop()
 except Exception as e:
-    st.error(f"Error al cargar/procesar '{ruta_csv}': {e}")
+    st.error(f"Error al cargar/procesar '{file_path}': {e}")
     st.stop()
-
 
 # Extraer información de las columnas y tipos de datos del DF CARGADO
 def obtener_informacion_datos(df_loaded):
