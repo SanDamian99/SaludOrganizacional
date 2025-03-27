@@ -1472,8 +1472,8 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                     # else: # Numérico pero solo NaNs (ignorar)
                 else:
                     st.error(f"¡ERROR! [{dim_name}]: Columna '{actual_col_name_in_df}' encontrada pero NO numérica ({df_informe[actual_col_name_in_df].dtype}). ¡Revisar!")
-            # else: # No se encontró la columna exacta del diccionario en el DF
-                 # st.warning(f"INFO [{dim_name}]: Columna '{col_prefixed_clean}' del diccionario no encontrada EXACTAMENTE en CSV.")
+            else: # No se encontró la columna exacta del diccionario en el DF
+                 st.warning(f"INFO [{dim_name}]: Columna '{col_prefixed_clean}' del diccionario no encontrada EXACTAMENTE en CSV.")
                  pass # Ignorar si no hay match exacto
 
         if cols_validas_para_dim:
