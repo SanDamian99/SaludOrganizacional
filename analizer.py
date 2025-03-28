@@ -422,7 +422,7 @@ ruta_csv = "cleaned_data - cleaned_data.csv"
     st.write(f"Conversión a categórico intentada. {converted_count} columnas convertidas.")
 
 except Exception as e:
-    st.error(f"Error al cargar/procesar '{file_path}': {e}")
+    st.error(f"Error al cargar/procesar '{ruta_csv}': {e}")
     st.stop()
 
 # Extraer información de las columnas y tipos de datos del DF CARGADO
