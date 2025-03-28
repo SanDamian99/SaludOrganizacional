@@ -453,7 +453,7 @@ try:
                 if col_name_key in df.columns:
                     try:
                         # Convertir solo si aún no es categórica
-                        if not pd.api.types.is_categorical_dtype(df[col_name_key]):
+                        if not isinstance(df[col_name_key].dtype, pd.CategoricalDtype):
                             df[col_name_key] = df[col_name_key].astype('category')
                             converted_count += 1
                             st.write(f"Columna convertida a categórica: {col_name_key}")
@@ -492,25 +492,52 @@ informacion_datos = obtener_informacion_datos(df) # Pasar el df cargado
 
 # --- Definir opciones_analisis (sin cambios) ---
 opciones_analisis = """
-Opciones de análisis disponibles:
-... (igual que antes) ...
-7. **Tablas de Contingencia y Chi-cuadrado:** Permite analizar la relación entre dos variables categóricas o entre una variable categórica y una numérica (agrupando la numérica). Se calculará la tabla de contingencia y se realizará la prueba Chi-cuadrado para ver la asociación. Los ejes de la tabla y gráfico mostrarán las etiquetas correctas.
-
-   *Ejemplo:* Analizar la relación entre "Sexo" y "Tiene_Hijos" (derivada de Numero de hijos) o entre "Nivel Educativo" y "Satisfacción" (agrupada).
-"""
-
-# --- Preparar prompt_informacion_datos (sin cambios) ---
-prompt_informacion_datos = f"""
-Los siguientes son los datos y tipos de datos que tenemos (basado en el archivo CSV limpio):
-{informacion_datos}
-... (resto igual) ...
-"""
+ Opciones de análisis disponibles:
+ 
+ 1. **Distribución de variable categórica:** Explora cómo se distribuyen los datos en una variable categórica (no numérica). Muestra la frecuencia de cada categoría mediante tablas y gráficos (barras, pastel, barras horizontales). 
+ 
+    *Ejemplo:* Si eliges la variable "color", el análisis mostrará cuántas veces aparece cada color (rojo, azul, verde, etc.) en el conjunto de datos.
+ 
+ 2. **Estadísticas descriptivas de variable numérica:**  Calcula y muestra las estadísticas descriptivas (media, mediana, desviación estándar, mínimo, máximo, etc.) de una variable numérica, proporcionando un resumen de su distribución.  Incluye visualizaciones como histogramas, boxplots y gráficos de densidad para comprender la forma de la distribución, identificar valores atípicos y analizar la dispersión de los datos.
+ 
+    *Ejemplo:*  Si eliges la variable "edad", el análisis calculará la edad promedio, la edad que se encuentra en el medio del conjunto de datos,  cómo se agrupan las edades, etc.
+ 
+ 3. **Relación entre dos variables numéricas:** Analiza la relación entre dos variables numéricas. Se mostrarán gráficos de dispersión, hexágonos y densidad conjunta para visualizar la correlación entre las variables. También se calculará el coeficiente de correlación para cuantificar la fuerza y dirección de la relación.
+ 
+    *Ejemplo:*  Si eliges las variables "ingresos" y "gastos", el análisis mostrará si existe una relación (positiva, negativa o nula) entre ambas.
+ 
+ 4. **Filtrar datos y mostrar estadísticas:** Permite filtrar los datos según criterios específicos y luego calcular estadísticas descriptivas de una variable numérica en el conjunto de datos filtrado.  Se incluyen visualizaciones como histogramas, boxplots y gráficos de densidad para el análisis del subconjunto de datos.
+ 
+    *Ejemplo:* Puedes filtrar los datos para incluir solo a las personas mayores de 30 años y luego analizar la distribución de sus ingresos.
+ 
+ 5. **Correlación entre variables numéricas:** Calcula la correlación entre múltiples variables numéricas y muestra los resultados en una matriz de correlación.  Se incluyen visualizaciones como mapas de calor, matrices de dispersión y gráficos de correlación para identificar patrones y relaciones entre las variables.
+ 
+    *Ejemplo:*  Si seleccionas "edad", "ingresos" y "nivel educativo", el análisis mostrará la correlación entre cada par de variables.
+ 
+ 6. **Análisis de regresión simple:** Realiza un análisis de regresión lineal simple para modelar la relación entre dos variables numéricas. Se mostrará el coeficiente de determinación (R^2), el intercepto y los coeficientes del modelo.  Se incluyen visualizaciones como gráficos de dispersión con línea de regresión, gráficos de residuales y la distribución de los residuales para evaluar la calidad del modelo.
+ 
+    *Ejemplo:*  Puedes analizar cómo la variable "años de experiencia" (variable independiente) afecta a la variable "salario" (variable dependiente).
+ 7. **Tablas de Contingencia y Chi-cuadrado:** Permite analizar la relación entre dos variables categóricas o entre una variable categórica (agrupando valores) y una numérica. Se calculará la tabla de contingencia y se realizará la prueba Chi-cuadrado para ver la asociación. Si es variable numérica, se agrupará en rangos para generar la tabla.
+ 
+ """
+ 
+ # Preparar el prompt para Gemini
+ prompt_informacion_datos = f"""
+ Los siguientes son los datos y tipos de datos que tenemos:
+ 
+ {informacion_datos}
+ 
+ Y las opciones de análisis disponibles son:
+ 
+ {opciones_analisis}
+ 
+ Por favor, utiliza esta información para entender los datos disponibles, los tipos de datos asociados y las opciones de análisis que podemos realizar.
+ """
 
 # --- Enviar prompt inicial a Gemini (sin cambios) ---
 rate_limiter = RateLimiter(max_calls=5, period=61) # Un poco más flexible
 
 def enviar_prompt(prompt):
-    # ... (igual que antes, con manejo de errores mejorado) ...
     retries = 0
     max_retries = 5
     while retries < max_retries:
@@ -1152,12 +1179,42 @@ Esta aplicación está diseñada para ayudarte a explorar y analizar datos relac
     *   Haz clic en "🔍 Realizar Análisis Específico". La IA interpretará tu pregunta, seleccionará el método adecuado y te mostrará los resultados y gráficos.
 4.  **Explora y Descarga:** Visualiza los resultados y descarga el informe completo en PDF usando los botones "📥 Descargar Informe...".
 
-**Resumen de la Base de Datos (Basado en `cleaned_data.csv`):**
-
-La base de datos contiene información sobre salud psicológica en el trabajo. Los datos han sido pre-procesados, y las escalas Likert se encuentran mayormente como valores numéricos (enteros). **Es crucial verificar que los nombres de las variables en el diccionario interno coincidan con los nombres exactos de las columnas en el archivo CSV.**
-
 **Principales categorías y variables:**
-... (resto del resumen como antes, asegurar que los nombres mencionados sean los correctos del CSV/diccionario) ...
+1. **Variables Sociodemográficas:**
+    - **Edad** (Continua): Edad de los participantes entre 18 y 70 años o más.
+    - **Sexo** (Categórica): Hombre, Mujer, Otro.
+    - **Estado Civil** (Categórica): Soltero, Casado, Separado, Unión Libre, Viudo.
+    - **Número de Hijos** (Continua): De 0 a 10 hijos.
+    - **Nivel Educativo** (Categórica): Bachiller, Técnico, Tecnológico, Profesional, Posgrado.
+    - **Municipio** (Categórica): Departamento y Municipio.
+    - **Zona de Vivienda** (Categórica): Urbana, Rural.
+    - **Estrato Socioeconómico** (Categórica): 1 a 6.
+ 
+ 2. **Variables Laborales:**
+    - **Sector Económico** (Categórica): Sectores económicos representativos.
+    - **Sector Empresa** (Categórica): Público, Privado, Mixto.
+    - **Tamaño Empresa** (Categórica): Menos de 10 empleados hasta más de 500 empleados.
+    - **Trabajo por Turnos** (Categórica): Sí, No.
+    - **Tipo de Contrato** (Categórica): Indefinido, Término Fijo, Obra o Labor, Aprendizaje, Prestación de Servicios.
+    - **Número de horas de trabajo semanal** (Continua): De 1 a 60 horas.
+    - **Ingreso Salarial Mensual** (Categórica): Rangos desde menos de 1 SMLV hasta más de 10 SMLV.
+    - **Nivel Cargo** (Categórica): Operativo, Administrativo, Directivo.
+    - **Personas a cargo en el trabajo** (Categórica): Sí, No.
+    - **Años de Experiencia Laboral** (Continua): De 1 a 60 años.
+    - **Antigüedad en el cargo/labor actual** (Categórica): Menos de 1 año hasta más de 10 años.
+    - **Tipo de Modalidad de Trabajo** (Categórica): Presencial, Híbrido, Remoto, Teletrabajo.
+    - **Tiempo promedio de traslado al trabajo/casa al día** (Categórica): Menos de 1 hora hasta más de 3 horas.
+    - **Horas de formación recibidas (último año)** (Continua): De 1 a 100 horas.
+ 
+ 3. **Dimensiones de Bienestar y Salud Mental:**
+    - **Control del Tiempo**: Percepción sobre el control y presión de tiempo en el trabajo.
+    - **Compromiso del Líder**: Apoyo y valoración del líder hacia el empleado.
+    - **Apoyo del Grupo**: Apoyo de los compañeros de trabajo.
+    - **Claridad de Rol**: Claridad sobre deberes y responsabilidades.
+    - **Cambio Organizacional**: Comunicación y gestión de cambios en la organización.
+    - **Responsabilidad Organizacional**: Acciones de la organización hacia la salud física y mental de los empleados.
+    - **Conflicto Familia-Trabajo**: Interferencia entre demandas familiares y laborales.
+    - **Síntomas de Burnout**: Indicadores de agotamiento emocional y físico.
 
 **Ejemplos de preguntas:**
 
@@ -1484,39 +1541,37 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     columnas_numericas_ok = []
     mapa_dim_cols = {} # dim_name -> [lista de cols con prefijo válidas]
 
-    st.write("--- Validando columnas numéricas para dimensiones (BUSCANDO PREFIJOS EXACTOS) ---")
+    st.write("--- Validando columnas numéricas para dimensiones (BUSCANDO POR ACRÓNIMO (BM),(XX)) ---")
     columnas_df = df_informe.columns.tolist()
-
     bm_dims = data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {})
+    
     for dim_name, dim_details in bm_dims.items():
-        cols_candidatas_dict_prefixed = dim_details.get("Preguntas", []) # Nombres con prefijo
+        acronym = dim_details.get("Acronimo")
+        if not acronym:
+            st.warning(f"SKIP [{dim_name}]: No tiene 'Acronimo' definido en data_dictionary.")
+            continue
+    
+        # Construir el patrón a buscar: (BM),(XX)
+        target_substring = f"(BM),({acronym})"
         cols_validas_para_dim = []
-
-        for col_prefixed in cols_candidatas_dict_prefixed:
-            col_prefixed_clean = col_prefixed.strip()
-
-            # BUSCAR COINCIDENCIA EXACTA
-            if col_prefixed_clean in columnas_df:
-                actual_col_name_in_df = col_prefixed_clean
-                # Validar si es numérico y tiene datos
-                if pd.api.types.is_numeric_dtype(df_informe[actual_col_name_in_df]):
-                    if df_informe[actual_col_name_in_df].notna().any():
-                        cols_validas_para_dim.append(actual_col_name_in_df)
-                        if actual_col_name_in_df not in columnas_numericas_ok:
-                             columnas_numericas_ok.append(actual_col_name_in_df)
-                    # else: # Numérico pero solo NaNs (ignorar)
+    
+        for col_name in columnas_df:
+            if target_substring in col_name:
+                # Verificar si es numérica y tiene datos
+                if pd.api.types.is_numeric_dtype(df_informe[col_name]):
+                    if df_informe[col_name].notna().any():
+                        cols_validas_para_dim.append(col_name)
+                        if col_name not in columnas_numericas_ok:
+                            columnas_numericas_ok.append(col_name)
+                    # else: st.write(f"DEBUG [{dim_name}]: Columna '{col_name}' encontrada pero solo NaNs.")
                 else:
-                    st.error(f"¡ERROR! [{dim_name}]: Columna '{actual_col_name_in_df}' encontrada pero NO numérica ({df_informe[actual_col_name_in_df].dtype}). ¡Revisar!")
-            else: # No se encontró la columna exacta del diccionario en el DF
-                 st.warning(f"INFO [{dim_name}]: Columna '{col_prefixed_clean}' del diccionario no encontrada EXACTAMENTE en CSV.")
-                 pass # Ignorar si no hay match exacto
-
+                    st.warning(f"INFO [{dim_name}]: Columna '{col_name}' coincide con patrón '{target_substring}' pero NO es numérica ({df_informe[col_name].dtype}).")
+    
         if cols_validas_para_dim:
             mapa_dim_cols[dim_name] = cols_validas_para_dim
-            # st.write(f"OK [{dim_name}]: Columnas válidas encontradas: {len(cols_validas_para_dim)}")
+            # st.write(f"OK [{dim_name}]: {len(cols_validas_para_dim)} columnas válidas encontradas usando '{target_substring}'.")
         else:
-             st.warning(f"SKIP [{dim_name}]: No se encontraron columnas numéricas válidas EXACTAS en el CSV para esta dimensión.")
-
+            st.warning(f"SKIP [{dim_name}]: No se encontraron columnas numéricas válidas en CSV para patrón '{target_substring}'.")
 
     if not mapa_dim_cols:
         st.error("Error Fatal: No se encontraron columnas numéricas válidas para NINGUNA dimensión (verificar nombres exactos con prefijos en CSV y Diccionario).")
@@ -1586,10 +1641,27 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
 
     # --- Generar Textos Gemini (sin cambios) ---
     try:
-        prompt_resumen = f"""... (prompt igual) ..."""
-        resumen_ejecutivo = enviar_prompt(prompt_resumen)
-        prompt_conclusiones = f"""... (prompt igual) ..."""
-        conclusiones_recomendaciones = enviar_prompt(prompt_conclusiones)
+        prompt_resumen = f"""
+         Estas son las dimensiones y sus promedios:
+         Fortalezas: {fortalezas}
+         Riesgos: {riesgos}
+         Intermedios: {intermedios}
+     
+         Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
+         ofreciendo una visión general de la situación y recomendaciones generales.
+         """
+         resumen_ejecutivo = enviar_prompt(prompt_resumen)
+     
+         prompt_conclusiones = f"""
+         Basándote en los resultados:
+         Fortalezas: {fortalezas}
+         Riesgos: {riesgos}
+         Intermedios: {intermedios}
+     
+         Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
+         desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
+         """
+         conclusiones = enviar_prompt(prompt_conclusiones)
         if "Error" in resumen_ejecutivo or "Error" in conclusiones_recomendaciones: raise Exception("Error Gemini")
     except Exception as e:
         # ... (manejo de error igual) ...
@@ -1600,14 +1672,83 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     figuras_informe = []
     fig_titles = []
     # --- Gráfico Semáforo ---
+    fig_semaforo = None 
     st.write("--- Generando Gráfico Semáforo ---")
     try:
+        try:
+    # 1. Preparar datos para el gráfico
+    # Ordenar dimensiones alfabéticamente para consistencia
+            dims_items_sorted = sorted(resultados_promedio.items())
+            if not dims_items_sorted:
+                st.warning("No hay datos de promedio para generar el semáforo.")
+                # fig_semaforo sigue siendo None (inicializado antes del try)
+            else:
+                dim_names = [item[0] for item in dims_items_sorted]
+                dim_scores = [item[1] for item in dims_items_sorted]
+        
+                # Obtener estado y color para cada dimensión
+                status_info = [estado_dimension(score, name) for name, score in dims_items_sorted]
+                dim_status = [info[0] for info in status_info]
+                # Mapear nombres de color ('green', 'red', 'yellow', 'grey') a colores de matplotlib
+                color_map = {'green': 'tab:green', 'red': 'tab:red', 'yellow': 'tab:orange', 'grey': 'tab:gray'} # Usar colores tab: para mejor visibilidad
+                dim_colors = [color_map.get(info[1], 'tab:gray') for info in status_info] # Usar get con default
+        
+                # 2. Crear la figura y los ejes
+                n_dims = len(dim_names)
+                # Ajustar altura dinámicamente (más alto si hay muchas dimensiones)
+                fig_height = max(4, n_dims * 0.4)
+                fig_semaforo, ax = plt.subplots(figsize=(8, fig_height)) # Ancho fijo, altura variable
+        
+                # 3. Crear las barras horizontales
+                y_pos = np.arange(n_dims)
+                bars = ax.barh(y_pos, dim_scores, color=dim_colors, align='center', height=0.6)
+        
+                # 4. Añadir etiquetas y texto
+                ax.set_yticks(y_pos)
+                ax.set_yticklabels(dim_names, fontsize=8) # Nombres de dimensión en el eje Y
+                ax.invert_yaxis()  # La primera dimensión arriba
+        
+                # Añadir el valor numérico y estado al lado o sobre la barra
+                for i, bar in enumerate(bars):
+                    score = dim_scores[i]
+                    status = dim_status[i]
+                    # Determinar el rango para posicionar el texto
+                    min_r, max_r = get_scale_range(dim_names[i])
+                    text_x_pos = max_r * 1.02 # Un poco a la derecha del máximo posible
+        
+                    # Si la barra es muy corta, poner texto a la derecha, si no, al final de la barra
+                    # O siempre a la derecha del máximo para alineación
+                    ax.text(text_x_pos, bar.get_y() + bar.get_height()/2,
+                            f'{score:.2f} ({status})',
+                            va='center', ha='left', fontsize=7, color='black')
+        
+                # 5. Configuración del Eje X y Título
+                # Determinar límites generales del eje X (ej. 0 al máximo de la escala + un margen)
+                all_ranges = [get_scale_range(name) for name in dim_names]
+                global_min = min(r[0] for r in all_ranges) if all_ranges else 0
+                global_max = max(r[1] for r in all_ranges) if all_ranges else 7
+                ax.set_xlim(left=global_min * 0.95, right=global_max * 1.15) # Ajustar límites con margen
+                ax.set_xlabel('Puntaje Promedio Dimensión', fontsize=9)
+                ax.set_title('Semáforo de Dimensiones de Bienestar', fontsize=11)
+        
+                # Mejorar apariencia
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.xaxis.grid(True, linestyle='--', which='major', color='grey', alpha=.25)
+                ax.tick_params(axis='x', labelsize=8)
+        
+                plt.tight_layout() # Ajustar layout para evitar solapamientos
+        
+        # -> El resto del bloque try...except como lo tenías para manejar el error general
+        except Exception as e:
+            st.error(f"Error al generar gráfico Semáforo: {e}")
         # ... (código semáforo igual, usa resultados_promedio) ...
         dims_list = list(resultados_promedio.items())
         if dims_list:
              # ... (crear subplots, iterar, colorear, añadir texto, etc.) ...
              # Asegurar que se guarda el objeto figura
-             figuras_informe.append(fig_semaforo)
+             if fig_semaforo:
+                figuras_informe.append(fig_semaforo)
              fig_titles.append("Figura 1: Semáforo de Dimensiones")
              st.pyplot(fig_semaforo)
     except Exception as e: st.error(f"Error Semáforo: {e}")
@@ -1647,33 +1788,73 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
         for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
             ax = axs_dim[k]
             try:
-                # Groupby usa cols_validas_dim (que tienen prefijo)
-                grouped = df_plot_groups.groupby(grupo_col, observed=False)[cols_validas_dim].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
-                if not grouped.empty:
-                    # ... (plot, títulos, etiquetas, etc. igual que antes, SIN 'ha' en tick_params) ...
-                    colors = plt.get_cmap('viridis')(np.linspace(0,1,len(grouped)))
-                    bars = grouped.plot(kind='bar',color=colors,ax=ax,width=0.8)
-                    ax.set_title(f"Por {grupo_label}", fontsize=9); ax.set_xlabel('')
-                    if k==0: ax.set_ylabel('Promedio Dimensión')
-                    ax.tick_params(axis='x', rotation=45, labelsize=8) # SIN ha='right'
+                grouped_series = df_plot_groups.groupby(grupo_col, observed=False)[cols_validas_dim].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
+            
+                if not grouped_series.empty:
+                    # --- >> AÑADIR ESTA LÍNEA PARA FORZAR FLOAT << ---
+                    grouped = grouped_series.astype(float)
+            
+                    colors = plt.get_cmap('viridis')(np.linspace(0, 1, len(grouped)))
+                    bars = grouped.plot(kind='bar', color=colors, ax=ax, width=0.8)
+                    ax.set_title(f"Por {grupo_label}", fontsize=9)
+                    ax.set_xlabel('') # Mantener vacío
+                    if k == 0: ax.set_ylabel('Promedio Dimensión')
+                    # --- >> MODIFICAR tick_params (quitar 'ha') << ---
+                    ax.tick_params(axis='x', rotation=45, labelsize=8) # Quitar ha='right'
                     ax.grid(axis='y', linestyle='--', alpha=0.6)
+                    # --- (Resto del código dentro del if not grouped.empty sigue igual) ---
                     ax.set_ylim(bottom=min_esc-(max_esc-min_esc)*0.05, top=max_esc+(max_esc-min_esc)*0.05)
                     for bar in bars.patches: ax.text(bar.get_x()+bar.get_width()/2, bar.get_height(), f'{bar.get_height():.2f}', ha='center', va='bottom', fontsize=7)
                     plot_count += 1
-                else: ax.text(0.5,0.5,'No hay datos',ha='center',va='center',fontsize=8,color='grey'); ax.set_xticks([]); ax.set_yticks([])
-            except Exception as e_grp: st.error(f"Error gráfico '{dim_name}' por '{grupo_label}': {e_grp}"); ax.text(0.5,0.5,f'Error',ha='center',va='center')
-
-        if plot_count > 0:
-            plt.tight_layout(rect=[0, 0.03, 1, 0.90])
-            figuras_informe.append(fig_dim)
-            fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
-            st.pyplot(fig_dim)
-        else: plt.close(fig_dim)
+                else:
+                     ax.text(0.5, 0.5, 'No hay datos', ha='center', va='center', fontsize=8, color='grey')
+                     ax.set_xticks([])
+                     ax.set_yticks([])
+            except Exception as e_grp_inner: # Capturar error específico aquí
+                st.error(f"Error procesando/graficando '{dim_name}' por '{grupo_label}': {e_grp_inner}")
+                ax.text(0.5, 0.5, f'Error: {e_grp_inner}', ha='center', va='center', fontsize=7, color='red')
+                    if plot_count > 0:
+                        plt.tight_layout(rect=[0, 0.03, 1, 0.90])
+                        figuras_informe.append(fig_dim)
+                        fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
+                        st.pyplot(fig_dim)
+                    else: plt.close(fig_dim)
 
 
     # --- Ensamblar Texto Informe Final (sin cambios) ---
     informe_partes = []
-    # ... (código igual para añadir título, periodo, resumen, clasificación, conclusiones) ...
+    # --- Ensamblar Texto Informe Final ---
+    informe_partes = []
+    informe_partes.append(f"# Informe General de Bienestar\n")
+    informe_partes.append(f"**Periodo Analizado:** {fecha_inicio.strftime('%Y-%m-%d')} al {fecha_fin.strftime('%Y-%m-%d')}\n\n")
+    # Puedes añadir el ID de empresa si se usó un filtro
+    
+    informe_partes.append("## Resumen Ejecutivo (IA)\n")
+    informe_partes.append(f"{resumen_ejecutivo}\n\n")
+    
+    informe_partes.append("## Estado General de las Dimensiones\n")
+    informe_partes.append("Clasificación basada en promedios (1/3 inferior = Riesgo, 1/3 medio = Intermedio, 1/3 superior = Fortaleza):\n") # Explicación simple
+    
+    if fortalezas:
+         informe_partes.append("\n**🟢 Fortalezas Clave:**\n")
+         for dim, val in fortalezas: informe_partes.append(f"- {dim}: {val:.2f}\n")
+    if intermedios:
+         informe_partes.append("\n**🟡 Dimensiones en Nivel Intermedio:**\n")
+         for dim, val in intermedios: informe_partes.append(f"- {dim}: {val:.2f}\n")
+    if riesgos:
+         informe_partes.append("\n**🔴 Riesgos Principales / Áreas de Mejora:**\n")
+         for dim, val in riesgos: informe_partes.append(f"- {dim}: {val:.2f}\n")
+    if sin_datos:
+         informe_partes.append("\n**⚪ Dimensiones Sin Datos Suficientes:**\n")
+         for dim, val in sin_datos: informe_partes.append(f"- {dim}\n")
+    
+    informe_partes.append("\n## Conclusiones y Recomendaciones (IA)\n")
+    informe_partes.append(f"{conclusiones_recomendaciones}\n\n")
+    # --- FIN del código faltante ---
+    
+    # Esta línea ya existe:
+    informe_texto_final = "".join(informe_partes)
+    
     informe_texto_final = "".join(informe_partes)
 
     st.success("Informe general procesado.")
