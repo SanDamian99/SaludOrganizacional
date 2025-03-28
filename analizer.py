@@ -1,4 +1,4 @@
-x# Importar librerías necesarias
+# Importar librerías necesarias
 import streamlit as st
 import difflib
 import pandas as pd
