@@ -962,8 +962,8 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
                 fig_h, ax_h = plt.subplots(figsize=(fig_h_width, fig_h_height))
                 sns.heatmap(correlacion, annot=True, fmt='.2f', cmap='coolwarm', ax=ax_h, annot_kws={"size": 8})
                 ax_h.set_title('Mapa de Calor de Correlación')
-                plt.xticks(rotation=45, fontsize=8)
-                plt.yticks(rotation=0, fontsize=8)
+                plt.xticks(rotation=45)
+                plt.yticks(rotation=0)
                 plt.tight_layout()
                 st.pyplot(fig_h)
                 figuras.append(fig_h) # <-- GUARDAR OBJETO FIGURA
@@ -1143,9 +1143,9 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
                  fig_ct_w = max(6, crosstab.shape[1]*0.6)
                  fig_ct, ax_ct = plt.subplots(figsize=(fig_ct_w, fig_ct_h))
                  sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct, annot_kws={"size": 8})
-                 ax_ct.set_title(f'Tabla: {index_name} vs {columns_name}', fontsize=10)
-                 plt.xticks(rotation=45, fontsize=8)
-                 plt.yticks(rotation=0, fontsize=8)
+                 ax_ct.set_title(f'Tabla: {index_name} vs {columns_name}')
+                 plt.xticks(rotation=45)
+                 plt.yticks(rotation=0)
                  plt.tight_layout()
                  st.pyplot(fig_ct)
                  figuras.append(fig_ct) # <-- GUARDAR OBJETO FIGURA
@@ -1245,11 +1245,11 @@ class PDFReport:
             bottomMargin=18*mm
         )
         # Estilos personalizados (ajustar tamaños si es necesario)
-        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['h1'], fontSize=16, alignment=1))
-        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['h2'], fontSize=12, spaceBefore=10))
-        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontSize=10, leading=12, alignment=4)) # Justificado
-        self.styles.add(ParagraphStyle(name='CustomCode', parent=self.styles['Code'], fontSize=8, leading=10, backColor=colors.whitesmoke, borderPadding=3, leftIndent=6, rightIndent=6))
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontSize=8, alignment=2, textColor=colors.grey)) # Derecha
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['h1'], alignment=1))
+        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['h2'], spaceBefore=10))
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=12, alignment=4)) # Justificado
+        self.styles.add(ParagraphStyle(name='CustomCode', parent=self.styles['Code'], leading=10, backColor=colors.whitesmoke, borderPadding=3, leftIndent=6, rightIndent=6))
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey)) # Derecha
 
     def header(self, canvas, doc):
         canvas.saveState()
@@ -1703,7 +1703,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
         
                 # 4. Añadir etiquetas y texto
                 ax.set_yticks(y_pos)
-                ax.set_yticklabels(dim_names, fontsize=8) # Nombres de dimensión en el eje Y
+                ax.set_yticklabels(dim_names) # Nombres de dimensión en el eje Y
                 ax.invert_yaxis()  # La primera dimensión arriba
         
                 # Añadir el valor numérico y estado al lado o sobre la barra
@@ -1718,7 +1718,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                     # O siempre a la derecha del máximo para alineación
                     ax.text(text_x_pos, bar.get_y() + bar.get_height()/2,
                             f'{score:.2f} ({status})',
-                            va='center', ha='left', fontsize=7, color='black')
+                            va='center', ha='left', color='black')
         
                 # 5. Configuración del Eje X y Título
                 # Determinar límites generales del eje X (ej. 0 al máximo de la escala + un margen)
@@ -1726,8 +1726,8 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                 global_min = min(r[0] for r in all_ranges) if all_ranges else 0
                 global_max = max(r[1] for r in all_ranges) if all_ranges else 7
                 ax.set_xlim(left=global_min * 0.95, right=global_max * 1.15) # Ajustar límites con margen
-                ax.set_xlabel('Puntaje Promedio Dimensión', fontsize=9)
-                ax.set_title('Semáforo de Dimensiones de Bienestar', fontsize=11)
+                ax.set_xlabel('Puntaje Promedio Dimensión')
+                ax.set_title('Semáforo de Dimensiones de Bienestar')
         
                 # Mejorar apariencia
                 ax.spines['top'].set_visible(False)
@@ -1914,7 +1914,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
             if n_grupos_validos == 1:
                 axs_dim = [axs_dim]
 
-            fig_dim.suptitle(f"Comparación: {dim_name}\n(Promedio General: {prom_general:.2f})", fontsize=10, y=1.03)
+            fig_dim.suptitle(f"Comparación: {dim_name}\n(Promedio General: {prom_general:.2f})", y=1.03)
             plot_count_for_dim = 0 # Contador para saber si se graficó algo para esta dimensión
 
             # Iterar sobre los GRUPOS (Sexo, Rango Edad, etc.)
@@ -1926,7 +1926,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                     # Doble check que la columna de grupo existe y es string/object
                     if grupo_col not in df_plot_groups.columns:
                         st.error(f"    ERROR GRAVE: Columna de grupo '{grupo_col}' no existe.")
-                        ax.text(0.5, 0.5, f'Error: Columna\n"{grupo_col}"\nno encontrada', ha='center', va='center', fontsize=8, color='red', transform=ax.transAxes)
+                        ax.text(0.5, 0.5, f'Error: Columna\n"{grupo_col}"\nno encontrada', ha='center', va='center', color='red', transform=ax.transAxes)
                         continue # Saltar al siguiente grupo
 
                     if not isinstance(df_plot_groups[grupo_col].dtype, (object, str)):
@@ -1936,7 +1936,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                              df_plot_groups[grupo_col] = df_plot_groups[grupo_col].astype(str)
                          except Exception as e_force_str:
                              st.error(f"    ERROR: No se pudo forzar '{grupo_col}' a string: {e_force_str}")
-                             ax.text(0.5, 0.5, f'Error: Dtype\nColumna Grupo\nInválido', ha='center', va='center', fontsize=8, color='red', transform=ax.transAxes)
+                             ax.text(0.5, 0.5, f'Error: Dtype\nColumna Grupo\nInválido', ha='center', va='center', color='red', transform=ax.transAxes)
                              continue
 
                     # --- El Groupby Crítico ---
@@ -1963,10 +1963,10 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                         bars = ax.bar(categories, values, color=colors, width=0.8) # Ajustar width si es necesario
 
                         # Configuración del gráfico (ejes, título, etc.)
-                        ax.set_title(f"Por {grupo_label}", fontsize=9)
+                        ax.set_title(f"Por {grupo_label}")
                         ax.set_xlabel('')
                         if k == 0: # Solo poner etiqueta Y en el primer subplot
-                            ax.set_ylabel('Promedio Dimensión', fontsize=9)
+                            ax.set_ylabel('Promedio Dimensión')
 
                         # Rotar etiquetas del eje X si son muchas o largas
                         ax.tick_params(axis='x', rotation=45, labelsize=8)
@@ -1980,20 +1980,20 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                         for bar in bars:
                             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                                     f'{bar.get_height():.2f}',
-                                    ha='center', va='bottom', fontsize=7)
+                                    ha='center', va='bottom')
 
                         plot_count_for_dim += 1 # Se graficó algo
                     else:
                         st.warning(f"    No hay datos para graficar '{dim_name}' por '{grupo_label}' (resultado groupby vacío).")
                         ax.text(0.5, 0.5, 'No hay datos\npara este grupo',
-                                ha='center', va='center', fontsize=8, color='grey', transform=ax.transAxes)
+                                ha='center', va='center', color='grey', transform=ax.transAxes)
                         ax.set_xticks([]) # Limpiar ejes si no hay datos
                         ax.set_yticks([])
 
                 except Exception as e_grp_inner:
                     st.error(f"    ERROR procesando/graficando '{dim_name}' por '{grupo_label}' ({grupo_col}): {e_grp_inner}")
                     # Mostrar error en el gráfico mismo
-                    ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', fontsize=7, color='red', transform=ax.transAxes)
+                    ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', color='red', transform=ax.transAxes)
                     # Loggear info de la columna que falló si existe
                     if grupo_col in df_plot_groups.columns:
                         st.write(f"    DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique (5): {df_plot_groups[grupo_col].unique()[:5]}...")
