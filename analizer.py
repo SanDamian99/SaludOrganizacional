@@ -2039,33 +2039,34 @@ def main():
         st.write("Genera un resumen del estado de bienestar para el periodo y empresa seleccionados.")
         if st.button("🚀 Generar Informe General"):
             if df_filtrado_base.empty:
-                 st.warning("No hay datos para generar el informe con los filtros actuales.")
+                st.warning("No hay datos para generar el informe con los filtros actuales.")
             else:
-                 with st.spinner("Generando informe general... Por favor espera."):
-                     informe_texto, figuras, fig_titulos = generar_informe_general(df_filtrado_base, fecha_inicio, fecha_fin)
-
-                     if "Error" in informe_texto:
-                         st.error(informe_texto)
-                     else:
-                         with st.expander("Ver Texto del Informe General", expanded=False):
-                             st.markdown(informe_texto)
-
-                         st.write("Construyendo PDF del informe general...")
-                         pdf_general = PDFReport('informe_general.pdf')
-                         pdf_general.add_markdown(informe_texto) # Usar markdown
-                         pdf_general.add_title("Visualizaciones", level=2)
+                with st.spinner("Generando informe general... Por favor espera."):
+                    informe_texto, figuras, fig_titulos = generar_informe_general(df_filtrado_base, fecha_inicio, fecha_fin)
+    
+                    if "Error" in informe_texto:
+                        st.error(informe_texto)
+                    else:
+                        with st.expander("Ver Texto del Informe General", expanded=False):
+                            st.markdown(informe_texto)
+    
+                        st.write("Construyendo PDF del informe general...")
+                        pdf_general = PDFReport('informe_general.pdf')
+                        pdf_general.add_markdown(informe_texto)  # Usar markdown
+                        pdf_general.add_title("Visualizaciones", level=2)
                         for fig, title in zip(figuras_informe, fig_titulos):
-                            st.write(f"DEBUG General: Procesando '{title}', tipo figura: {type(fig)}") # DEBUG ANTES
+                            st.write(f"DEBUG General: Procesando '{title}', tipo figura: {type(fig)}")  # DEBUG ANTES
                             pdf_general.add_paragraph(f"**{title}**", style='CustomHeading')
-                            pdf_general.insert_image(fig) # Pasa el objeto figura
+                            pdf_general.insert_image(fig)  # Pasa el objeto figura
+    
+                        try:
+                            pdf_general.build_pdf()
+                            st.success("Informe general en PDF generado.")
+                            with open('informe_general.pdf', 'rb') as f:
+                                st.download_button("📥 Descargar Informe General PDF", f, "informe_general.pdf", "application/pdf")
+                        except Exception as e_pdf_gen:
+                            st.error(f"Error al construir el PDF general: {e_pdf_gen}")
 
-                         try:
-                             pdf_general.build_pdf()
-                             st.success("Informe general en PDF generado.")
-                             with open('informe_general.pdf', 'rb') as f:
-                                 st.download_button("📥 Descargar Informe General PDF", f, "informe_general.pdf", "application/pdf")
-                         except Exception as e_pdf_gen:
-                             st.error(f"Error al construir el PDF general: {e_pdf_gen}")
 
     # --- TAB 2: Análisis Específico (igual que antes) ---
     with tab2:
