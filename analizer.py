@@ -962,7 +962,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
                 fig_h, ax_h = plt.subplots(figsize=(fig_h_width, fig_h_height))
                 sns.heatmap(correlacion, annot=True, fmt='.2f', cmap='coolwarm', ax=ax_h, annot_kws={"size": 8})
                 ax_h.set_title('Mapa de Calor de Correlación')
-                plt.xticks(rotation=45, ha='right', fontsize=8)
+                plt.xticks(rotation=45, fontsize=8)
                 plt.yticks(rotation=0, fontsize=8)
                 plt.tight_layout()
                 st.pyplot(fig_h)
@@ -1144,7 +1144,7 @@ def realizar_analisis(opcion, pregunta_usuario, filtros=None, df_base=None):
                  fig_ct, ax_ct = plt.subplots(figsize=(fig_ct_w, fig_ct_h))
                  sns.heatmap(crosstab, annot=True, fmt='d', cmap='Blues', ax=ax_ct, annot_kws={"size": 8})
                  ax_ct.set_title(f'Tabla: {index_name} vs {columns_name}', fontsize=10)
-                 plt.xticks(rotation=45, ha='right', fontsize=8)
+                 plt.xticks(rotation=45, fontsize=8)
                  plt.yticks(rotation=0, fontsize=8)
                  plt.tight_layout()
                  st.pyplot(fig_ct)
@@ -1969,7 +1969,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                             ax.set_ylabel('Promedio Dimensión', fontsize=9)
 
                         # Rotar etiquetas del eje X si son muchas o largas
-                        ax.tick_params(axis='x', rotation=45, labelsize=8, ha='right')
+                        ax.tick_params(axis='x', rotation=45, labelsize=8)
                         ax.grid(axis='y', linestyle='--', alpha=0.6)
 
                         # Ajustar límites del eje Y basado en la escala de la dimensión
