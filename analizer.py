@@ -1363,92 +1363,92 @@ class PDFReport:
                      self.elements.append(Spacer(1, 2))
 
 
-        def insert_image(self, image_path_or_fig, max_width_mm=170, max_height_mm=180):
-            """
-            Inserta imagen desde archivo o figura Matplotlib usando io.BytesIO para figuras.
-            """
-            img_buffer = None # Para manejar el buffer si se crea
+    def insert_image(self, image_path_or_fig, max_width_mm=170, max_height_mm=180):
+        """
+        Inserta imagen desde archivo o figura Matplotlib usando io.BytesIO para figuras.
+        """
+        img_buffer = None  # Para manejar el buffer si se crea
     
-            try:
-                if isinstance(image_path_or_fig, str) and os.path.isfile(image_path_or_fig):
-                    # Caso 1: Es una ruta de archivo válida, úsala directamente
-                    img_path_to_use = image_path_or_fig
-                    st.write(f"DEBUG PDF: Usando archivo de imagen existente: {img_path_to_use}")
-                    # Abrir con PIL para obtener dimensiones
-                    with PILImage.open(img_path_to_use) as pil_img:
-                        orig_width_px, orig_height_px = pil_img.size
-                    # RLImage usará la ruta directamente
-                    img_source_for_rl = img_path_to_use
+        try:
+            if isinstance(image_path_or_fig, str) and os.path.isfile(image_path_or_fig):
+                # Caso 1: Es una ruta de archivo válida, úsala directamente
+                img_path_to_use = os.path.abspath(image_path_or_fig)  # Convertir a ruta absoluta
+                st.write(f"DEBUG PDF: Usando archivo de imagen existente: {img_path_to_use}")
+                # Abrir con PIL para obtener dimensiones
+                with PILImage.open(img_path_to_use) as pil_img:
+                    orig_width_px, orig_height_px = pil_img.size
+                # RLImage usará la ruta directamente
+                img_source_for_rl = img_path_to_use
     
-                elif hasattr(image_path_or_fig, 'savefig'):
-                    # Caso 2: Es una figura Matplotlib, usar buffer en memoria
-                    st.write(f"DEBUG PDF: Procesando figura Matplotlib en memoria...")
-                    img_buffer = io.BytesIO()
-                    # Guardar la figura en el buffer
-                    image_path_or_fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
-                    img_buffer.seek(0) # Rebobinar el buffer para leerlo
+            elif hasattr(image_path_or_fig, 'savefig'):
+                # Caso 2: Es una figura Matplotlib, usar buffer en memoria
+                st.write("DEBUG PDF: Procesando figura Matplotlib en memoria...")
+                img_buffer = io.BytesIO()
+                # Guardar la figura en el buffer
+                image_path_or_fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+                img_buffer.seek(0)  # Rebobinar el buffer para leerlo
     
-                    # Usar PIL para obtener dimensiones DESDE EL BUFFER
-                    with PILImage.open(img_buffer) as pil_img:
-                        orig_width_px, orig_height_px = pil_img.size
+                # Usar PIL para obtener dimensiones desde el buffer
+                with PILImage.open(img_buffer) as pil_img:
+                    orig_width_px, orig_height_px = pil_img.size
     
-                    img_buffer.seek(0) # Rebobinar de nuevo para que ReportLab lo lea
-                    # RLImage usará el buffer directamente
-                    img_source_for_rl = img_buffer
-                    st.write(f"DEBUG PDF: Figura procesada en buffer. Dimensiones: {orig_width_px}x{orig_height_px}")
+                img_buffer.seek(0)  # Rebobinar de nuevo para que ReportLab lo lea
+                # RLImage usará el buffer directamente
+                img_source_for_rl = img_buffer
+                st.write(f"DEBUG PDF: Figura procesada en buffer. Dimensiones: {orig_width_px}x{orig_height_px}")
     
-                else:
-                     self.add_paragraph(f"Error: Imagen no válida ({type(image_path_or_fig)})", style='CustomCode')
-                     return
+            else:
+                self.add_paragraph(f"Error: Imagen no válida ({type(image_path_or_fig)})", style='CustomCode')
+                return
     
-                # --- Cálculo de tamaño (igual que antes) ---
-                if orig_width_px == 0 or orig_height_px == 0:
-                    raise ValueError("Dimensiones de imagen inválidas (0).")
+            # --- Cálculo de tamaño ---
+            if orig_width_px == 0 or orig_height_px == 0:
+                raise ValueError("Dimensiones de imagen inválidas (0).")
     
-                max_width_pt = max_width_mm * mm
-                max_height_pt = max_height_mm * mm
+            max_width_pt = max_width_mm * mm
+            max_height_pt = max_height_mm * mm
     
-                ratio = float(orig_height_px) / float(orig_width_px) if orig_width_px else 1
-                new_width_pt = min(max_width_pt, orig_width_px * 0.75) # Usar puntos approx
-                new_height_pt = new_width_pt * ratio
+            ratio = float(orig_height_px) / float(orig_width_px) if orig_width_px else 1
+            new_width_pt = min(max_width_pt, orig_width_px * 0.75)  # Aproximación en puntos
+            new_height_pt = new_width_pt * ratio
     
-                if new_height_pt > max_height_pt:
-                    new_height_pt = max_height_pt
-                    new_width_pt = new_height_pt / ratio if ratio else max_width_pt
+            if new_height_pt > max_height_pt:
+                new_height_pt = max_height_pt
+                new_width_pt = new_height_pt / ratio if ratio else max_width_pt
     
-                # --- Crear la imagen ReportLab DESDE LA FUENTE CORRECTA (ruta o buffer) ---
-                rl_img = RLImage(img_source_for_rl, width=new_width_pt, height=new_height_pt)
-                rl_img.hAlign = 'CENTER'
-                self.elements.append(rl_img)
-                self.elements.append(Spacer(1, 10))
-                st.write(f"DEBUG PDF: RLImage añadido a elements.")
+            # --- Crear la imagen ReportLab ---
+            rl_img = RLImage(img_source_for_rl, width=new_width_pt, height=new_height_pt)
+            rl_img.hAlign = 'CENTER'
+            self.elements.append(rl_img)
+            self.elements.append(Spacer(1, 10))
+            st.write("DEBUG PDF: RLImage añadido a elements.")
     
-            except FileNotFoundError as fnf:
-                 # Este error ahora solo debería ocurrir para el caso de ruta de archivo
-                 self.add_paragraph(f"Error: Archivo de imagen no encontrado: {fnf}", style='CustomCode')
-                 print(f"Error PDF Imagen: {fnf}")
-            except Exception as e:
-                 # Captura errores al guardar en buffer, abrir con PIL, etc.
-                 img_info = f"(Fuente: {type(image_path_or_fig)})"
-                 error_msg = f"Error al procesar/insertar imagen: {e} {img_info}"
-                 self.add_paragraph(error_msg, style='CustomCode')
-                 print(error_msg)
-
+        except FileNotFoundError as fnf:
+            # Este error debería ocurrir solo si la ruta de archivo no es válida
+            self.add_paragraph(f"Error: Archivo de imagen no encontrado: {fnf}", style='CustomCode')
+            print(f"Error PDF Imagen: {fnf}")
+        except Exception as e:
+            # Captura errores al procesar/insertar la imagen
+            img_info = f"(Fuente: {type(image_path_or_fig)})"
+            error_msg = f"Error al procesar/insertar imagen: {e} {img_info}"
+            self.add_paragraph(error_msg, style='CustomCode')
+            print(error_msg)
+    
     def build_pdf(self):
         try:
             st.write("DEBUG PDF: Iniciando self.doc.build()...")
             self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
             st.write("DEBUG PDF: self.doc.build() completado.")
-            # Ya no necesitamos limpiar el directorio temporal
+            # Si usas archivos temporales, asegúrate de que no se eliminen antes de construir el PDF
         except LayoutError as e:
             st.error(f"Error de maquetación al generar PDF: {e}")
-            print(f"Error PDF Layout: {e}") # Log
+            print(f"Error PDF Layout: {e}")  # Log
             raise e
         except Exception as e:
-             st.error(f"Error inesperado al construir PDF: {e}")
-             print(f"Error PDF Build: {e}") # Log
-             raise er(f"Error inesperado al construir PDF: {e}")
-             raise e
+            st.error(f"Error inesperado al construir PDF: {e}")
+            print(f"Error PDF Build: {e}")  # Log
+            raise e  # Relanzamos la excepción correctamente
+
 
 
 # --- Funciones de limpieza de texto (igual) ---
