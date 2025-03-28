@@ -397,25 +397,9 @@ for dim_cat, dim_content in data_dictionary.items():
                               label_maps[col_clean] = num_to_label_map
                               # st.write(f"DEBUG: Label map (desde Escala) asignado a '{col_clean}'")
 
-
-# --- Configuración de Supabase usando los secretos de Streamlit ---
-supabase_url = st.secrets["SUPABASE_URL"]
-supabase_key = st.secrets["SUPABASE_KEY"]
-bucket_name = st.secrets["SUPABASE_BUCKET"]
-
-# Crear el cliente de Supabase
-supabase = create_client(supabase_url, supabase_key)
-
-# Ruta del archivo en el bucket de Supabase
-file_path = "cleaned_data.csv"
-
-try:
-    # Descargar el archivo desde Supabase Storage
-    # Esto devuelve el contenido del archivo en bytes
-    response = supabase.storage.from_(bucket_name).download(file_path)
-    
-    # Leer el CSV desde los bytes descargados
-    df = pd.read_csv(BytesIO(response), sep=";")
+ruta_csv = "cleaned_data - cleaned_data.csv"
+ try:
+    df = pd.read_csv(ruta_csv, parse_dates=['Hora de inicio', 'Hora de finalización'], dayfirst=False)
     df.dropna(axis=1, how='all', inplace=True)
     df.columns = df.columns.str.strip()  # Limpieza de nombres de columna
     st.success(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas.")
