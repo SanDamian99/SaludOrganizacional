@@ -1934,8 +1934,8 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
                     st.error(f"    ERROR procesando/graficando '{dim_name}' por '{grupo_label}' ({grupo_col}): {e_grp_inner}")
                     ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', color='red', transform=ax.transAxes)
                     if grupo_col in df_plot_groups.columns:
-                        #st.write(f"    DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique (5): {df_plot_groups[grupo_col].unique()[:5]}...")
-                    #st.write(f"    DEBUG Info Columnas Valor Error: {cols_realmente_validas}")
+                        st.write(f"    DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique (5): {df_plot_groups[grupo_col].unique()[:5]}...")
+                    st.write(f"    DEBUG Info Columnas Valor Error: {cols_realmente_validas}")
 
             if plot_count_for_dim > 0:
                 plt.tight_layout(rect=[0, 0.03, 1, 0.90])
