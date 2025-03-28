@@ -522,7 +522,7 @@ opciones_analisis = """
  """
  
  # Preparar el prompt para Gemini
- prompt_informacion_datos = f"""
+prompt_informacion_datos = f"""
      Los siguientes son los datos y tipos de datos que tenemos:
  
      {informacion_datos}
