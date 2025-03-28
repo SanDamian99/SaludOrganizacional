@@ -1646,22 +1646,20 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
          Fortalezas: {fortalezas}
          Riesgos: {riesgos}
          Intermedios: {intermedios}
-     
          Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
          ofreciendo una visión general de la situación y recomendaciones generales.
          """
-         resumen_ejecutivo = enviar_prompt(prompt_resumen)
-     
-         prompt_conclusiones = f"""
+        resumen_ejecutivo = enviar_prompt(prompt_resumen)
+        
+        prompt_conclusiones = f"""
          Basándote en los resultados:
          Fortalezas: {fortalezas}
          Riesgos: {riesgos}
          Intermedios: {intermedios}
-     
          Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
          desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
          """
-         conclusiones = enviar_prompt(prompt_conclusiones)
+        conclusiones = enviar_prompt(prompt_conclusiones)
         if "Error" in resumen_ejecutivo or "Error" in conclusiones_recomendaciones: raise Exception("Error Gemini")
     except Exception as e:
         # ... (manejo de error igual) ...
