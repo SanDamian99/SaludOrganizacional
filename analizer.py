@@ -1854,89 +1854,95 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
         st.warning("No se definieron grupos válidos para la comparación. No se generarán gráficos comparativos.")
     else:
         st.info(f"Generando comparaciones para {len(mapa_dim_cols)} dimensiones por {len(grupos)} grupos: {list(grupos.keys())}")
-        fig_idx_start = 2 # Índice para titular figuras
+        fig_idx_start = 2  # Índice para titular figuras
         for i, (dim_name, prom_general) in enumerate(resultados_promedio.items()):
             if dim_name not in mapa_dim_cols:
                 st.warning(f"Skipping plot for dimension '{dim_name}': No valid columns found earlier.")
                 continue
-
+    
             cols_validas_dim = mapa_dim_cols[dim_name]
             min_esc, max_esc = get_scale_range(dim_name)
-
+    
             n_grupos_validos = len(grupos)
-            if n_grupos_validos == 0: continue
-
+            if n_grupos_validos == 0:
+                continue
+    
             fig_dim, axs_dim = plt.subplots(1, n_grupos_validos,
                                             figsize=(n_grupos_validos * 4.5, 4.0),
                                             sharey=True)
-
+    
             if n_grupos_validos == 1:
                 axs_dim = [axs_dim]
-
+    
             fig_dim.suptitle(f"Comparación: {dim_name}\n(Promedio General: {prom_general:.2f})", fontsize=10, y=1.03)
             plot_count_for_dim = 0
-
+    
             for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
                 ax = axs_dim[k]
-
+    
                 try:
                     # Asegurarse que la columna de grupo existe y no está vacía
                     if grupo_col not in df_plot_groups.columns or df_plot_groups[grupo_col].isnull().all():
-                         ax.text(0.5, 0.5, f'Columna de grupo\n"{grupo_col}"\nno válida o vacía', ha='center', va='center', fontsize=8, color='red', transform=ax.transAxes)
-                         ax.set_xticks([])
-                         ax.set_yticks([])
-                         continue # Pasar al siguiente grupo
-
-                    # Agrupar por la columna de grupo (ya limpiada y convertida a string/categoría manejable)
-                    grouped_series = df_plot_groups.groupby(grupo_col, observed=True)[cols_validas_dim].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
-                    # Use observed=True if appropriate, especially after converting categoricals to string
-
+                        ax.text(0.5, 0.5, f'Columna de grupo\n"{grupo_col}"\nno válida o vacía',
+                                ha='center', va='center', fontsize=8, color='red', transform=ax.transAxes)
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                        continue  # Pasar al siguiente grupo
+    
+                    # Convertir las columnas de los valores a numérico para evitar el error de 'category'
+                    df_plot_groups[cols_validas_dim] = df_plot_groups[cols_validas_dim].apply(
+                        lambda col: pd.to_numeric(col, errors='coerce')
+                    )
+    
+                    # Agrupar por la columna de grupo y calcular el promedio
+                    grouped_series = df_plot_groups.groupby(grupo_col, observed=True)[cols_validas_dim] \
+                        .mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
+    
                     if not grouped_series.empty:
-                        grouped_data = grouped_series.astype(float) # Forzar float para plot
-
+                        grouped_data = grouped_series.astype(float)  # Forzar float para plot
+    
                         categories = grouped_data.index.astype(str)
                         values = grouped_data.values
                         colors = plt.get_cmap('viridis')(np.linspace(0, 1, len(categories)))
-
+    
                         bars = ax.bar(categories, values, color=colors, width=0.8)
-
+    
                         ax.set_title(f"Por {grupo_label}", fontsize=9)
                         ax.set_xlabel('')
                         if k == 0:
                             ax.set_ylabel('Promedio Dimensión', fontsize=9)
-
-                        ax.tick_params(axis='x', rotation=45, labelsize=8, ha='right') # ha='right' a menudo ayuda con rotación 45
+    
+                        ax.tick_params(axis='x', rotation=45, labelsize=8, ha='right')
                         ax.grid(axis='y', linestyle='--', alpha=0.6)
-
+    
                         margin = (max_esc - min_esc) * 0.05
                         ax.set_ylim(bottom=min_esc - margin, top=max_esc + margin)
-
+    
                         for bar in bars:
                             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                                     f'{bar.get_height():.2f}',
                                     ha='center', va='bottom', fontsize=7)
-
+    
                         plot_count_for_dim += 1
                     else:
-                        ax.text(0.5, 0.5, 'No hay datos\npara este grupo', ha='center', va='center', fontsize=8, color='grey', transform=ax.transAxes)
+                        ax.text(0.5, 0.5, 'No hay datos\npara este grupo',
+                                ha='center', va='center', fontsize=8, color='grey', transform=ax.transAxes)
                         ax.set_xticks([])
                         ax.set_yticks([])
-
+    
                 except Exception as e_grp_inner:
                     st.error(f"Error procesando/graficando '{dim_name}' por '{grupo_label}' ({grupo_col}): {e_grp_inner}")
                     ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', fontsize=7, color='red', transform=ax.transAxes)
-                    # Try to show column info if error
                     if grupo_col in df_plot_groups.columns:
                         st.write(f"DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique: {df_plot_groups[grupo_col].unique()[:5]}...")
-
-
+    
             if plot_count_for_dim > 0:
                 plt.tight_layout(rect=[0, 0.03, 1, 0.90])
                 figuras_informe.append(fig_dim)
                 fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
                 st.pyplot(fig_dim)
             else:
-                plt.close(fig_dim) # Cerrar figura si no se graficó nada
+                plt.close(fig_dim)  # Cerrar figura si no se graficó nada
 
 
     # --- Ensamblar Texto Informe Final (sin cambios) ---
