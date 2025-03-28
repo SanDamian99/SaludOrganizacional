@@ -1367,6 +1367,7 @@ class PDFReport:
         """
         Inserta imagen desde archivo o figura Matplotlib usando io.BytesIO para figuras.
         """
+        st.write(f"DEBUG insert_image: Recibido tipo: {type(image_path_or_fig)}")
         img_buffer = None  # Para manejar el buffer si se crea
     
         try:
@@ -2053,9 +2054,10 @@ def main():
                          pdf_general = PDFReport('informe_general.pdf')
                          pdf_general.add_markdown(informe_texto) # Usar markdown
                          pdf_general.add_title("Visualizaciones", level=2)
-                         for fig, title in zip(figuras, fig_titulos):
-                              pdf_general.add_paragraph(f"**{title}**", style='CustomHeading')
-                              pdf_general.insert_image(fig) # Pasa el objeto figura
+                        for fig, title in zip(figuras_informe, fig_titulos):
+                            st.write(f"DEBUG General: Procesando '{title}', tipo figura: {type(fig)}") # DEBUG ANTES
+                            pdf_general.add_paragraph(f"**{title}**", style='CustomHeading')
+                            pdf_general.insert_image(fig) # Pasa el objeto figura
 
                          try:
                              pdf_general.build_pdf()
