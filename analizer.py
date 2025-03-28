@@ -1752,71 +1752,180 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     except Exception as e: st.error(f"Error Semáforo: {e}")
 
     # --- Gráficos por Grupo ---
+# --- Generar Gráficos Comparativos ---
     st.write("--- Generando Gráficos Comparativos ---")
-    df_plot_groups = df_informe.copy()
-    grupos = {}
-    # ... (definición de grupos Sexo, Rango Edad, Tiene Hijos igual) ...
-    col_sexo = '(SD)Sexo'; # Usar nombre con prefijo
-    if col_sexo in df_plot_groups and df_plot_groups[col_sexo].nunique() > 1: grupos['Sexo'] = col_sexo
-    col_edad = '(SD)Edad'; col_rango_edad = 'Rango_Edad'
-    if col_edad in df_plot_groups and pd.api.types.is_numeric_dtype(df_plot_groups[col_edad]):
-        try: # ... (código cut Rango Edad igual) ...
-            max_edad=df_plot_groups[col_edad].max(); bins=[0,24,34,44,54,64,max(65,max_edad+1)]; labels=['<25','25-34','35-44','45-54','55-64','65+']
-            df_plot_groups[col_rango_edad]=pd.cut(df_plot_groups[col_edad],bins=bins,labels=labels[:len(bins)-1],right=False,duplicates='drop')
-            if df_plot_groups[col_rango_edad].nunique() > 1: grupos['Rango Edad'] = col_rango_edad
-        except Exception as e_edad: st.warning(f"No se pudo crear Rango Edad: {e_edad}")
-    col_hijos = '(SD)Numero de hijos'; col_tiene_hijos = 'Tiene_Hijos'
-    if col_hijos in df_plot_groups and pd.api.types.is_numeric_dtype(df_plot_groups[col_hijos]):
-        df_plot_groups[col_tiene_hijos] = np.where(df_plot_groups[col_hijos].fillna(-1)>0,'Con hijos','Sin hijos').astype('category')
-        if df_plot_groups[col_tiene_hijos].nunique() > 1: grupos['Tiene Hijos'] = col_tiene_hijos
+    df_plot_groups = df_informe.copy() # Usar copia del DataFrame del informe
+    grupos = {} # Diccionario para almacenar las columnas de agrupación válidas {Label: ColumnName}
 
+    # --- Definir y Validar Columnas de Agrupación ---
 
-    fig_idx_start = 2
-    for i, (dim_name, prom_general) in enumerate(resultados_promedio.items()):
-        if dim_name not in mapa_dim_cols: continue # Saltar si no se encontraron cols
-        cols_validas_dim = mapa_dim_cols[dim_name]
-        min_esc, max_esc = get_scale_range(dim_name)
-        if not grupos: continue
+    # 1. Sexo
+    col_sexo = '(SD)Sexo' # Nombre exacto de la columna
+    if col_sexo in df_plot_groups.columns and df_plot_groups[col_sexo].nunique() > 1:
+        # Limpiar NaNs o valores no estándar si es necesario antes de añadir
+        # df_plot_groups[col_sexo] = df_plot_groups[col_sexo].fillna('No especificado').astype(str)
+        grupos['Sexo'] = col_sexo
+        st.write(f"DEBUG: Agrupación por '{col_sexo}' añadida.")
+    else:
+        st.warning(f"Agrupación por '{col_sexo}' omitida (columna no encontrada o <2 valores únicos).")
 
-        n_grupos = len(grupos)
-        fig_dim, axs_dim = plt.subplots(1, n_grupos, figsize=(n_grupos * 4.5, 4.0), sharey=True)
-        if n_grupos == 1: axs_dim = [axs_dim]
-        fig_dim.suptitle(f"Comparación: {dim_name}\n(General: {prom_general:.2f})", fontsize=10, y=1.03)
-        plot_count = 0
-        for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
-            ax = axs_dim[k]
-            try:
-                grouped_series = df_plot_groups.groupby(grupo_col, observed=False)[cols_validas_dim].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
-            
-                if not grouped_series.empty:
-                    # --- >> AÑADIR ESTA LÍNEA PARA FORZAR FLOAT << ---
-                    grouped = grouped_series.astype(float)
-            
-                    colors = plt.get_cmap('viridis')(np.linspace(0, 1, len(grouped)))
-                    bars = grouped.plot(kind='bar', color=colors, ax=ax, width=0.8)
-                    ax.set_title(f"Por {grupo_label}", fontsize=9)
-                    ax.set_xlabel('') # Mantener vacío
-                    if k == 0: ax.set_ylabel('Promedio Dimensión')
-                    # --- >> MODIFICAR tick_params (quitar 'ha') << ---
-                    ax.tick_params(axis='x', rotation=45, labelsize=8) # Quitar ha='right'
-                    ax.grid(axis='y', linestyle='--', alpha=0.6)
-                    # --- (Resto del código dentro del if not grouped.empty sigue igual) ---
-                    ax.set_ylim(bottom=min_esc-(max_esc-min_esc)*0.05, top=max_esc+(max_esc-min_esc)*0.05)
-                    for bar in bars.patches: ax.text(bar.get_x()+bar.get_width()/2, bar.get_height(), f'{bar.get_height():.2f}', ha='center', va='bottom', fontsize=7)
-                    plot_count += 1
+    # 2. Rango de Edad (creado desde Edad continua)
+    col_edad = '(SD)Edad'
+    col_rango_edad = 'Rango_Edad' # Nombre de la nueva columna
+    if col_edad in df_plot_groups.columns and pd.api.types.is_numeric_dtype(df_plot_groups[col_edad]):
+        try:
+            # Asegurarse de que la columna Edad no tenga NaNs que rompan pd.cut
+            edad_sin_nan = df_plot_groups[col_edad].dropna()
+            if not edad_sin_nan.empty:
+                min_edad_val = edad_sin_nan.min()
+                max_edad_val = edad_sin_nan.max()
+                # Definir los límites de los bins dinámicamente o estáticamente
+                bins = [0, 24, 34, 44, 54, 64, max(65, max_edad_val + 1)]
+                labels = ['<25', '25-34', '35-44', '45-54', '55-64', '65+']
+                num_labels = len(bins) - 1
+                # Crear la columna. pd.cut devuelve tipo 'category' por defecto.
+                df_plot_groups[col_rango_edad] = pd.cut(df_plot_groups[col_edad],
+                                                        bins=bins,
+                                                        labels=labels[:num_labels],
+                                                        right=False, # Intervalos [a, b)
+                                                        duplicates='drop')
+                # Verificar si se creó más de un grupo
+                if df_plot_groups[col_rango_edad].nunique() > 1:
+                    grupos['Rango Edad'] = col_rango_edad
+                    st.write(f"DEBUG: Agrupación por '{col_rango_edad}' añadida.")
                 else:
-                     ax.text(0.5, 0.5, 'No hay datos', ha='center', va='center', fontsize=8, color='grey')
-                     ax.set_xticks([])
-                     ax.set_yticks([])
-            except Exception as e_grp_inner: # Capturar error específico aquí
-                st.error(f"Error procesando/graficando '{dim_name}' por '{grupo_label}': {e_grp_inner}")
-                ax.text(0.5, 0.5, f'Error: {e_grp_inner}', ha='center', va='center', fontsize=7, color='red')
-                if plot_count > 0:
-                    plt.tight_layout(rect=[0, 0.03, 1, 0.90])
-                    figuras_informe.append(fig_dim)
-                    fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
-                    st.pyplot(fig_dim)
-                else: plt.close(fig_dim)
+                    st.warning(f"Agrupación por '{col_rango_edad}' omitida (<2 rangos resultantes).")
+            else:
+                 st.warning(f"Agrupación por '{col_rango_edad}' omitida (columna '{col_edad}' no tiene valores válidos).")
+        except Exception as e_edad:
+            st.warning(f"No se pudo crear Rango Edad desde '{col_edad}': {e_edad}")
+    else:
+        st.warning(f"Agrupación por Rango Edad omitida (columna '{col_edad}' no encontrada o no numérica).")
+
+    # 3. Tiene Hijos (creado desde Numero de hijos continuo)
+    col_hijos = '(SD)Numero de hijos'
+    col_tiene_hijos = 'Tiene_Hijos' # Nombre de la nueva columna
+    if col_hijos in df_plot_groups.columns and pd.api.types.is_numeric_dtype(df_plot_groups[col_hijos]):
+        try:
+            # Crear columna con strings 'Con hijos'/'Sin hijos', SIN .astype('category')
+            df_plot_groups[col_tiene_hijos] = np.where(df_plot_groups[col_hijos].fillna(-1) > 0, 'Con hijos', 'Sin hijos')
+            # Verificar si resultan ambos grupos
+            if df_plot_groups[col_tiene_hijos].nunique() > 1:
+                grupos['Tiene Hijos'] = col_tiene_hijos
+                st.write(f"DEBUG: Agrupación por '{col_tiene_hijos}' añadida.")
+            else:
+                st.warning(f"Agrupación por '{col_tiene_hijos}' omitida (<2 grupos resultantes).")
+        except Exception as e_hijos:
+             st.warning(f"No se pudo crear Tiene Hijos desde '{col_hijos}': {e_hijos}")
+    else:
+         st.warning(f"Agrupación por Tiene Hijos omitida (columna '{col_hijos}' no encontrada o no numérica).")
+
+    # 4. Estrato Socioeconómico
+    col_estrato = '(SD)Estrato socioeconomico' # Nombre exacto
+    # Quitar posible espacio al final si existe en el CSV original (aunque df.columns.str.strip() debería haberlo hecho)
+    col_estrato_cleaned = col_estrato.strip()
+    if col_estrato_cleaned in df_plot_groups.columns:
+         # Convertir a string por si acaso son números, para agrupar consistentemente
+         df_plot_groups[col_estrato_cleaned] = df_plot_groups[col_estrato_cleaned].astype(str)
+         if df_plot_groups[col_estrato_cleaned].nunique() > 1:
+             grupos['Estrato'] = col_estrato_cleaned
+             st.write(f"DEBUG: Agrupación por '{col_estrato_cleaned}' añadida.")
+         else:
+              st.warning(f"Agrupación por '{col_estrato_cleaned}' omitida (<2 valores únicos).")
+    else:
+        st.warning(f"Agrupación por Estrato omitida (columna '{col_estrato_cleaned}' no encontrada).")
+
+
+    # --- Bucle Principal de Gráficos por Dimensión y Grupo ---
+    if not grupos:
+        st.warning("No se definieron grupos válidos para la comparación. No se generarán gráficos comparativos.")
+    else:
+        st.info(f"Generando comparaciones para {len(mapa_dim_cols)} dimensiones por {len(grupos)} grupos: {list(grupos.keys())}")
+        fig_idx_start = 2 # Índice para titular figuras
+        # Iterar sobre cada DIMENSIÓN que tiene promedio calculado
+        for i, (dim_name, prom_general) in enumerate(resultados_promedio.items()):
+            if dim_name not in mapa_dim_cols:
+                st.warning(f"Skipping plot for dimension '{dim_name}': No valid columns found earlier.")
+                continue # Saltar si no se encontraron columnas válidas para esta dimensión
+
+            cols_validas_dim = mapa_dim_cols[dim_name] # Columnas de preguntas para esta dimensión
+            min_esc, max_esc = get_scale_range(dim_name) # Rango de la escala para esta dimensión
+
+            n_grupos_validos = len(grupos)
+            if n_grupos_validos == 0: continue # Doble check
+
+            # Crear una figura con subplots para cada grupo de comparación
+            fig_dim, axs_dim = plt.subplots(1, n_grupos_validos,
+                                            figsize=(n_grupos_validos * 4.5, 4.0), # Ancho dinámico
+                                            sharey=True) # Compartir eje Y para fácil comparación
+
+            # Si solo hay un grupo, axs_dim no es una lista, convertirla
+            if n_grupos_validos == 1:
+                axs_dim = [axs_dim]
+
+            fig_dim.suptitle(f"Comparación: {dim_name}\n(Promedio General: {prom_general:.2f})", fontsize=10, y=1.03)
+            plot_count_for_dim = 0 # Contar si se pudo graficar algo para esta dimensión
+
+            # Iterar sobre cada GRUPO de comparación (Sexo, Rango Edad, etc.)
+            for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
+                ax = axs_dim[k] # Eje actual para este grupo
+
+                try:
+                    # Agrupar por la columna de grupo (e.g., 'Sexo', 'Rango_Edad')
+                    # Calcular el promedio de TODAS las preguntas de la dimensión actual
+                    # Luego calcular el promedio de esos promedios (un solo valor por categoría del grupo)
+                    grouped_series = df_plot_groups.groupby(grupo_col, observed=False)[cols_validas_dim].mean(numeric_only=True).mean(axis=1, skipna=True).dropna()
+
+                    if not grouped_series.empty:
+                        # --- FORZAR a float ANTES de graficar ---
+                        grouped_data = grouped_series.astype(float)
+
+                        # Graficar barras
+                        categories = grouped_data.index.astype(str) # Asegurar que las etiquetas del eje X sean strings
+                        values = grouped_data.values
+                        colors = plt.get_cmap('viridis')(np.linspace(0, 1, len(categories)))
+
+                        bars = ax.bar(categories, values, color=colors, width=0.8)
+
+                        # Configurar ejes y título del subplot
+                        ax.set_title(f"Por {grupo_label}", fontsize=9)
+                        ax.set_xlabel('') # No necesitamos etiqueta X aquí
+                        if k == 0: # Solo poner etiqueta Y en el primer subplot
+                            ax.set_ylabel('Promedio Dimensión', fontsize=9)
+
+                        # Ajustar ticks del eje X
+                        ax.tick_params(axis='x', rotation=45, labelsize=8)
+                        ax.grid(axis='y', linestyle='--', alpha=0.6)
+
+                        # Establecer límites del eje Y basados en la escala de la dimensión
+                        margin = (max_esc - min_esc) * 0.05 # 5% de margen
+                        ax.set_ylim(bottom=min_esc - margin, top=max_esc + margin)
+
+                        # Añadir valores numéricos sobre las barras
+                        for bar in bars:
+                            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                                    f'{bar.get_height():.2f}',
+                                    ha='center', va='bottom', fontsize=7)
+
+                        plot_count_for_dim += 1 # Se graficó algo para este grupo
+                    else:
+                        # Mostrar mensaje si no hay datos para este grupo específico
+                        ax.text(0.5, 0.5, 'No hay datos\npara este grupo', ha='center', va='center', fontsize=8, color='grey', transform=ax.transAxes)
+                        ax.set_xticks([])
+                        ax.set_yticks([]) # Quitar ticks si no hay datos
+
+                except Exception as e_grp_inner:
+                    st.error(f"Error procesando/graficando '{dim_name}' por '{grupo_label}': {e_grp_inner}")
+                    ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', fontsize=7, color='red', transform=ax.transAxes)
+
+            # Después de iterar por todos los grupos para una dimensión:
+            if plot_count_for_dim > 0:
+                plt.tight_layout(rect=[0, 0.03, 1, 0.90]) # Ajustar layout general de la figura
+                figuras_informe.append(fig_dim) # Guardar la figura completa
+                fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
+                st.pyplot(fig_dim) # Mostrar la figura en Streamlit
+            else:
+                plt.close(fig_dim) # Cerrar la figura si no se graficó nada útilm)
 
 
     # --- Ensamblar Texto Informe Final (sin cambios) ---
