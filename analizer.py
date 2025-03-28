@@ -1,4 +1,4 @@
-# Importar librerías necesarias
+x# Importar librerías necesarias
 import streamlit as st
 import difflib
 import pandas as pd
@@ -398,17 +398,17 @@ for dim_cat, dim_content in data_dictionary.items():
                               # st.write(f"DEBUG: Label map (desde Escala) asignado a '{col_clean}'")
 
 ruta_csv = "cleaned_data - cleaned_data.csv"
-st.write("Iniciando proceso de carga del archivo CSV...")
-st.write("Ruta del archivo:", ruta_csv)
+#st.write("Iniciando proceso de carga del archivo CSV...")
+#st.write("Ruta del archivo:", ruta_csv)
 
 # Verificar si el archivo existe en la ruta especificada
 if os.path.exists(ruta_csv):
-    st.write("El archivo existe en la ruta indicada.")
+    #st.write("El archivo existe en la ruta indicada.")
     try:
         tamano = os.path.getsize(ruta_csv)
-        st.write("Tamaño del archivo (bytes):", tamano)
+        #st.write("Tamaño del archivo (bytes):", tamano)
     except Exception as ex:
-        st.write("Error al obtener el tamaño del archivo:", ex)
+        #st.write("Error al obtener el tamaño del archivo:", ex)
 else:
     st.error("Archivo no encontrado en la ruta especificada: " + ruta_csv)
     st.stop()
@@ -417,51 +417,51 @@ else:
 try:
     with open(ruta_csv, "r", encoding="utf-8") as f:
         contenido_inicial = f.read(500)
-    st.write("Contenido inicial del archivo (primeros 500 caracteres):")
+    #st.write("Contenido inicial del archivo (primeros 500 caracteres):")
     st.text(contenido_inicial)
 except Exception as ex:
-    st.error("Error al leer el contenido del archivo: " + str(ex))
+    #st.error("Error al leer el contenido del archivo: " + str(ex))
     st.stop()
 
 # Intento de cargar el DataFrame
 try:
-    st.write("Intentando cargar el DataFrame usando pd.read_csv...")
+    #st.write("Intentando cargar el DataFrame usando pd.read_csv...")
     df = pd.read_csv(
         ruta_csv, 
         parse_dates=['Hora de inicio', 'Hora de finalización'], 
         dayfirst=False, 
         sep=","
     )
-    st.write("Archivo leído en DataFrame exitosamente.")
+    #st.write("Archivo leído en DataFrame exitosamente.")
     
-    st.write("Dimensiones del DataFrame antes de limpieza:", df.shape)
+    #st.write("Dimensiones del DataFrame antes de limpieza:", df.shape)
     df.dropna(axis=1, how='all', inplace=True)
-    st.write("Dimensiones del DataFrame después de eliminar columnas vacías:", df.shape)
+    #st.write("Dimensiones del DataFrame después de eliminar columnas vacías:", df.shape)
     
     df.columns = df.columns.str.strip()  # Limpieza de nombres de columna
     st.success(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas.")
 
     # Conversión de columnas a tipo categórico basado en el diccionario de datos
-    st.write("Convirtiendo tipos categóricos...")
+    #st.write("Convirtiendo tipos categóricos...")
     converted_count = 0
     for category, variables in data_dictionary.items():
-        st.write(f"Procesando categoría: {category}")
+        #st.write(f"Procesando categoría: {category}")
         for col_name_key, var_details in variables.items():
             if var_details.get("Tipo") == "Categórica":
                 col_name_key = col_name_key.strip()  # Asegurar limpieza
-                st.write(f"Revisando columna: {col_name_key}")
+                #st.write(f"Revisando columna: {col_name_key}")
                 if col_name_key in df.columns:
                     try:
                         # Convertir solo si aún no es categórica
                         if not isinstance(df[col_name_key].dtype, pd.CategoricalDtype):
                             df[col_name_key] = df[col_name_key].astype('category')
                             converted_count += 1
-                            st.write(f"Columna convertida a categórica: {col_name_key}")
+                            #st.write(f"Columna convertida a categórica: {col_name_key}")
                     except Exception as e:
                         st.warning(f"No se pudo convertir '{col_name_key}' a categórica: {e}. Tipo actual: {df[col_name_key].dtype}.")
                 else:
                     st.warning(f"La columna '{col_name_key}' no se encuentra en el DataFrame.")
-    st.write(f"Conversión a categórico intentada. {converted_count} columnas convertidas.")
+    #st.write(f"Conversión a categórico intentada. {converted_count} columnas convertidas.")
 
 except Exception as e:
     st.error(f"Error al cargar/procesar '{ruta_csv}': {e}")
@@ -1367,14 +1367,14 @@ class PDFReport:
         """
         Inserta imagen desde archivo o figura Matplotlib usando io.BytesIO para figuras.
         """
-        st.write(f"DEBUG insert_image: Recibido tipo: {type(image_path_or_fig)}")
+        #st.write(f"DEBUG insert_image: Recibido tipo: {type(image_path_or_fig)}")
         img_buffer = None  # Para manejar el buffer si se crea
     
         try:
             if isinstance(image_path_or_fig, str) and os.path.isfile(image_path_or_fig):
                 # Caso 1: Es una ruta de archivo válida, úsala directamente
                 img_path_to_use = os.path.abspath(image_path_or_fig)  # Convertir a ruta absoluta
-                st.write(f"DEBUG PDF: Usando archivo de imagen existente: {img_path_to_use}")
+                #st.write(f"DEBUG PDF: Usando archivo de imagen existente: {img_path_to_use}")
                 # Abrir con PIL para obtener dimensiones
                 with PILImage.open(img_path_to_use) as pil_img:
                     orig_width_px, orig_height_px = pil_img.size
@@ -1383,7 +1383,7 @@ class PDFReport:
     
             elif hasattr(image_path_or_fig, 'savefig'):
                 # Caso 2: Es una figura Matplotlib, usar buffer en memoria
-                st.write("DEBUG PDF: Procesando figura Matplotlib en memoria...")
+                #st.write("DEBUG PDF: Procesando figura Matplotlib en memoria...")
                 img_buffer = io.BytesIO()
                 # Guardar la figura en el buffer
                 image_path_or_fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
@@ -1396,7 +1396,7 @@ class PDFReport:
                 img_buffer.seek(0)  # Rebobinar de nuevo para que ReportLab lo lea
                 # RLImage usará el buffer directamente
                 img_source_for_rl = img_buffer
-                st.write(f"DEBUG PDF: Figura procesada en buffer. Dimensiones: {orig_width_px}x{orig_height_px}")
+                #st.write(f"DEBUG PDF: Figura procesada en buffer. Dimensiones: {orig_width_px}x{orig_height_px}")
     
             else:
                 self.add_paragraph(f"Error: Imagen no válida ({type(image_path_or_fig)})", style='CustomCode')
@@ -1422,7 +1422,7 @@ class PDFReport:
             rl_img.hAlign = 'CENTER'
             self.elements.append(rl_img)
             self.elements.append(Spacer(1, 10))
-            st.write("DEBUG PDF: RLImage añadido a elements.")
+            #st.write("DEBUG PDF: RLImage añadido a elements.")
     
         except FileNotFoundError as fnf:
             # Este error debería ocurrir solo si la ruta de archivo no es válida
@@ -1437,9 +1437,9 @@ class PDFReport:
     
     def build_pdf(self):
         try:
-            st.write("DEBUG PDF: Iniciando self.doc.build()...")
+            #st.write("DEBUG PDF: Iniciando self.doc.build()...")
             self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
-            st.write("DEBUG PDF: self.doc.build() completado.")
+            #st.write("DEBUG PDF: self.doc.build() completado.")
             # Si usas archivos temporales, asegúrate de que no se eliminen antes de construir el PDF
         except LayoutError as e:
             st.error(f"Error de maquetación al generar PDF: {e}")
@@ -1535,11 +1535,11 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     if df_informe.empty:
         return "No hay datos para generar el informe general.", [], []
 
-    st.write(f"DEBUG - Generando informe general con {df_informe.shape[0]} filas.")
+    #st.write(f"DEBUG - Generando informe general con {df_informe.shape[0]} filas.")
     columnas_numericas_ok = []
     mapa_dim_cols = {}  # dim_name -> [lista de cols con prefijo válidas]
 
-    st.write("--- Validando columnas numéricas para dimensiones (BUSCANDO POR ACRÓNIMO (BM),(XX)) ---")
+    #st.write("--- Validando columnas numéricas para dimensiones (BUSCANDO POR ACRÓNIMO (BM),(XX)) ---")
     columnas_df = df_informe.columns.tolist()
     bm_dims = data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {})
 
@@ -1575,19 +1575,19 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
         st.error("Error Fatal: No se encontraron columnas numéricas válidas para NINGUNA dimensión (verificar nombres exactos con prefijos en CSV y Diccionario).")
         return "Error: No hay columnas válidas para análisis dimensional.", [], []
 
-    st.write(f"DEBUG - Dimensiones con columnas válidas encontradas: {len(mapa_dim_cols)}")
-    st.write(f"DEBUG - Total columnas numéricas únicas válidas: {len(columnas_numericas_ok)}")
+    #st.write(f"DEBUG - Dimensiones con columnas válidas encontradas: {len(mapa_dim_cols)}")
+    #st.write(f"DEBUG - Total columnas numéricas únicas válidas: {len(columnas_numericas_ok)}")
 
     # --- Calcular Promedios ---
     resultados_promedio = {}
-    st.write("--- Calculando Promedios Dimensionales ---")
+    #st.write("--- Calculando Promedios Dimensionales ---")
     for dim_name, cols_validas in mapa_dim_cols.items():
         try:
             promedio_dim = df_informe[cols_validas].mean(axis=0, skipna=True).mean(skipna=True)
             if pd.notna(promedio_dim):
                 resultados_promedio[dim_name] = promedio_dim
                 n_promedio = df_informe[cols_validas].count().mean()
-                st.write(f"OK: Promedio '{dim_name}': {promedio_dim:.2f} (N~{n_promedio:.0f})")
+                #st.write(f"OK: Promedio '{dim_name}': {promedio_dim:.2f} (N~{n_promedio:.0f})")
         except Exception as e:
             st.error(f"ERROR promedio '{dim_name}': {e}")
 
@@ -1735,15 +1735,15 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
     df_plot_groups = df_informe.copy()  # Copia del DataFrame del informe
     grupos = {}  # Diccionario {Label: ColumnName} para columnas de agrupación
 
-    st.write("DEBUG: Validando columnas de agrupación...")
+    #st.write("DEBUG: Validando columnas de agrupación...")
     # 1. Sexo
     col_sexo = '(SD)Sexo'
     if col_sexo in df_plot_groups.columns:
         df_plot_groups[col_sexo] = df_plot_groups[col_sexo].astype(str).fillna('No especificado')
-        st.write(f"DEBUG: Columna '{col_sexo}' dtype: {df_plot_groups[col_sexo].dtype}")
+        #st.write(f"DEBUG: Columna '{col_sexo}' dtype: {df_plot_groups[col_sexo].dtype}")
         if df_plot_groups[col_sexo].nunique() > 1:
             grupos['Sexo'] = col_sexo
-            st.write(f"DEBUG: Agrupación por '{col_sexo}' añadida (Unique: {df_plot_groups[col_sexo].nunique()}).")
+            #st.write(f"DEBUG: Agrupación por '{col_sexo}' añadida (Unique: {df_plot_groups[col_sexo].nunique()}).")
         else:
             st.warning(f"Agrupación por '{col_sexo}' omitida (<2 valores únicos después de limpiar NaNs).")
     else:
@@ -1770,10 +1770,10 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
                                                         right=False,
                                                         duplicates='drop')
                 df_plot_groups[col_rango_edad] = df_plot_groups[col_rango_edad].astype(str).fillna('Edad desconocida')
-                st.write(f"DEBUG: Columna '{col_rango_edad}' dtype: {df_plot_groups[col_rango_edad].dtype}")
+                #st.write(f"DEBUG: Columna '{col_rango_edad}' dtype: {df_plot_groups[col_rango_edad].dtype}")
                 if df_plot_groups[col_rango_edad].nunique() > 1:
                     grupos['Rango Edad'] = col_rango_edad
-                    st.write(f"DEBUG: Agrupación por '{col_rango_edad}' añadida (Unique: {df_plot_groups[col_rango_edad].nunique()}).")
+                    #st.write(f"DEBUG: Agrupación por '{col_rango_edad}' añadida (Unique: {df_plot_groups[col_rango_edad].nunique()}).")
                 else:
                     st.warning(f"Agrupación por '{col_rango_edad}' omitida (<2 rangos resultantes).")
             else:
@@ -1791,10 +1791,10 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
             numeric_hijos = pd.to_numeric(df_plot_groups[col_hijos], errors='coerce')
             df_plot_groups[col_tiene_hijos] = np.where(numeric_hijos > 0, 'Con hijos', 'Sin hijos')
             df_plot_groups[col_tiene_hijos] = df_plot_groups[col_tiene_hijos].astype(str)
-            st.write(f"DEBUG: Columna '{col_tiene_hijos}' dtype: {df_plot_groups[col_tiene_hijos].dtype}")
+            #st.write(f"DEBUG: Columna '{col_tiene_hijos}' dtype: {df_plot_groups[col_tiene_hijos].dtype}")
             if df_plot_groups[col_tiene_hijos].nunique() > 1:
                 grupos['Tiene Hijos'] = col_tiene_hijos
-                st.write(f"DEBUG: Agrupación por '{col_tiene_hijos}' añadida (Unique: {df_plot_groups[col_tiene_hijos].nunique()}).")
+                #st.write(f"DEBUG: Agrupación por '{col_tiene_hijos}' añadida (Unique: {df_plot_groups[col_tiene_hijos].nunique()}).")
             else:
                 st.warning(f"Agrupación por '{col_tiene_hijos}' omitida (<2 grupos resultantes).")
         except Exception as e_hijos:
@@ -1807,19 +1807,19 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
     col_estrato_cleaned = col_estrato.strip()
     if col_estrato_cleaned in df_plot_groups.columns:
         df_plot_groups[col_estrato_cleaned] = df_plot_groups[col_estrato_cleaned].astype(str).fillna('Estrato desc.')
-        st.write(f"DEBUG: Columna '{col_estrato_cleaned}' dtype: {df_plot_groups[col_estrato_cleaned].dtype}")
+        #st.write(f"DEBUG: Columna '{col_estrato_cleaned}' dtype: {df_plot_groups[col_estrato_cleaned].dtype}")
         if df_plot_groups[col_estrato_cleaned].nunique() > 1:
             grupos['Estrato'] = col_estrato_cleaned
-            st.write(f"DEBUG: Agrupación por '{col_estrato_cleaned}' añadida (Unique: {df_plot_groups[col_estrato_cleaned].nunique()}).")
+            #st.write(f"DEBUG: Agrupación por '{col_estrato_cleaned}' añadida (Unique: {df_plot_groups[col_estrato_cleaned].nunique()}).")
         else:
             st.warning(f"Agrupación por '{col_estrato_cleaned}' omitida (<2 valores únicos).")
     else:
         st.warning(f"Agrupación por Estrato omitida (columna '{col_estrato_cleaned}' no encontrada).")
 
-    st.write(f"DEBUG: Grupos definidos para comparación: {list(grupos.keys())}")
+    #st.write(f"DEBUG: Grupos definidos para comparación: {list(grupos.keys())}")
 
     # --- Asegurar que TODAS las columnas de valor sean numéricas ---
-    st.write("DEBUG: Asegurando tipos numéricos para columnas de valor...")
+    #st.write("DEBUG: Asegurando tipos numéricos para columnas de valor...")
     columnas_valor_todas = []
     for cols in mapa_dim_cols.values():
         columnas_valor_todas.extend(cols)
@@ -1852,7 +1852,7 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
         fig_idx_start = 2
 
         for i, (dim_name, prom_general) in enumerate(resultados_promedio.items()):
-            st.write(f"\nDEBUG: Iniciando gráficos para Dimensión: '{dim_name}'")
+            #st.write(f"\nDEBUG: Iniciando gráficos para Dimensión: '{dim_name}'")
             if dim_name not in mapa_dim_cols:
                 st.warning(f"SKIP Plot Dimensión '{dim_name}': No se encontraron columnas válidas para ella.")
                 continue
@@ -1879,7 +1879,7 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
 
             for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
                 ax = axs_dim[k]
-                st.write(f"  -> Procesando Grupo: '{grupo_label}' (Col: '{grupo_col}')")
+                #st.write(f"  -> Procesando Grupo: '{grupo_label}' (Col: '{grupo_col}')")
                 try:
                     if grupo_col not in df_plot_groups.columns:
                         st.error(f"    ERROR GRAVE: Columna de grupo '{grupo_col}' no existe.")
@@ -1895,12 +1895,12 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
                             ax.text(0.5, 0.5, f'Error: Dtype\nColumna Grupo\nInválido', ha='center', va='center', color='red', transform=ax.transAxes)
                             continue
 
-                    st.write(f"    Agrupando por '{grupo_col}', calculando media de {len(cols_realmente_validas)} columnas...")
+                    #st.write(f"    Agrupando por '{grupo_col}', calculando media de {len(cols_realmente_validas)} columnas...")
                     grouped_series = df_plot_groups.groupby(grupo_col, observed=False)[cols_realmente_validas] \
                         .mean(numeric_only=True)
-                    st.write(f"    Resultado Groupby (medias por columna): \n{grouped_series.head().to_string()}")
+                    #st.write(f"    Resultado Groupby (medias por columna): \n{grouped_series.head().to_string()}")
                     final_means = grouped_series.mean(axis=1, skipna=True).dropna()
-                    st.write(f"    Resultado Groupby (media final por grupo): \n{final_means.head().to_string()}")
+                    #st.write(f"    Resultado Groupby (media final por grupo): \n{final_means.head().to_string()}")
 
                     if not final_means.empty:
                         grouped_data = final_means.astype(float)
@@ -1934,15 +1934,15 @@ desde una perspectiva organizacional, considerando aspectos psicosociales y del 
                     st.error(f"    ERROR procesando/graficando '{dim_name}' por '{grupo_label}' ({grupo_col}): {e_grp_inner}")
                     ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', color='red', transform=ax.transAxes)
                     if grupo_col in df_plot_groups.columns:
-                        st.write(f"    DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique (5): {df_plot_groups[grupo_col].unique()[:5]}...")
-                    st.write(f"    DEBUG Info Columnas Valor Error: {cols_realmente_validas}")
+                        #st.write(f"    DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique (5): {df_plot_groups[grupo_col].unique()[:5]}...")
+                    #st.write(f"    DEBUG Info Columnas Valor Error: {cols_realmente_validas}")
 
             if plot_count_for_dim > 0:
                 plt.tight_layout(rect=[0, 0.03, 1, 0.90])
                 figuras_informe.append(fig_dim)
                 fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
                 st.pyplot(fig_dim)
-                st.write(f"DEBUG: Gráfico para Dimensión '{dim_name}' generado y añadido.")
+                #st.write(f"DEBUG: Gráfico para Dimensión '{dim_name}' generado y añadido.")
             else:
                 st.warning(f"WARN: No se generó ningún gráfico para la dimensión '{dim_name}'.")
                 plt.close(fig_dim)
