@@ -1532,6 +1532,7 @@ def generar_informe(pregunta_usuario, opcion_analisis, resultados_texto, figuras
 
 
 # --- Función generar_informe_general (AJUSTADA con Fuzzy Match y corrección 'ha') ---
+# --- Función generar_informe_general (AJUSTADA con Fuzzy Match, corrección en tick_params y envío de prompts a Gemini) ---
 def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     df_informe = df_original.copy()
     if df_informe.empty:
@@ -1539,22 +1540,22 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
 
     st.write(f"DEBUG - Generando informe general con {df_informe.shape[0]} filas.")
     columnas_numericas_ok = []
-    mapa_dim_cols = {} # dim_name -> [lista de cols con prefijo válidas]
+    mapa_dim_cols = {}  # dim_name -> [lista de cols con prefijo válidas]
 
     st.write("--- Validando columnas numéricas para dimensiones (BUSCANDO POR ACRÓNIMO (BM),(XX)) ---")
     columnas_df = df_informe.columns.tolist()
     bm_dims = data_dictionary.get("Dimensiones de Bienestar y Salud Mental", {})
-    
+
     for dim_name, dim_details in bm_dims.items():
         acronym = dim_details.get("Acronimo")
         if not acronym:
             st.warning(f"SKIP [{dim_name}]: No tiene 'Acronimo' definido en data_dictionary.")
             continue
-    
+
         # Construir el patrón a buscar: (BM),(XX)
         target_substring = f"(BM),({acronym})"
         cols_validas_para_dim = []
-    
+
         for col_name in columnas_df:
             if target_substring in col_name:
                 # Verificar si es numérica y tiene datos
@@ -1566,7 +1567,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                     # else: st.write(f"DEBUG [{dim_name}]: Columna '{col_name}' encontrada pero solo NaNs.")
                 else:
                     st.warning(f"INFO [{dim_name}]: Columna '{col_name}' coincide con patrón '{target_substring}' pero NO es numérica ({df_informe[col_name].dtype}).")
-    
+
         if cols_validas_para_dim:
             mapa_dim_cols[dim_name] = cols_validas_para_dim
             # st.write(f"OK [{dim_name}]: {len(cols_validas_para_dim)} columnas válidas encontradas usando '{target_substring}'.")
@@ -1580,7 +1581,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     st.write(f"DEBUG - Dimensiones con columnas válidas encontradas: {len(mapa_dim_cols)}")
     st.write(f"DEBUG - Total columnas numéricas únicas válidas: {len(columnas_numericas_ok)}")
 
-    # --- Calcular Promedios (sin cambios) ---
+    # --- Calcular Promedios ---
     resultados_promedio = {}
     st.write("--- Calculando Promedios Dimensionales ---")
     for dim_name, cols_validas in mapa_dim_cols.items():
@@ -1597,8 +1598,8 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
         st.error("Error Fatal: No se pudo calcular promedio para ninguna dimensión.")
         return "Error: No se calcularon promedios.", [], []
 
-    # --- Clasificar Fortalezas, Riesgos, etc. (sin cambios) ---
-    inverse_dims = { # Asegúrate que los NOMBRES DE DIMENSIÓN aquí sean correctos
+    # --- Clasificar Fortalezas, Riesgos, etc. ---
+    inverse_dims = {  # Asegúrate que los NOMBRES DE DIMENSIÓN aquí sean correctos
         "Conflicto Familia-Trabajo": True, "Síntomas de Burnout": True,
         "Factores de Efectos Colaterales (Escala de Desgaste)": True,
         "Factores de Efectos Colaterales (Escala de Alienación)": True,
@@ -1613,159 +1614,136 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
             if vals: return min(vals), max(vals)
         if "Burnout" in dim_name: return 1, 5
         if any(s in dim_name for s in ["Compromiso", "Defensa", "Satisfacción", "Retiro"]): return 1, 6
-        return 1, 7 # Default
+        return 1, 7  # Default
 
     def estado_dimension(valor, dim_name):
-        if pd.isna(valor): return ('Sin Datos', 'grey')
+        if pd.isna(valor): 
+            return ('Sin Datos', 'grey')
         min_esc, max_esc = get_scale_range(dim_name)
         rango = max_esc - min_esc; midpoint = (min_esc + max_esc) / 2.0
-        if rango <= 0: return ('Rango Inválido', 'grey')
+        if rango <= 0: 
+            return ('Rango Inválido', 'grey')
         umbral_riesgo = min_esc + rango / 3.0
         umbral_fortaleza = max_esc - rango / 3.0
         val_int = (max_esc + min_esc) - valor if inverse_dims.get(dim_name, False) else valor
-        if val_int >= umbral_fortaleza: return ('Fortaleza', 'green')
-        elif val_int <= umbral_riesgo: return ('Riesgo', 'red')
-        else: return ('Intermedio', 'yellow')
+        if val_int >= umbral_fortaleza: 
+            return ('Fortaleza', 'green')
+        elif val_int <= umbral_riesgo: 
+            return ('Riesgo', 'red')
+        else: 
+            return ('Intermedio', 'yellow')
 
     fortalezas, riesgos, intermedios, sin_datos = [], [], [], []
-    # ... (loop de clasificación igual) ...
     for dim, val in resultados_promedio.items():
         estado, _ = estado_dimension(val, dim)
         entry = (dim, val)
-        if estado == 'Fortaleza': fortalezas.append(entry)
-        elif estado == 'Riesgo': riesgos.append(entry)
-        elif estado == 'Intermedio': intermedios.append(entry)
-        else: sin_datos.append(entry)
-    fortalezas.sort(key=lambda x: x[1], reverse=True); riesgos.sort(key=lambda x: x[1]); intermedios.sort(key=lambda x: x[1])
+        if estado == 'Fortaleza': 
+            fortalezas.append(entry)
+        elif estado == 'Riesgo': 
+            riesgos.append(entry)
+        elif estado == 'Intermedio': 
+            intermedios.append(entry)
+        else: 
+            sin_datos.append(entry)
+    fortalezas.sort(key=lambda x: x[1], reverse=True)
+    riesgos.sort(key=lambda x: x[1])
+    intermedios.sort(key=lambda x: x[1])
 
-
-    # --- Generar Textos Gemini (sin cambios) ---
+    # --- Envío de prompts a Gemini ---
     try:
         prompt_resumen = f"""
-         Estas son las dimensiones y sus promedios:
-         Fortalezas: {fortalezas}
-         Riesgos: {riesgos}
-         Intermedios: {intermedios}
-         Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
-         ofreciendo una visión general de la situación y recomendaciones generales.
-         """
+Estas son las dimensiones y sus promedios:
+Fortalezas: {fortalezas}
+Riesgos: {riesgos}
+Intermedios: {intermedios}
+Genera un resumen ejecutivo describiendo las fortalezas, las debilidades (riesgos) y las dimensiones intermedias, 
+ofreciendo una visión general de la situación y recomendaciones generales.
+"""
         resumen_ejecutivo = enviar_prompt(prompt_resumen)
-        
+
         prompt_conclusiones = f"""
-         Basándote en los resultados:
-         Fortalezas: {fortalezas}
-         Riesgos: {riesgos}
-         Intermedios: {intermedios}
-         Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
-         desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
-         """
-        conclusiones = enviar_prompt(prompt_conclusiones)
-        if "Error" in resumen_ejecutivo or "Error" in conclusiones_recomendaciones: raise Exception("Error Gemini")
+Basándote en los resultados:
+Fortalezas: {fortalezas}
+Riesgos: {riesgos}
+Intermedios: {intermedios}
+Proporciona conclusiones detalladas y recomendaciones prácticas para mejorar las áreas en riesgo y mantener las fortalezas, 
+desde una perspectiva organizacional, considerando aspectos psicosociales y del bienestar laboral.
+"""
+        conclusiones_recomendaciones = enviar_prompt(prompt_conclusiones)
+        if "Error" in resumen_ejecutivo or "Error" in conclusiones_recomendaciones:
+            raise Exception("Error en respuesta de Gemini")
     except Exception as e:
-        # ... (manejo de error igual) ...
-        resumen_ejecutivo = "Error generando resumen."; conclusiones_recomendaciones = "Error generando conclusiones."
+        st.error(f"Error enviando prompts a Gemini: {e}")
+        resumen_ejecutivo = "Error generando resumen."
+        conclusiones_recomendaciones = "Error generando conclusiones."
 
-
-    # --- Generar Gráficos (sin cambios en la lógica principal, usa cols encontradas) ---
+    # --- Generar Gráficos ---
     figuras_informe = []
     fig_titles = []
+
     # --- Gráfico Semáforo ---
     fig_semaforo = None 
     st.write("--- Generando Gráfico Semáforo ---")
     try:
-        try:
-    # 1. Preparar datos para el gráfico
-    # Ordenar dimensiones alfabéticamente para consistencia
-            dims_items_sorted = sorted(resultados_promedio.items())
-            if not dims_items_sorted:
-                st.warning("No hay datos de promedio para generar el semáforo.")
-                # fig_semaforo sigue siendo None (inicializado antes del try)
-            else:
-                dim_names = [item[0] for item in dims_items_sorted]
-                dim_scores = [item[1] for item in dims_items_sorted]
-        
-                # Obtener estado y color para cada dimensión
-                status_info = [estado_dimension(score, name) for name, score in dims_items_sorted]
-                dim_status = [info[0] for info in status_info]
-                # Mapear nombres de color ('green', 'red', 'yellow', 'grey') a colores de matplotlib
-                color_map = {'green': 'tab:green', 'red': 'tab:red', 'yellow': 'tab:orange', 'grey': 'tab:gray'} # Usar colores tab: para mejor visibilidad
-                dim_colors = [color_map.get(info[1], 'tab:gray') for info in status_info] # Usar get con default
-        
-                # 2. Crear la figura y los ejes
-                n_dims = len(dim_names)
-                # Ajustar altura dinámicamente (más alto si hay muchas dimensiones)
-                fig_height = max(4, n_dims * 0.4)
-                fig_semaforo, ax = plt.subplots(figsize=(8, fig_height)) # Ancho fijo, altura variable
-        
-                # 3. Crear las barras horizontales
-                y_pos = np.arange(n_dims)
-                bars = ax.barh(y_pos, dim_scores, color=dim_colors, align='center', height=0.6)
-        
-                # 4. Añadir etiquetas y texto
-                ax.set_yticks(y_pos)
-                ax.set_yticklabels(dim_names) # Nombres de dimensión en el eje Y
-                ax.invert_yaxis()  # La primera dimensión arriba
-        
-                # Añadir el valor numérico y estado al lado o sobre la barra
-                for i, bar in enumerate(bars):
-                    score = dim_scores[i]
-                    status = dim_status[i]
-                    # Determinar el rango para posicionar el texto
-                    min_r, max_r = get_scale_range(dim_names[i])
-                    text_x_pos = max_r * 1.02 # Un poco a la derecha del máximo posible
-        
-                    # Si la barra es muy corta, poner texto a la derecha, si no, al final de la barra
-                    # O siempre a la derecha del máximo para alineación
-                    ax.text(text_x_pos, bar.get_y() + bar.get_height()/2,
-                            f'{score:.2f} ({status})',
-                            va='center', ha='left', color='black')
-        
-                # 5. Configuración del Eje X y Título
-                # Determinar límites generales del eje X (ej. 0 al máximo de la escala + un margen)
-                all_ranges = [get_scale_range(name) for name in dim_names]
-                global_min = min(r[0] for r in all_ranges) if all_ranges else 0
-                global_max = max(r[1] for r in all_ranges) if all_ranges else 7
-                ax.set_xlim(left=global_min * 0.95, right=global_max * 1.15) # Ajustar límites con margen
-                ax.set_xlabel('Puntaje Promedio Dimensión')
-                ax.set_title('Semáforo de Dimensiones de Bienestar')
-        
-                # Mejorar apariencia
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.xaxis.grid(True, linestyle='--', which='major', color='grey', alpha=.25)
-                ax.tick_params(axis='x', labelsize=8)
-        
-                plt.tight_layout() # Ajustar layout para evitar solapamientos
-        
-        # -> El resto del bloque try...except como lo tenías para manejar el error general
-        except Exception as e:
-            st.error(f"Error al generar gráfico Semáforo: {e}")
-        # ... (código semáforo igual, usa resultados_promedio) ...
-        dims_list = list(resultados_promedio.items())
-        if dims_list:
-             # ... (crear subplots, iterar, colorear, añadir texto, etc.) ...
-             # Asegurar que se guarda el objeto figura
-             if fig_semaforo:
-                figuras_informe.append(fig_semaforo)
-             fig_titles.append("Figura 1: Semáforo de Dimensiones")
-             st.pyplot(fig_semaforo)
-    except Exception as e: st.error(f"Error Semáforo: {e}")
+        dims_items_sorted = sorted(resultados_promedio.items())
+        if not dims_items_sorted:
+            st.warning("No hay datos de promedio para generar el semáforo.")
+        else:
+            dim_names = [item[0] for item in dims_items_sorted]
+            dim_scores = [item[1] for item in dims_items_sorted]
+
+            status_info = [estado_dimension(score, name) for name, score in dims_items_sorted]
+            dim_status = [info[0] for info in status_info]
+            color_map = {'green': 'tab:green', 'red': 'tab:red', 'yellow': 'tab:orange', 'grey': 'tab:gray'}
+            dim_colors = [color_map.get(info[1], 'tab:gray') for info in status_info]
+
+            n_dims = len(dim_names)
+            fig_height = max(4, n_dims * 0.4)
+            fig_semaforo, ax = plt.subplots(figsize=(8, fig_height))
+
+            y_pos = np.arange(n_dims)
+            bars = ax.barh(y_pos, dim_scores, color=dim_colors, align='center', height=0.6)
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(dim_names)
+            ax.invert_yaxis()
+
+            for i, bar in enumerate(bars):
+                score = dim_scores[i]
+                status = dim_status[i]
+                min_r, max_r = get_scale_range(dim_names[i])
+                text_x_pos = max_r * 1.02
+                ax.text(text_x_pos, bar.get_y() + bar.get_height()/2,
+                        f'{score:.2f} ({status})',
+                        va='center', ha='left', color='black')
+
+            all_ranges = [get_scale_range(name) for name in dim_names]
+            global_min = min(r[0] for r in all_ranges) if all_ranges else 0
+            global_max = max(r[1] for r in all_ranges) if all_ranges else 7
+            ax.set_xlim(left=global_min * 0.95, right=global_max * 1.15)
+            ax.set_xlabel('Puntaje Promedio Dimensión')
+            ax.set_title('Semáforo de Dimensiones de Bienestar')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.xaxis.grid(True, linestyle='--', which='major', color='grey', alpha=.25)
+            ax.tick_params(axis='x', rotation=45, labelsize=8)
+            plt.tight_layout()
+            figuras_informe.append(fig_semaforo)
+            fig_titles.append("Figura 1: Semáforo de Dimensiones")
+            st.pyplot(fig_semaforo)
+    except Exception as e:
+        st.error(f"Error al generar gráfico Semáforo: {e}")
 
     # --- Gráficos por Grupo ---
-        # --- Generar Gráficos Comparativos ---
     st.write("--- Generando Gráficos Comparativos ---")
-    df_plot_groups = df_informe.copy() # Usar copia del DataFrame del informe
-    grupos = {} # Diccionario para almacenar las columnas de agrupación válidas {Label: ColumnName}
+    df_plot_groups = df_informe.copy()  # Copia del DataFrame del informe
+    grupos = {}  # Diccionario {Label: ColumnName} para columnas de agrupación
 
-    # --- Definir y Validar Columnas de Agrupación ---
     st.write("DEBUG: Validando columnas de agrupación...")
-
     # 1. Sexo
-    col_sexo = '(SD)Sexo' # Nombre exacto
+    col_sexo = '(SD)Sexo'
     if col_sexo in df_plot_groups.columns:
-        # Convertir a string Y LUEGO verificar nunique > 1
         df_plot_groups[col_sexo] = df_plot_groups[col_sexo].astype(str).fillna('No especificado')
-        st.write(f"DEBUG: Columna '{col_sexo}' dtype: {df_plot_groups[col_sexo].dtype}") # Verificar dtype
+        st.write(f"DEBUG: Columna '{col_sexo}' dtype: {df_plot_groups[col_sexo].dtype}")
         if df_plot_groups[col_sexo].nunique() > 1:
             grupos['Sexo'] = col_sexo
             st.write(f"DEBUG: Agrupación por '{col_sexo}' añadida (Unique: {df_plot_groups[col_sexo].nunique()}).")
@@ -1776,7 +1754,7 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
 
     # 2. Rango de Edad (creado desde Edad continua)
     col_edad = '(SD)Edad'
-    col_rango_edad = 'Rango_Edad' # Nombre de la nueva columna
+    col_rango_edad = 'Rango_Edad'
     if col_edad in df_plot_groups.columns and pd.api.types.is_numeric_dtype(df_plot_groups[col_edad]):
         try:
             edad_sin_nan = df_plot_groups[col_edad].dropna()
@@ -1785,25 +1763,24 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
                 max_edad_val = edad_sin_nan.max()
                 bins = [0, 24, 34, 44, 54, 64, max(65, max_edad_val + 1)]
                 labels = ['<25', '25-34', '35-44', '45-54', '55-64', '65+']
-                # Asegurarse que labels coincida con bins-1
                 num_labels = len(bins) - 1
-                if len(labels) > num_labels: labels = labels[:num_labels] # Ajustar si labels es más largo
+                if len(labels) > num_labels: 
+                    labels = labels[:num_labels]
 
                 df_plot_groups[col_rango_edad] = pd.cut(df_plot_groups[col_edad],
                                                         bins=bins,
-                                                        labels=labels, # Usar labels ajustados
+                                                        labels=labels,
                                                         right=False,
                                                         duplicates='drop')
-                # ---> Convertir explícitamente a string DESPUÉS de pd.cut <---
                 df_plot_groups[col_rango_edad] = df_plot_groups[col_rango_edad].astype(str).fillna('Edad desconocida')
-                st.write(f"DEBUG: Columna '{col_rango_edad}' dtype: {df_plot_groups[col_rango_edad].dtype}") # Verificar dtype
+                st.write(f"DEBUG: Columna '{col_rango_edad}' dtype: {df_plot_groups[col_rango_edad].dtype}")
                 if df_plot_groups[col_rango_edad].nunique() > 1:
                     grupos['Rango Edad'] = col_rango_edad
                     st.write(f"DEBUG: Agrupación por '{col_rango_edad}' añadida (Unique: {df_plot_groups[col_rango_edad].nunique()}).")
                 else:
                     st.warning(f"Agrupación por '{col_rango_edad}' omitida (<2 rangos resultantes).")
             else:
-                 st.warning(f"Agrupación por '{col_rango_edad}' omitida (columna '{col_edad}' no tiene valores válidos).")
+                st.warning(f"Agrupación por '{col_rango_edad}' omitida (columna '{col_edad}' no tiene valores válidos).")
         except Exception as e_edad:
             st.warning(f"No se pudo crear Rango Edad desde '{col_edad}': {e_edad}")
     else:
@@ -1815,241 +1792,194 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
     if col_hijos in df_plot_groups.columns:
         try:
             numeric_hijos = pd.to_numeric(df_plot_groups[col_hijos], errors='coerce')
-            # Crear la columna directamente como string
             df_plot_groups[col_tiene_hijos] = np.where(numeric_hijos > 0, 'Con hijos', 'Sin hijos')
-            # Los NaN en numeric_hijos resultarán en 'Sin hijos' con np.where si > 0 es False
-            df_plot_groups[col_tiene_hijos] = df_plot_groups[col_tiene_hijos].astype(str) # Asegurar string por si acaso
-            st.write(f"DEBUG: Columna '{col_tiene_hijos}' dtype: {df_plot_groups[col_tiene_hijos].dtype}") # Verificar dtype
+            df_plot_groups[col_tiene_hijos] = df_plot_groups[col_tiene_hijos].astype(str)
+            st.write(f"DEBUG: Columna '{col_tiene_hijos}' dtype: {df_plot_groups[col_tiene_hijos].dtype}")
             if df_plot_groups[col_tiene_hijos].nunique() > 1:
                 grupos['Tiene Hijos'] = col_tiene_hijos
                 st.write(f"DEBUG: Agrupación por '{col_tiene_hijos}' añadida (Unique: {df_plot_groups[col_tiene_hijos].nunique()}).")
             else:
                 st.warning(f"Agrupación por '{col_tiene_hijos}' omitida (<2 grupos resultantes).")
         except Exception as e_hijos:
-             st.warning(f"No se pudo crear Tiene Hijos desde '{col_hijos}': {e_hijos}")
+            st.warning(f"No se pudo crear Tiene Hijos desde '{col_hijos}': {e_hijos}")
     else:
-         st.warning(f"Agrupación por Tiene Hijos omitida (columna '{col_hijos}' no encontrada).")
+        st.warning(f"Agrupación por Tiene Hijos omitida (columna '{col_hijos}' no encontrada).")
 
     # 4. Estrato Socioeconómico
     col_estrato = '(SD)Estrato socioeconomico'
     col_estrato_cleaned = col_estrato.strip()
     if col_estrato_cleaned in df_plot_groups.columns:
-         df_plot_groups[col_estrato_cleaned] = df_plot_groups[col_estrato_cleaned].astype(str).fillna('Estrato desc.')
-         st.write(f"DEBUG: Columna '{col_estrato_cleaned}' dtype: {df_plot_groups[col_estrato_cleaned].dtype}") # Verificar dtype
-         if df_plot_groups[col_estrato_cleaned].nunique() > 1:
-             grupos['Estrato'] = col_estrato_cleaned
-             st.write(f"DEBUG: Agrupación por '{col_estrato_cleaned}' añadida (Unique: {df_plot_groups[col_estrato_cleaned].nunique()}).")
-         else:
-              st.warning(f"Agrupación por '{col_estrato_cleaned}' omitida (<2 valores únicos).")
+        df_plot_groups[col_estrato_cleaned] = df_plot_groups[col_estrato_cleaned].astype(str).fillna('Estrato desc.')
+        st.write(f"DEBUG: Columna '{col_estrato_cleaned}' dtype: {df_plot_groups[col_estrato_cleaned].dtype}")
+        if df_plot_groups[col_estrato_cleaned].nunique() > 1:
+            grupos['Estrato'] = col_estrato_cleaned
+            st.write(f"DEBUG: Agrupación por '{col_estrato_cleaned}' añadida (Unique: {df_plot_groups[col_estrato_cleaned].nunique()}).")
+        else:
+            st.warning(f"Agrupación por '{col_estrato_cleaned}' omitida (<2 valores únicos).")
     else:
         st.warning(f"Agrupación por Estrato omitida (columna '{col_estrato_cleaned}' no encontrada).")
 
-    # --- FIN de Validar Columnas de Agrupación ---
     st.write(f"DEBUG: Grupos definidos para comparación: {list(grupos.keys())}")
 
-    # --- >> NUEVO: Asegurar que TODAS las columnas de valor sean numéricas ANTES del bucle << ---
+    # --- Asegurar que TODAS las columnas de valor sean numéricas ---
     st.write("DEBUG: Asegurando tipos numéricos para columnas de valor...")
     columnas_valor_todas = []
     for cols in mapa_dim_cols.values():
         columnas_valor_todas.extend(cols)
-    columnas_valor_todas = list(set(columnas_valor_todas)) # Únicas
+    columnas_valor_todas = list(set(columnas_valor_todas))
 
     conversion_errores = 0
     for col_val in columnas_valor_todas:
         if col_val in df_plot_groups.columns:
             original_dtype = df_plot_groups[col_val].dtype
-            # Solo convertir si no es ya numérico (float o int)
             if not pd.api.types.is_numeric_dtype(original_dtype):
-                 try:
-                     df_plot_groups[col_val] = pd.to_numeric(df_plot_groups[col_val], errors='coerce')
-                     if df_plot_groups[col_val].isnull().all():
-                         st.warning(f"WARN: Columna valor '{col_val}' quedó toda NaN después de to_numeric (era {original_dtype}).")
-                     # else:
-                         # st.write(f"DEBUG: Columna valor '{col_val}' convertida a numérica (era {original_dtype}).")
-                 except Exception as e_conv:
-                     st.error(f"ERROR: No se pudo convertir columna valor '{col_val}' a numérica: {e_conv}")
-                     conversion_errores += 1
-            # else: st.write(f"DEBUG: Columna valor '{col_val}' ya es numérica ({original_dtype}).")
+                try:
+                    df_plot_groups[col_val] = pd.to_numeric(df_plot_groups[col_val], errors='coerce')
+                    if df_plot_groups[col_val].isnull().all():
+                        st.warning(f"WARN: Columna valor '{col_val}' quedó toda NaN después de to_numeric (era {original_dtype}).")
+                except Exception as e_conv:
+                    st.error(f"ERROR: No se pudo convertir columna valor '{col_val}' a numérica: {e_conv}")
+                    conversion_errores += 1
         else:
             st.error(f"ERROR: Columna valor '{col_val}' (esperada para dimensiones) no encontrada en df_plot_groups.")
             conversion_errores += 1
 
     if conversion_errores > 0:
         st.error("Errores al convertir columnas de valor a numérico. Los gráficos pueden fallar o ser incorrectos.")
-    # --- >> FIN NUEVO << ---
-
 
     # --- Bucle Principal de Gráficos por Dimensión y Grupo ---
     if not grupos:
         st.warning("No se definieron grupos válidos para la comparación. No se generarán gráficos comparativos.")
     else:
         st.info(f"Generando comparaciones para {len(mapa_dim_cols)} dimensiones por {len(grupos)} grupos: {list(grupos.keys())}")
-        fig_idx_start = 2  # Índice para titular figuras
+        fig_idx_start = 2
 
-        # Iterar sobre las dimensiones que SÍ tienen promedios calculados
         for i, (dim_name, prom_general) in enumerate(resultados_promedio.items()):
-            st.write(f"\nDEBUG: Iniciando gráficos para Dimensión: '{dim_name}'") # <-- Print para ver progreso
-
+            st.write(f"\nDEBUG: Iniciando gráficos para Dimensión: '{dim_name}'")
             if dim_name not in mapa_dim_cols:
                 st.warning(f"SKIP Plot Dimensión '{dim_name}': No se encontraron columnas válidas para ella.")
                 continue
 
             cols_validas_dim = mapa_dim_cols[dim_name]
-            # Verificar que estas columnas existen y son numéricas AHORA
             cols_realmente_validas = [c for c in cols_validas_dim if c in df_plot_groups.columns and pd.api.types.is_numeric_dtype(df_plot_groups[c].dtype)]
             if not cols_realmente_validas:
-                 st.warning(f"SKIP Plot Dimensión '{dim_name}': Ninguna de sus columnas ({cols_validas_dim}) es numérica válida en df_plot_groups AHORA.")
-                 continue
+                st.warning(f"SKIP Plot Dimensión '{dim_name}': Ninguna de sus columnas ({cols_validas_dim}) es numérica válida en df_plot_groups AHORA.")
+                continue
             if len(cols_realmente_validas) < len(cols_validas_dim):
-                 st.warning(f"WARN Plot Dimensión '{dim_name}': Usando subconjunto de columnas numéricas válidas: {cols_realmente_validas}")
+                st.warning(f"WARN Plot Dimensión '{dim_name}': Usando subconjunto de columnas numéricas válidas: {cols_realmente_validas}")
 
             min_esc, max_esc = get_scale_range(dim_name)
             n_grupos_validos = len(grupos)
 
-            # Crear figura para esta dimensión
             fig_dim, axs_dim = plt.subplots(1, n_grupos_validos,
-                                            figsize=(n_grupos_validos * 4.5, 4.0), # Ajustar tamaño si es necesario
+                                            figsize=(n_grupos_validos * 4.5, 4.0),
                                             sharey=True)
-            # Asegurar que axs_dim sea siempre iterable (lista)
             if n_grupos_validos == 1:
                 axs_dim = [axs_dim]
 
             fig_dim.suptitle(f"Comparación: {dim_name}\n(Promedio General: {prom_general:.2f})", y=1.03)
-            plot_count_for_dim = 0 # Contador para saber si se graficó algo para esta dimensión
+            plot_count_for_dim = 0
 
-            # Iterar sobre los GRUPOS (Sexo, Rango Edad, etc.)
             for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
-                ax = axs_dim[k] # Eje actual para este grupo
-                st.write(f"  -> Procesando Grupo: '{grupo_label}' (Col: '{grupo_col}')") # <-- Print detalle
-
+                ax = axs_dim[k]
+                st.write(f"  -> Procesando Grupo: '{grupo_label}' (Col: '{grupo_col}')")
                 try:
-                    # Doble check que la columna de grupo existe y es string/object
                     if grupo_col not in df_plot_groups.columns:
                         st.error(f"    ERROR GRAVE: Columna de grupo '{grupo_col}' no existe.")
                         ax.text(0.5, 0.5, f'Error: Columna\n"{grupo_col}"\nno encontrada', ha='center', va='center', color='red', transform=ax.transAxes)
-                        continue # Saltar al siguiente grupo
+                        continue
 
-                    if not isinstance(df_plot_groups[grupo_col].dtype, (object, str)):
-                         # Intentar forzar string si no lo es (aunque debería serlo por la preparación anterior)
-                         st.warning(f"    WARN: Dtype de '{grupo_col}' es {df_plot_groups[grupo_col].dtype}. Forzando a string.")
-                         try:
-                             df_plot_groups[grupo_col] = df_plot_groups[grupo_col].astype(str)
-                         except Exception as e_force_str:
-                             st.error(f"    ERROR: No se pudo forzar '{grupo_col}' a string: {e_force_str}")
-                             ax.text(0.5, 0.5, f'Error: Dtype\nColumna Grupo\nInválido', ha='center', va='center', color='red', transform=ax.transAxes)
-                             continue
+                    if not pd.api.types.is_string_dtype(df_plot_groups[grupo_col]):
+                        st.warning(f"    WARN: Dtype de '{grupo_col}' es {df_plot_groups[grupo_col].dtype}. Forzando a string.")
+                        try:
+                            df_plot_groups[grupo_col] = df_plot_groups[grupo_col].astype(str)
+                        except Exception as e_force_str:
+                            st.error(f"    ERROR: No se pudo forzar '{grupo_col}' a string: {e_force_str}")
+                            ax.text(0.5, 0.5, f'Error: Dtype\nColumna Grupo\nInválido', ha='center', va='center', color='red', transform=ax.transAxes)
+                            continue
 
-                    # --- El Groupby Crítico ---
                     st.write(f"    Agrupando por '{grupo_col}', calculando media de {len(cols_realmente_validas)} columnas...")
-                    # Agrupar por la columna de grupo (YA DEBERÍA SER STRING)
-                    # Calcular media de las columnas de valor (YA DEBERÍAN SER NUMÉRICAS)
                     grouped_series = df_plot_groups.groupby(grupo_col, observed=False)[cols_realmente_validas] \
-                        .mean(numeric_only=True) # Media por cada columna de valor
-                    st.write(f"    Resultado Groupby (medias por columna): \n{grouped_series.head().to_string()}") # DEBUG
-
-                    # Calcular la media ENTRE las columnas de valor para cada grupo
+                        .mean(numeric_only=True)
+                    st.write(f"    Resultado Groupby (medias por columna): \n{grouped_series.head().to_string()}")
                     final_means = grouped_series.mean(axis=1, skipna=True).dropna()
-                    st.write(f"    Resultado Groupby (media final por grupo): \n{final_means.head().to_string()}") # DEBUG
+                    st.write(f"    Resultado Groupby (media final por grupo): \n{final_means.head().to_string()}")
 
                     if not final_means.empty:
-                        # Preparar datos para el plot
-                        # Asegurar float para valores y string para categorías
                         grouped_data = final_means.astype(float)
                         categories = grouped_data.index.astype(str)
                         values = grouped_data.values
-
                         st.write(f"    Graficando {len(categories)} barras...")
                         colors = plt.get_cmap('viridis')(np.linspace(0, 1, len(categories)))
-                        bars = ax.bar(categories, values, color=colors, width=0.8) # Ajustar width si es necesario
-
-                        # Configuración del gráfico (ejes, título, etc.)
+                        bars = ax.bar(categories, values, color=colors, width=0.8)
                         ax.set_title(f"Por {grupo_label}")
                         ax.set_xlabel('')
-                        if k == 0: # Solo poner etiqueta Y en el primer subplot
+                        if k == 0:
                             ax.set_ylabel('Promedio Dimensión')
-
-                        # Rotar etiquetas del eje X si son muchas o largas
+                        # Corrección: quitar el keyword 'ha' en tick_params
                         ax.tick_params(axis='x', rotation=45, labelsize=8)
                         ax.grid(axis='y', linestyle='--', alpha=0.6)
-
-                        # Ajustar límites del eje Y basado en la escala de la dimensión
-                        margin = (max_esc - min_esc) * 0.05 # Pequeño margen
-                        ax.set_ylim(bottom=max(0, min_esc - margin), top=max_esc + margin) # Evitar ir bajo 0 si escala empieza más alto
-
-                        # Añadir valor numérico sobre cada barra
+                        margin = (max_esc - min_esc) * 0.05
+                        ax.set_ylim(bottom=max(0, min_esc - margin), top=max_esc + margin)
                         for bar in bars:
                             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                                     f'{bar.get_height():.2f}',
                                     ha='center', va='bottom')
-
-                        plot_count_for_dim += 1 # Se graficó algo
+                        plot_count_for_dim += 1
                     else:
                         st.warning(f"    No hay datos para graficar '{dim_name}' por '{grupo_label}' (resultado groupby vacío).")
                         ax.text(0.5, 0.5, 'No hay datos\npara este grupo',
                                 ha='center', va='center', color='grey', transform=ax.transAxes)
-                        ax.set_xticks([]) # Limpiar ejes si no hay datos
+                        ax.set_xticks([])
                         ax.set_yticks([])
 
                 except Exception as e_grp_inner:
                     st.error(f"    ERROR procesando/graficando '{dim_name}' por '{grupo_label}' ({grupo_col}): {e_grp_inner}")
-                    # Mostrar error en el gráfico mismo
                     ax.text(0.5, 0.5, f'Error:\n{e_grp_inner}', ha='center', va='center', color='red', transform=ax.transAxes)
-                    # Loggear info de la columna que falló si existe
                     if grupo_col in df_plot_groups.columns:
                         st.write(f"    DEBUG Info Columna Error: '{grupo_col}' Dtype: {df_plot_groups[grupo_col].dtype}, Unique (5): {df_plot_groups[grupo_col].unique()[:5]}...")
                     st.write(f"    DEBUG Info Columnas Valor Error: {cols_realmente_validas}")
 
-
-            # Después de iterar por todos los grupos para esta dimensión
             if plot_count_for_dim > 0:
-                plt.tight_layout(rect=[0, 0.03, 1, 0.90]) # Ajustar layout para que quepa el supertítulo
-                figuras_informe.append(fig_dim) # Guardar la figura COMPLETA de esta dimensión
+                plt.tight_layout(rect=[0, 0.03, 1, 0.90])
+                figuras_informe.append(fig_dim)
                 fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
-                st.pyplot(fig_dim) # Mostrar figura en Streamlit
-                st.write(f"DEBUG: Gráfico para Dimensión '{dim_name}' generado y añadido.") # Confirmación
+                st.pyplot(fig_dim)
+                st.write(f"DEBUG: Gráfico para Dimensión '{dim_name}' generado y añadido.")
             else:
                 st.warning(f"WARN: No se generó ningún gráfico para la dimensión '{dim_name}'.")
-                plt.close(fig_dim) # Cerrar figura si no se graficó nada en ella
+                plt.close(fig_dim)
 
-    # --- Fin Bucle Principal ---
-
-
-    # --- Ensamblar Texto Informe Final (sin cambios) ---
-    informe_partes = []
     # --- Ensamblar Texto Informe Final ---
     informe_partes = []
     informe_partes.append(f"# Informe General de Bienestar\n")
     informe_partes.append(f"**Periodo Analizado:** {fecha_inicio.strftime('%Y-%m-%d')} al {fecha_fin.strftime('%Y-%m-%d')}\n\n")
-    # Puedes añadir el ID de empresa si se usó un filtro
-    
     informe_partes.append("## Resumen Ejecutivo (IA)\n")
     informe_partes.append(f"{resumen_ejecutivo}\n\n")
-    
     informe_partes.append("## Estado General de las Dimensiones\n")
-    informe_partes.append("Clasificación basada en promedios (1/3 inferior = Riesgo, 1/3 medio = Intermedio, 1/3 superior = Fortaleza):\n") # Explicación simple
+    informe_partes.append("Clasificación basada en promedios (1/3 inferior = Riesgo, 1/3 medio = Intermedio, 1/3 superior = Fortaleza):\n")
     
     if fortalezas:
          informe_partes.append("\n**🟢 Fortalezas Clave:**\n")
-         for dim, val in fortalezas: informe_partes.append(f"- {dim}: {val:.2f}\n")
+         for dim, val in fortalezas:
+             informe_partes.append(f"- {dim}: {val:.2f}\n")
     if intermedios:
          informe_partes.append("\n**🟡 Dimensiones en Nivel Intermedio:**\n")
-         for dim, val in intermedios: informe_partes.append(f"- {dim}: {val:.2f}\n")
+         for dim, val in intermedios:
+             informe_partes.append(f"- {dim}: {val:.2f}\n")
     if riesgos:
          informe_partes.append("\n**🔴 Riesgos Principales / Áreas de Mejora:**\n")
-         for dim, val in riesgos: informe_partes.append(f"- {dim}: {val:.2f}\n")
+         for dim, val in riesgos:
+             informe_partes.append(f"- {dim}: {val:.2f}\n")
     if sin_datos:
          informe_partes.append("\n**⚪ Dimensiones Sin Datos Suficientes:**\n")
-         for dim, val in sin_datos: informe_partes.append(f"- {dim}\n")
+         for dim, val in sin_datos:
+             informe_partes.append(f"- {dim}\n")
     
     informe_partes.append("\n## Conclusiones y Recomendaciones (IA)\n")
     informe_partes.append(f"{conclusiones_recomendaciones}\n\n")
-    # --- FIN del código faltante ---
-    
-    # Esta línea ya existe:
-    informe_texto_final = "".join(informe_partes)
     
     informe_texto_final = "".join(informe_partes)
-
     st.success("Informe general procesado.")
     return informe_texto_final, figuras_informe, fig_titles
 
