@@ -398,27 +398,69 @@ for dim_cat, dim_content in data_dictionary.items():
                               # st.write(f"DEBUG: Label map (desde Escala) asignado a '{col_clean}'")
 
 ruta_csv = "cleaned_data - cleaned_data.csv"
- try:
-    df = pd.read_csv(ruta_csv, parse_dates=['Hora de inicio', 'Hora de finalización'], dayfirst=False, sep=",")
+st.write("Iniciando proceso de carga del archivo CSV...")
+st.write("Ruta del archivo:", ruta_csv)
+
+# Verificar si el archivo existe en la ruta especificada
+if os.path.exists(ruta_csv):
+    st.write("El archivo existe en la ruta indicada.")
+    try:
+        tamano = os.path.getsize(ruta_csv)
+        st.write("Tamaño del archivo (bytes):", tamano)
+    except Exception as ex:
+        st.write("Error al obtener el tamaño del archivo:", ex)
+else:
+    st.error("Archivo no encontrado en la ruta especificada: " + ruta_csv)
+    st.stop()
+
+# Mostrar los primeros 500 caracteres del archivo para verificar su contenido
+try:
+    with open(ruta_csv, "r", encoding="utf-8") as f:
+        contenido_inicial = f.read(500)
+    st.write("Contenido inicial del archivo (primeros 500 caracteres):")
+    st.text(contenido_inicial)
+except Exception as ex:
+    st.error("Error al leer el contenido del archivo: " + str(ex))
+    st.stop()
+
+# Intento de cargar el DataFrame
+try:
+    st.write("Intentando cargar el DataFrame usando pd.read_csv...")
+    df = pd.read_csv(
+        ruta_csv, 
+        parse_dates=['Hora de inicio', 'Hora de finalización'], 
+        dayfirst=False, 
+        sep=","
+    )
+    st.write("Archivo leído en DataFrame exitosamente.")
+    
+    st.write("Dimensiones del DataFrame antes de limpieza:", df.shape)
     df.dropna(axis=1, how='all', inplace=True)
+    st.write("Dimensiones del DataFrame después de eliminar columnas vacías:", df.shape)
+    
     df.columns = df.columns.str.strip()  # Limpieza de nombres de columna
     st.success(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas.")
 
-    # Convertir columnas a tipo categórico basado en el diccionario de datos
+    # Conversión de columnas a tipo categórico basado en el diccionario de datos
     st.write("Convirtiendo tipos categóricos...")
     converted_count = 0
     for category, variables in data_dictionary.items():
+        st.write(f"Procesando categoría: {category}")
         for col_name_key, var_details in variables.items():
             if var_details.get("Tipo") == "Categórica":
                 col_name_key = col_name_key.strip()  # Asegurar limpieza
+                st.write(f"Revisando columna: {col_name_key}")
                 if col_name_key in df.columns:
                     try:
-                        # Convertir solo si no lo es ya
+                        # Convertir solo si aún no es categórica
                         if not pd.api.types.is_categorical_dtype(df[col_name_key]):
                             df[col_name_key] = df[col_name_key].astype('category')
                             converted_count += 1
+                            st.write(f"Columna convertida a categórica: {col_name_key}")
                     except Exception as e:
                         st.warning(f"No se pudo convertir '{col_name_key}' a categórica: {e}. Tipo actual: {df[col_name_key].dtype}.")
+                else:
+                    st.warning(f"La columna '{col_name_key}' no se encuentra en el DataFrame.")
     st.write(f"Conversión a categórico intentada. {converted_count} columnas convertidas.")
 
 except Exception as e:
