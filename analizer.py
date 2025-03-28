@@ -109,7 +109,7 @@ data_dictionary = {
        "(SD)Departamento ": {"Tipo": "Categórica"}, # Quitar NombreExacto si la clave es el nombre real
        "(SD)Ciudad /Municipio": {"Tipo": "Categórica"},
        "(SD)Zona de vivienda": {"Tipo": "Categórica", "Valores": ["Urbana", "Rural"]},
-       "(SD)Estrato socioeconomico": {"Tipo": "Categórica", "Valores": [1, 2, 3, 4, 5, 6]}
+       "(SD)Estrato Socioeconómico": {"Tipo": "Categórica", "Valores": [1, 2, 3, 4, 5, 6]}
    },
    "Variables Laborales": {
        "(LB)Sector Económico ": {"Tipo": "Categórica"},
@@ -418,7 +418,7 @@ try:
     with open(ruta_csv, "r", encoding="utf-8") as f:
         contenido_inicial = f.read(500)
     #st.write("Contenido inicial del archivo (primeros 500 caracteres):")
-    st.text(contenido_inicial)
+    #st.text(contenido_inicial)
 except Exception as ex:
     #st.error("Error al leer el contenido del archivo: " + str(ex))
     st.stop()
