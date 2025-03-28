@@ -523,16 +523,16 @@ opciones_analisis = """
  
  # Preparar el prompt para Gemini
  prompt_informacion_datos = f"""
- Los siguientes son los datos y tipos de datos que tenemos:
+     Los siguientes son los datos y tipos de datos que tenemos:
  
- {informacion_datos}
+     {informacion_datos}
  
- Y las opciones de análisis disponibles son:
+     Y las opciones de análisis disponibles son:
  
- {opciones_analisis}
+     {opciones_analisis}
  
- Por favor, utiliza esta información para entender los datos disponibles, los tipos de datos asociados y las opciones de análisis que podemos realizar.
- """
+     Por favor, utiliza esta información para entender los datos disponibles, los tipos de datos asociados y las opciones de análisis que podemos realizar.
+     """
 
 # --- Enviar prompt inicial a Gemini (sin cambios) ---
 rate_limiter = RateLimiter(max_calls=5, period=61) # Un poco más flexible
