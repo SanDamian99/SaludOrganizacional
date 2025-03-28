@@ -408,7 +408,7 @@ if os.path.exists(ruta_csv):
         tamano = os.path.getsize(ruta_csv)
         #st.write("Tamaño del archivo (bytes):", tamano)
     except Exception as ex:
-        #st.write("Error al obtener el tamaño del archivo:", ex)
+        st.write("Error al obtener el tamaño del archivo:", ex)
 else:
     st.error("Archivo no encontrado en la ruta especificada: " + ruta_csv)
     st.stop()
