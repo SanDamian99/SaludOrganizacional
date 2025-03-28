@@ -1811,12 +1811,12 @@ def generar_informe_general(df_original, fecha_inicio, fecha_fin):
             except Exception as e_grp_inner: # Capturar error específico aquí
                 st.error(f"Error procesando/graficando '{dim_name}' por '{grupo_label}': {e_grp_inner}")
                 ax.text(0.5, 0.5, f'Error: {e_grp_inner}', ha='center', va='center', fontsize=7, color='red')
-                    if plot_count > 0:
-                        plt.tight_layout(rect=[0, 0.03, 1, 0.90])
-                        figuras_informe.append(fig_dim)
-                        fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
-                        st.pyplot(fig_dim)
-                    else: plt.close(fig_dim)
+                if plot_count > 0:
+                    plt.tight_layout(rect=[0, 0.03, 1, 0.90])
+                    figuras_informe.append(fig_dim)
+                    fig_titles.append(f"Figura {fig_idx_start + i}: Comparación {dim_name}")
+                    st.pyplot(fig_dim)
+                else: plt.close(fig_dim)
 
 
     # --- Ensamblar Texto Informe Final (sin cambios) ---
