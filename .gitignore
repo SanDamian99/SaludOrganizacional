@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Logs
+logs/
+*.log
+
+# Data & PDF Tests
+*.pdf
+processed_output_test.csv
+*.xlsx
+*.csv
+!scripts/
+!src/data/samples/  # Permitir muestras si existen
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+
+# ChromaDB
+.chroma/
