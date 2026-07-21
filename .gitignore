@@ -33,3 +33,6 @@ logs/
 
 # ChromaDB
 .chroma/
+
+# Playwright / capturas E2E
+.playwright-mcp/
