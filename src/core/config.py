@@ -20,7 +20,9 @@ def get_supabase_key():
     return os.environ.get("SUPABASE_KEY")
 
 # --- Master Data Configuration ---
+# Dataset maestro local (no versionado). Si no existe, la app usa el sample.
 MASTER_DATA_PATH = "cleaned_data - cleaned_data.csv"
+SAMPLE_DATA_PATH = "src/data/samples/sample_bienestar.csv"
 
 # --- Data Dictionary & Configuration ---
 

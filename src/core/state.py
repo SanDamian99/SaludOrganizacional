@@ -20,18 +20,17 @@ def init_session_state():
     if "df" not in st.session_state:
         st.session_state.df = None
 
-        # Try to load default data
+        # Cargar datos por defecto: dataset maestro local, o el sample versionado.
         try:
-            from src.core.config import MASTER_DATA_PATH
+            from src.core.config import MASTER_DATA_PATH, SAMPLE_DATA_PATH
             import os
 
-            if os.path.exists(MASTER_DATA_PATH):
-                st.session_state.df = pd.read_csv(MASTER_DATA_PATH)
-            else:
-                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                abs_path = os.path.join(base_dir, MASTER_DATA_PATH)
-                if os.path.exists(abs_path):
-                    st.session_state.df = pd.read_csv(abs_path)
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            for path in (MASTER_DATA_PATH, SAMPLE_DATA_PATH):
+                candidate = path if os.path.exists(path) else os.path.join(base_dir, path)
+                if os.path.exists(candidate):
+                    st.session_state.df = pd.read_csv(candidate)
+                    break
         except Exception as e:
             logger.warning(f"Error loading default data: {e}")
 
