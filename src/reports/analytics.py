@@ -9,8 +9,19 @@ import matplotlib as mpl
 from matplotlib.patches import Patch
 import seaborn as sns
 import io
-from src.core.config import DATA_DICTIONARY
+from src.core.config import DATA_DICTIONARY, get_scale_range as _config_scale_range
 from src.core.ai import generate_analysis, build_report_prompt
+from src.analysis import scoring
+
+# Variables candidatas para comparaciones por grupo (se usan las presentes)
+GROUP_CANDIDATES = [
+    ("(SD)Sexo", "Sexo"),
+    ("(SD)Nivel Educativo", "Nivel Educativo"),
+    ("(SD)Zona de vivienda", "Zona de vivienda"),
+    ("(LB)Sector empresa", "Sector empresa"),
+    ("(LB)Tipo de modalidad de trabajo", "Modalidad de trabajo"),
+    ("(LB)Cargo", "Cargo"),
+]
 
 # ═══════════════════════════════════════════════════════════════
 # PALETA Y TEMA MATPLOTLIB
@@ -90,68 +101,29 @@ def save_figure_to_bytes(fig, dpi=130) -> bytes:
 class ReportAnalytics:
     def __init__(self, df):
         self.df = df
-        self.inverse_dims = {
-            "Conflicto Familia-Trabajo": True,
-            "Síntomas de Burnout": True,
-            "Factores de Efectos Colaterales (Escala de Desgaste)": True,
-            "Factores de Efectos Colaterales (Escala de Alienación)": True,
-            "Intención de Retiro": True,
-            "Factores de Efectos Colaterales (Escala de Somatización)": True,
-        }
+        # Fuente única de verdad: puntajes orientados a bienestar (mayor = mejor)
+        self._scores = scoring.compute_dimension_scores(df)
 
     def get_scale_range(self, dim_name):
-        details = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {}).get(dim_name, {})
-        escala = details.get("Escala", {})
-        if escala and isinstance(escala, dict):
-            vals = [k for k in escala.keys() if isinstance(k, (int, float))]
-            if vals:
-                return min(vals), max(vals)
-        if "Burnout" in dim_name:
-            return 1, 5
-        if any(s in dim_name for s in ["Compromiso", "Defensa", "Satisfacción", "Retiro"]):
-            return 1, 6
-        return 1, 7
+        return _config_scale_range(dim_name)
 
     def estado_dimension(self, valor, dim_name):
-        if pd.isna(valor):
-            return ('Sin Datos', 'grey')
-        min_esc, max_esc = self.get_scale_range(dim_name)
-        rango = max_esc - min_esc
-        if rango <= 0:
-            return ('Rango Inválido', 'grey')
+        """Clasifica un puntaje YA orientado (delegado a scoring)."""
+        return scoring.estado_from_score(valor, dim_name)
 
-        umbral_riesgo = min_esc + rango / 3.0
-        umbral_fortaleza = max_esc - rango / 3.0
-        val_int = (max_esc + min_esc) - valor if self.inverse_dims.get(dim_name, False) else valor
-
-        if val_int >= umbral_fortaleza:
-            return ('Fortaleza', 'green')
-        elif val_int <= umbral_riesgo:
-            return ('Riesgo', 'red')
-        else:
-            return ('Intermedio', 'yellow')
+    def scores(self):
+        """Métricas completas por dimensión (score, n, std, ci95, alpha, estado...)."""
+        return self._scores
 
     def calculate_averages(self):
-        """Calcula promedios de todas las dimensiones."""
-        resultados = {}
-        bm_dims = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {})
-        for dim_name, dim_details in bm_dims.items():
-            acronym = dim_details.get("Acronimo")
-            if not acronym:
-                continue
-            target = f"(BM),({acronym})"
-            cols = [c for c in self.df.columns
-                    if target in c and pd.api.types.is_numeric_dtype(self.df[c])]
-            if cols:
-                prom = self.df[cols].mean(axis=0, skipna=True).mean(skipna=True)
-                if pd.notna(prom):
-                    resultados[dim_name] = prom
-        return resultados
+        """Promedios ORIENTADOS por dimensión (mayor = mejor bienestar)."""
+        return {dim: info["score"] for dim, info in self._scores.items()}
 
-    def classify_dimensions(self, promedios):
-        """Clasifica dimensiones en Fortalezas, Riesgos, Intermedios."""
+    def classify_dimensions(self, promedios=None):
+        """Clasifica en Fortalezas, Riesgos, Intermedios, Sin Datos."""
         fortalezas, riesgos, intermedios, sin_datos = [], [], [], []
-        for dim, val in promedios.items():
+        source = promedios if promedios is not None else self.calculate_averages()
+        for dim, val in source.items():
             estado, _ = self.estado_dimension(val, dim)
             entry = (dim, val)
             if estado == 'Fortaleza':
@@ -258,25 +230,25 @@ class ReportAnalytics:
         apply_report_theme()
         charts = []
 
-        # Buscar columnas de agrupación
+        # Buscar columnas de agrupación disponibles (cardinalidad razonable)
         grupos = {}
-        col_sexo = '(SD)Sexo'
-        if col_sexo in self.df.columns and self.df[col_sexo].nunique() > 1:
-            grupos['Sexo'] = col_sexo
+        for col, label in GROUP_CANDIDATES:
+            if col in self.df.columns:
+                nun = self.df[col].nunique(dropna=True)
+                if 1 < nun <= 8:
+                    grupos[label] = col
+            if len(grupos) >= 3:  # máximo 3 agrupaciones por dimensión
+                break
 
         if not grupos:
             return []
 
         for dim_name, prom_general in promedios.items():
-            details = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {}).get(dim_name, {})
-            acronym = details.get("Acronimo")
-            if not acronym:
-                continue
-            target = f"(BM),({acronym})"
-            cols_validas = [c for c in self.df.columns
-                           if target in c and pd.api.types.is_numeric_dtype(self.df[c])]
+            cols_validas = scoring.dimension_columns(self.df, dim_name)
             if not cols_validas:
                 continue
+            # Ítems orientados a bienestar para que la comparación sea coherente
+            oriented = scoring.orient_items(self.df, dim_name, cols_validas)
 
             min_esc, max_esc = self.get_scale_range(dim_name)
             n_grupos = len(grupos)
@@ -291,7 +263,7 @@ class ReportAnalytics:
             for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
                 ax = axs[k]
                 try:
-                    grouped = self.df.groupby(grupo_col, observed=False)[cols_validas].mean(numeric_only=True)
+                    grouped = oriented.groupby(self.df[grupo_col], observed=False).mean(numeric_only=True)
                     final_means = grouped.mean(axis=1, skipna=True).dropna()
                     if not final_means.empty:
                         has_data = True
@@ -325,35 +297,54 @@ class ReportAnalytics:
         return charts
 
     def generate_correlation_matrix(self) -> bytes:
-        """Genera heatmap de correlación."""
+        """Heatmap de correlación ENTRE DIMENSIONES (orientadas): legible e interpretable."""
         apply_report_theme()
 
-        target_subs = ["(BM)", "(SD)"]
-        cols = [c for c in self.df.columns
-                if any(s in c for s in target_subs) and pd.api.types.is_numeric_dtype(self.df[c])]
-        if len(cols) < 2:
+        dim_scores = {}
+        for dim in self._scores.keys():
+            cols = scoring.dimension_columns(self.df, dim)
+            if not cols:
+                continue
+            oriented = scoring.orient_items(self.df, dim, cols)
+            acr = self._scores[dim].get("acronimo") or dim[:6]
+            dim_scores[acr] = oriented.mean(axis=1, skipna=True)
+
+        if len(dim_scores) < 2:
             return None
 
-        corr_df = self.df[cols].corr()
-        short_labels = []
-        for c in corr_df.columns:
-            label = c.split(')')[-1]
-            short_labels.append(label[:18] + '..' if len(label) > 18 else label)
-
+        corr_df = pd.DataFrame(dim_scores).corr()
         n = len(corr_df.columns)
-        fig_size = max(8, n * 0.45)
+        fig_size = max(6, n * 0.55)
         fig, ax = plt.subplots(figsize=(fig_size, fig_size))
 
-        sns.heatmap(corr_df, annot=False, cmap='coolwarm', center=0,
-                    xticklabels=short_labels, yticklabels=short_labels,
-                    square=True, linewidths=.5, cbar_kws={"shrink": .5}, ax=ax)
+        sns.heatmap(corr_df, annot=True, fmt=".2f", annot_kws={"size": 7},
+                    cmap='coolwarm', center=0, vmin=-1, vmax=1,
+                    xticklabels=corr_df.columns, yticklabels=corr_df.columns,
+                    square=True, linewidths=.5, cbar_kws={"shrink": .6}, ax=ax)
 
-        ax.set_title("Matriz de Correlación", fontsize=14, color=COLORS["brand_blue"], pad=12)
-        plt.xticks(rotation=45, ha='right', fontsize=8)
+        ax.set_title("Matriz de Correlación entre Dimensiones (orientadas a bienestar)",
+                     fontsize=12, color=COLORS["brand_blue"], pad=12)
+        plt.xticks(rotation=0, fontsize=8)
         plt.yticks(rotation=0, fontsize=8)
-        return save_figure_to_bytes(fig, dpi=110)
+        return save_figure_to_bytes(fig, dpi=120)
 
     def generate_ai_analysis(self, promedios, fortalezas, riesgos) -> str:
-        """Genera análisis IA usando ai.py."""
+        """Genera análisis IA fundamentado con referencias del RAG."""
         prompt = build_report_prompt(promedios, fortalezas, riesgos)
+        try:
+            from src.ai.knowledge_base import get_cached_kb
+            kb = get_cached_kb()
+            if kb.enabled:
+                focos = " ".join(d for d, _ in (riesgos[:3] if riesgos else []))
+                refs = kb.query_knowledge(
+                    f"recomendaciones e intervenciones de bienestar laboral {focos}",
+                    n_results=4,
+                )
+                if refs:
+                    prompt += (
+                        "\n\nUSA Y CITA EN FORMATO APA ÚNICAMENTE ESTAS REFERENCIAS "
+                        f"(no inventes otras):\n{refs}"
+                    )
+        except Exception:
+            pass
         return generate_analysis(prompt)

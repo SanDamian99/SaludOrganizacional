@@ -325,6 +325,49 @@ def add_kpi_table(story: list, metrics: list, styles: dict):
     story.append(Spacer(1, SPACING["section_before"]))
 
 
+def add_data_table(story: list, headers: list, rows: list, styles: dict):
+    """Tabla de datos con encabezado azul y filas alternadas (para anexos técnicos)."""
+    if not rows:
+        return
+    page_width = letter[0] - 2 * SPACING["page_margin"]
+    ncols = len(headers)
+    first = page_width * 0.34
+    rest = (page_width - first) / max(1, ncols - 1)
+    col_widths = [first] + [rest] * (ncols - 1)
+
+    head_style = ParagraphStyle(
+        "THead", fontName="Helvetica-Bold", fontSize=8,
+        textColor=HexColor(COLORS["white"]), alignment=TA_CENTER, leading=10)
+    cell_c = ParagraphStyle(
+        "TCellC", fontName="Helvetica", fontSize=8,
+        textColor=HexColor(COLORS["text_primary"]), alignment=TA_CENTER, leading=10)
+    cell_l = ParagraphStyle(
+        "TCellL", fontName="Helvetica", fontSize=8,
+        textColor=HexColor(COLORS["text_primary"]), alignment=TA_LEFT, leading=10)
+
+    data = [[Paragraph(clean_text(str(h)), head_style) for h in headers]]
+    for r in rows:
+        data.append([
+            Paragraph(clean_text(str(v)), cell_l if i == 0 else cell_c)
+            for i, v in enumerate(r)
+        ])
+
+    t = RLTable(data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0), HexColor(COLORS["brand_blue"])),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [HexColor(COLORS["white"]), HexColor(COLORS["background_alt"])]),
+        ("GRID",          (0, 0), (-1, -1), 0.4, HexColor(COLORS["divider"])),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, SPACING["section_before"]))
+
+
 # ═══════════════════════════════════════════════════════════════
 # INTEGRACIÓN TEXTO → GRÁFICA → INTERPRETACIÓN
 # ═══════════════════════════════════════════════════════════════
@@ -552,6 +595,9 @@ class PDFReport:
 
     def add_kpi_table(self, metrics: list):
         add_kpi_table(self.elements, metrics, self.styles)
+
+    def add_metrics_table(self, headers: list, rows: list):
+        add_data_table(self.elements, headers, rows, self.styles)
 
     def insert_chart(self, fig_bytes, intro: str = "", caption: str = "",
                      interpretation: str = "", width_pct: float = 0.85):

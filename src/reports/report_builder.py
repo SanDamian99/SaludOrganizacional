@@ -20,10 +20,11 @@ class ReportBuilder:
     """
 
     def __init__(self, df, title="Informe de Diagnóstico de Bienestar",
-                 org_name="Organización"):
+                 org_name="Organización", include_academic_annex=True):
         self.df = df
         self.title = title
         self.org_name = org_name
+        self.include_academic_annex = include_academic_annex
         self.analytics = ReportAnalytics(df)
 
     def build_report(self, title=None, org_name=None) -> bytes:
@@ -60,6 +61,8 @@ class ReportBuilder:
             self._build_bienestar_diagnosis(pdf, promedios, fortalezas, riesgos)
             self._build_group_analysis(pdf, promedios)
             self._build_recommendations(pdf, promedios, fortalezas, riesgos)
+            if self.include_academic_annex:
+                self._build_academic_annex(pdf)
             self._build_references(pdf)
 
             # Generar PDF
@@ -70,6 +73,10 @@ class ReportBuilder:
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    def build(self, title=None, org_name=None) -> bytes:
+        """Alias de build_report() — compatibilidad con llamadas existentes."""
+        return self.build_report(title=title, org_name=org_name)
 
     # ───────────────────────────────────────────────────────
     # SECCIÓN 1: RESUMEN EJECUTIVO
@@ -124,7 +131,7 @@ class ReportBuilder:
     # ───────────────────────────────────────────────────────
 
     def _build_sociodemographic(self, pdf):
-        pdf.add_title("1. CARACTERIZACION SOCIODEMOGRAFICA", level=1)
+        pdf.add_title("1. CARACTERIZACIÓN SOCIODEMOGRÁFICA", level=1)
         pdf.add_paragraph(
             "A continuacion se presenta la distribucion de los participantes "
             "segun sus principales caracteristicas demograficas y laborales."
@@ -159,14 +166,14 @@ class ReportBuilder:
                 width_pct=0.6,
             )
 
-        # Buscar variables laborales
+        # Buscar variables laborales (prefijo (LB))
         lab_vars = []
         for col in self.df.columns:
-            if col.startswith("(SD)") and col not in ["(SD)Sexo", "(SD)Edad"]:
-                lab_vars.append((col, col.replace("(SD)", "").strip()))
+            if col.startswith("(LB)"):
+                lab_vars.append((col, col.replace("(LB)", "").strip()))
 
         if lab_vars:
-            pdf.add_title("Caracteristicas Laborales", level=2)
+            pdf.add_title("Características Laborales", level=2)
             pair = []
             for col, label in lab_vars[:4]:  # Máximo 4 variables
                 chart_bytes = self.analytics.generate_sociodemographic_chart(col, label)
@@ -190,7 +197,7 @@ class ReportBuilder:
     # ───────────────────────────────────────────────────────
 
     def _build_bienestar_diagnosis(self, pdf, promedios, fortalezas, riesgos):
-        pdf.add_title("2. DIAGNOSTICO DE BIENESTAR", level=1)
+        pdf.add_title("2. DIAGNÓSTICO DE BIENESTAR", level=1)
 
         # Intro con escala
         pdf.add_paragraph(
@@ -235,7 +242,7 @@ class ReportBuilder:
 
         # 2.2 Riesgos
         if riesgos:
-            pdf.add_title("2.2 Areas de Atencion", level=2)
+            pdf.add_title("2.2 Áreas de Atención", level=2)
             pdf.add_paragraph(
                 "Las siguientes dimensiones mostraron puntajes preocupantes "
                 "y requieren atencion prioritaria:"
@@ -259,7 +266,7 @@ class ReportBuilder:
     # ───────────────────────────────────────────────────────
 
     def _build_group_analysis(self, pdf, promedios):
-        pdf.add_title("3. ANALISIS COMPARATIVO POR GRUPOS", level=1)
+        pdf.add_title("3. ANÁLISIS COMPARATIVO POR GRUPOS", level=1)
         pdf.add_paragraph(
             "Esta seccion presenta las comparaciones entre subgrupos demograficos, "
             "permitiendo identificar diferencias significativas en los niveles de bienestar."
@@ -302,7 +309,7 @@ class ReportBuilder:
     # ───────────────────────────────────────────────────────
 
     def _build_recommendations(self, pdf, promedios, fortalezas, riesgos):
-        pdf.add_title("4. RECOMENDACIONES ESTRATEGICAS", level=1)
+        pdf.add_title("4. RECOMENDACIONES ESTRATÉGICAS", level=1)
         pdf.add_paragraph(
             "Las siguientes recomendaciones fueron generadas por inteligencia artificial "
             "con base en los resultados del estudio, integrando conocimiento de psicologia "
@@ -328,11 +335,58 @@ class ReportBuilder:
         pdf.add_divider()
 
     # ───────────────────────────────────────────────────────
+    # ANEXO TÉCNICO (LECTURA ACADÉMICA)
+    # ───────────────────────────────────────────────────────
+
+    def _build_academic_annex(self, pdf):
+        pdf.add_page_break()
+        pdf.add_title("ANEXO TÉCNICO (LECTURA ACADÉMICA)", level=1)
+        pdf.add_paragraph(
+            "Los puntajes se calculan orientando cada ítem a bienestar (los ítems de "
+            "valencia inversa se recodifican) y promediando por dimensión, de modo que en "
+            "todas un valor más alto indica mayor bienestar. Se reporta el N de respuestas "
+            "válidas, la desviación estándar (DE), el intervalo de confianza al 95 % de la "
+            "media y el alfa de Cronbach (consistencia interna; se considera aceptable "
+            "α ≥ 0.70). Ver documento de metodología para la tabla de valencia por ítem."
+        )
+
+        scores = self.analytics.scores()
+        headers = ["Dimensión", "N", "Puntaje", "DE", "IC 95%", "Alpha", "Estado"]
+        rows = []
+        for dim, info in sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True):
+            alpha = info.get("alpha")
+            a_txt = f"{alpha:.2f}" if isinstance(alpha, float) else "—"
+            rows.append([
+                dim,
+                str(info.get("n", "—")),
+                f"{info['score']:.2f}/{info['scale_max']:.0f}",
+                f"{info.get('std', 0):.2f}",
+                f"±{info.get('ci95', 0):.2f}",
+                a_txt,
+                info.get("estado", "—"),
+            ])
+        if rows:
+            pdf.add_metrics_table(headers, rows)
+            low_alpha = [d for d, i in scores.items()
+                         if isinstance(i.get("alpha"), float) and i["alpha"] < 0.70]
+            if low_alpha:
+                pdf.add_insight_box(
+                    "Dimensiones con consistencia interna baja (α < 0.70), interpretar "
+                    "con cautela: " + ", ".join(low_alpha) + ".",
+                    tipo="warning",
+                )
+        else:
+            pdf.add_insight_box(
+                "No hay dimensiones puntuables en este conjunto de datos.", tipo="warning")
+
+        pdf.add_divider()
+
+    # ───────────────────────────────────────────────────────
     # SECCIÓN 6: REFERENCIAS
     # ───────────────────────────────────────────────────────
 
     def _build_references(self, pdf):
-        pdf.add_title("5. REFERENCIAS BIBLIOGRAFICAS", level=1)
+        pdf.add_title("5. REFERENCIAS BIBLIOGRÁFICAS", level=1)
 
         refs = [
             "Maslach, C., & Jackson, S. E. (1981). The measurement of experienced burnout. "

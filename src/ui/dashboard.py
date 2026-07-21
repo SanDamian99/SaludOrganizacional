@@ -1,312 +1,388 @@
+"""
+Dashboard dual — Observatorio de Salud Organizacional.
+
+Vista EJECUTIVA (KPIs, semáforo, alertas, fortalezas/riesgos) para directivos y
+vista ACADÉMICA (α de Cronbach, tablas, correlación entre dimensiones, comparativas
+por grupo con N) para investigación. Todos los puntajes provienen de src.analysis.scoring
+(orientados a bienestar: mayor = mejor).
+"""
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-import numpy as np
-from src.ai.gemini_client import GeminiClient
-from src.core.config import DATA_DICTIONARY, CHART_CONFIG as CC
 
-# --- Helper Functions ---
+from src.core.config import DATA_DICTIONARY, get_scale_range
+from src.core.state import get_processed_data
+from src.analysis import scoring
+from src.ai.gemini_client import get_cached_client
+from src.ui.components.filtering import render_filtering_sidebar
 
+SEM_COLORS = {"green": "#1A7F4B", "yellow": "#B07D0D", "red": "#C0392B", "grey": "#5F6368"}
+ESTADO_ICON = {"Fortaleza": "🟢", "Intermedio": "🟡", "Riesgo": "🔴", "Sin Datos": "⚪"}
+
+
+# ── Cálculos cacheados ──────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def _scores(df):
+    return scoring.compute_dimension_scores(df)
+
+
+@st.cache_data(show_spinner=False)
+def _dim_score_matrix(df):
+    """DataFrame de puntajes orientados por respondiente (columnas = acrónimos)."""
+    data = {}
+    for dim, info in scoring.compute_dimension_scores(df).items():
+        cols = scoring.dimension_columns(df, dim)
+        if cols:
+            data[info.get("acronimo") or dim[:6]] = scoring.orient_items(df, dim, cols).mean(axis=1)
+    return pd.DataFrame(data)
+
+
+def _norm(info):
+    mn, mx = info["scale_min"], info["scale_max"]
+    return (info["score"] - mn) / (mx - mn) * 100 if mx > mn else 0.0
+
+
+# ── Compatibilidad (utilidades usadas por tests y vistas) ───────
 def get_dimension_average(df, dim_name):
-    """Calculates the average for a dimension based on DATA_DICTIONARY."""
-    if "Dimensiones de Bienestar y Salud Mental" not in DATA_DICTIONARY:
+    """Media CRUDA (sin orientar) de una dimensión y sus columnas. (avg, cols)."""
+    dims = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {})
+    cfg = dims.get(dim_name)
+    if not cfg:
         return None, []
-    
-    dim_config = DATA_DICTIONARY["Dimensiones de Bienestar y Salud Mental"].get(dim_name)
-    if not dim_config:
+    questions = cfg.get("Preguntas", [])
+    valid = [c for c in df.columns if c in questions and pd.api.types.is_numeric_dtype(df[c])]
+    if not valid:
         return None, []
-        
-    questions = dim_config.get("Preguntas", [])
-    # Find columns in df that match these questions
-    valid_cols = [c for c in df.columns if c in questions and pd.api.types.is_numeric_dtype(df[c])]
-    
-    if not valid_cols:
-        return None, []
-        
-    return df[valid_cols].mean(axis=1).mean(), valid_cols
+    return df[valid].mean(axis=1).mean(), valid
 
-def render_gauge(value, title, min_val=1, max_val=7, color_scale=['red', 'yellow', 'green']):
-    """Renders a simple gauge/bar chart."""
-    fig = px.bar(x=[value], y=[title], orientation='h', range_x=[min_val, max_val], 
-                 color=[value], color_continuous_scale=color_scale)
-    fig.update_layout(height=100, margin=dict(l=40, r=30, t=40, b=40), 
-                      xaxis=dict(title=f"Escala {min_val}-{max_val}", automargin=True),
-                      yaxis=dict(automargin=True),
-                      showlegend=False)
-    fig.update_traces(texttemplate='%{x:.2f}', textposition='inside')
-    return fig
 
 def render_tank(value, left_label, right_label, min_val=1, max_val=7):
-    """Renders a 'Tank' style visualization for Semantic Differential."""
-    # Normalize value to 0-100 for the tank fill
-    pct = (value - min_val) / (max_val - min_val) * 100
-    
+    """Visualización tipo 'tanque' para diferencial semántico."""
+    pct = (value - min_val) / (max_val - min_val) * 100 if max_val > min_val else 0
+    color = "#C0392B" if pct < 33 else "#B07D0D" if pct < 66 else "#1A7F4B"
     fig = go.Figure()
-    
-    # Background bar (empty tank)
-    fig.add_trace(go.Bar(
-        x=[max_val], y=[""], orientation='h', 
-        marker_color='lightgrey', opacity=0.3, hoverinfo='none'
-    ))
-    
-    # Foreground bar (fill)
-    color = 'red' if pct < 33 else 'yellow' if pct < 66 else 'green'
-    fig.add_trace(go.Bar(
-        x=[value], y=[""], orientation='h',
-        marker_color=color, text=f"{value:.2f}", textposition='auto'
-    ))
-    
+    fig.add_trace(go.Bar(x=[max_val], y=[""], orientation="h",
+                         marker_color="lightgrey", opacity=0.3, hoverinfo="none"))
+    fig.add_trace(go.Bar(x=[value], y=[""], orientation="h", marker_color=color,
+                         text=f"{value:.2f}", textposition="auto"))
     fig.update_layout(
-        title=dict(text=f"{left_label} ↔ {right_label}", x=0.5, xanchor='center'),
-        xaxis=dict(range=[0, max_val+0.5], showgrid=False, visible=False, automargin=True),
-        yaxis=dict(showgrid=False, visible=False, automargin=True),
-        height=80,
-        margin=dict(l=20, r=20, t=40, b=20),
+        title=dict(text=f"{left_label} ↔ {right_label}", x=0.5, xanchor="center"),
+        xaxis=dict(range=[0, max_val + 0.5], visible=False),
+        yaxis=dict(visible=False), height=90, barmode="overlay",
+        margin=dict(l=20, r=20, t=40, b=10), showlegend=False)
+    return fig
+
+
+# ── Componentes visuales ────────────────────────────────────────
+def render_gauge(value, title, mn=1, mx=7, color="#2E5FAC"):
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
+        number={"suffix": f" / {mx:.0f}", "font": {"size": 26}},
+        title={"text": title, "font": {"size": 15}},
+        gauge={
+            "axis": {"range": [mn, mx]},
+            "bar": {"color": color, "thickness": 0.7},
+            "steps": [
+                {"range": [mn, mn + (mx - mn) / 3], "color": "#FDECEA"},
+                {"range": [mn + (mx - mn) / 3, mx - (mx - mn) / 3], "color": "#FFF3CD"},
+                {"range": [mx - (mx - mn) / 3, mx], "color": "#D6F0E4"},
+            ],
+        },
+    ))
+    fig.update_layout(height=260, margin=dict(l=25, r=25, t=55, b=10))
+    return fig
+
+
+def render_semaforo(scores):
+    items = sorted(scores.items(), key=lambda kv: _norm(kv[1]))
+    dims = [d for d, _ in items]
+    vals = [_norm(i) for _, i in items]
+    colors = [SEM_COLORS.get(i["color"], "#5F6368") for _, i in items]
+    fig = go.Figure(go.Bar(
+        x=vals, y=dims, orientation="h", marker_color=colors,
+        text=[f"{v:.0f}" for v in vals], textposition="outside",
+        hovertemplate="<b>%{y}</b><br>Índice: %{x:.0f}/100<extra></extra>",
+    ))
+    fig.add_vline(x=50, line_dash="dash", line_color="#CBD5E1")
+    fig.update_layout(
+        height=max(320, len(dims) * 30),
+        margin=dict(l=10, r=40, t=30, b=10),
+        xaxis=dict(range=[0, 108], title="Índice de bienestar (0-100, mayor = mejor)"),
         showlegend=False,
-        barmode='overlay'
     )
     return fig
 
-def render_likert_distribution(df, cols, title):
-    """Renders distribution of responses for a set of Likert columns."""
-    # Melt dataframe to get all responses in one column
-    melted = df[cols].melt(var_name="Pregunta", value_name="Respuesta")
-    
-    # Count frequencies
-    counts = melted['Respuesta'].value_counts().sort_index()
-    
-    fig = px.bar(counts, x=counts.index, y=counts.values, 
-                 title=f"Distribución: {title}", labels={'x': 'Respuesta', 'y': 'Frecuencia'},
-                 color=counts.values, color_continuous_scale='Blues')
+
+def render_distribution(df, dim, cols):
+    oriented = scoring.orient_items(df, dim, cols)
+    vals = oriented.stack().dropna().round().astype(int)
+    counts = vals.value_counts().sort_index()
+    total = counts.sum()
+    pct = (counts / total * 100).round(1)
+    fig = go.Figure(go.Bar(
+        x=counts.index.astype(str), y=counts.values,
+        marker=dict(color=counts.index, colorscale=[[0, "#C0392B"], [0.5, "#FBBC04"], [1, "#1A7F4B"]]),
+        text=[f"{p}%" for p in pct.values], textposition="outside",
+        hovertemplate="Respuesta %{x}<br>%{y} respuestas<extra></extra>",
+    ))
     fig.update_layout(
-        height=400,  # Increased height for better readability
-        margin=dict(l=60, r=40, t=60, b=80),
-        xaxis=dict(automargin=True),
-        yaxis=dict(automargin=True)
+        title="Distribución de respuestas (orientadas a bienestar)",
+        height=320, margin=dict(l=50, r=30, t=50, b=50),
+        xaxis_title="Nivel de respuesta (mayor = mejor)", yaxis_title="Frecuencia",
+        coloraxis_showscale=False, showlegend=False,
     )
     return fig
 
-# --- Main Dashboard ---
+
+def render_item_bars(df, dim, cols):
+    """Media por ítem (orientada), útil para dimensiones y diferencial semántico."""
+    oriented = scoring.orient_items(df, dim, cols)
+    means = oriented.mean().sort_values()
+    labels = [c.split(")")[-1][:55] for c in means.index]
+    mn, mx = get_scale_range(dim)
+    fig = go.Figure(go.Bar(
+        x=means.values, y=labels, orientation="h",
+        marker_color="#2E5FAC",
+        text=[f"{v:.2f}" for v in means.values], textposition="outside",
+    ))
+    fig.update_layout(
+        title="Promedio por ítem (orientado)", height=max(280, len(labels) * 26),
+        margin=dict(l=10, r=30, t=50, b=10),
+        xaxis=dict(range=[mn, mx + 0.3], title=f"Escala {mn:.0f}-{mx:.0f}"),
+    )
+    return fig
+
+
+# ── Vistas ──────────────────────────────────────────────────────
+def _view_executive(df, scores):
+    if not scores:
+        st.warning("No se detectaron dimensiones de bienestar puntuables en los datos.")
+        return
+    fort, riesgo, inter = scoring.classify_dimensions(scores)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("👥 Participantes", f"{len(df):,}")
+    c2.metric("📐 Dimensiones", len(scores))
+    c3.metric("🟢 Fortalezas", len(fort))
+    c4.metric("🔴 Áreas de atención", len(riesgo))
+
+    st.markdown("#### Semáforo de bienestar")
+    st.plotly_chart(render_semaforo(scores), use_container_width=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("##### 🟢 Principales fortalezas")
+        if fort:
+            for dim, val in fort[:5]:
+                st.success(f"**{dim}** — {val:.2f}/{scores[dim]['scale_max']:.0f}")
+        else:
+            st.caption("Sin fortalezas destacadas.")
+    with col_b:
+        st.markdown("##### 🔴 Áreas de atención prioritaria")
+        if riesgo:
+            for dim, val in riesgo[:5]:
+                st.error(f"**{dim}** — {val:.2f}/{scores[dim]['scale_max']:.0f}")
+        else:
+            st.caption("Sin dimensiones en riesgo crítico.")
+
+
+def _view_dimension(df, scores):
+    dims = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {})
+    dim_names = [d for d in dims.keys() if d in scores]
+    if not dim_names:
+        st.warning("No hay dimensiones puntuables.")
+        return
+    selected = st.selectbox("Selecciona una dimensión:", dim_names)
+    info = scores[selected]
+    cols = scoring.dimension_columns(df, selected)
+
+    st.markdown(f"### {ESTADO_ICON.get(info['estado'],'')} {selected}")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Puntaje", f"{info['score']:.2f}/{info['scale_max']:.0f}")
+    m2.metric("Estado", info["estado"])
+    m3.metric("N", info["n"])
+    m4.metric("α Cronbach", f"{info['alpha']:.2f}" if isinstance(info["alpha"], float) else "—")
+
+    if info["is_risk"]:
+        st.caption("ℹ️ Dimensión de riesgo: el puntaje está orientado a bienestar "
+                   "(mayor = mejor); un valor bajo indica mayor nivel de riesgo.")
+
+    g, d = st.columns([1, 1.3])
+    with g:
+        st.plotly_chart(
+            render_gauge(info["score"], selected[:30], info["scale_min"],
+                         info["scale_max"], SEM_COLORS.get(info["color"], "#2E5FAC")),
+            use_container_width=True)
+    with d:
+        st.plotly_chart(render_distribution(df, selected, cols), use_container_width=True)
+
+    st.plotly_chart(render_item_bars(df, selected, cols), use_container_width=True)
+
+    if st.button(f"✨ Interpretar «{selected}» con IA"):
+        client = get_cached_client()
+        client.current_df = df
+        if not client.is_configured():
+            st.error("⚠️ API Key no configurada.")
+        else:
+            with st.spinner("Generando análisis experto..."):
+                stats = df[cols].describe().to_string()
+                prompt = (
+                    f"Actúa como experto en Psicología Organizacional. Analiza la dimensión "
+                    f"'{selected}' (puntaje orientado a bienestar {info['score']:.2f}/"
+                    f"{info['scale_max']:.0f}, estado {info['estado']}, N={info['n']}).\n\n"
+                    f"Estadísticos por ítem:\n{stats}\n\n"
+                    "1. Describe el estado actual en lenguaje claro.\n"
+                    "2. Identifica ítems críticos.\n"
+                    "3. Sugiere 2 acciones basadas en evidencia."
+                )
+                st.markdown(client.generate_response(prompt))
+
+
+def _view_profile(df):
+    tabs = st.tabs(["👥 Sociodemográficas", "🏢 Laborales"])
+    specs = [
+        (tabs[0], "Variables Sociodemográficas"),
+        (tabs[1], "Variables Laborales"),
+    ]
+    for tab, cat in specs:
+        with tab:
+            variables = DATA_DICTIONARY.get(cat, {})
+            cols = st.columns(2)
+            i = 0
+            for var_name in variables.keys():
+                found = next((c for c in df.columns if var_name.strip() in c), None)
+                if not found:
+                    continue
+                with cols[i % 2]:
+                    label = var_name.split(")")[-1].strip()
+                    st.markdown(f"**{label}**")
+                    if pd.api.types.is_numeric_dtype(df[found]):
+                        fig = px.histogram(df, x=found, nbins=20, color_discrete_sequence=["#2E5FAC"])
+                    else:
+                        vc = df[found].value_counts().reset_index()
+                        vc.columns = ["Valor", "Frecuencia"]
+                        fig = px.bar(vc, x="Valor", y="Frecuencia",
+                                     color="Frecuencia", color_continuous_scale="Blues")
+                    fig.update_layout(height=300, margin=dict(l=40, r=20, t=20, b=60),
+                                      coloraxis_showscale=False,
+                                      xaxis=dict(automargin=True), yaxis=dict(automargin=True))
+                    st.plotly_chart(fig, use_container_width=True)
+                i += 1
+            if i == 0:
+                st.caption("No se encontraron columnas de esta categoría en los datos.")
+
+
+def _view_academic(df, scores):
+    if not scores:
+        st.warning("No hay dimensiones puntuables.")
+        return
+
+    st.markdown("#### Tabla de fiabilidad y puntajes")
+    table = pd.DataFrame([
+        {
+            "Dimensión": dim,
+            "N": info["n"],
+            "Puntaje": round(info["score"], 2),
+            "Escala": f"{info['scale_min']:.0f}-{info['scale_max']:.0f}",
+            "DE": round(info["std"], 2),
+            "IC95%": f"±{info['ci95']:.2f}",
+            "α": round(info["alpha"], 2) if isinstance(info["alpha"], float) else None,
+            "Ítems": info["n_items"],
+            "Estado": info["estado"],
+        }
+        for dim, info in sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)
+    ])
+    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.caption("α = alfa de Cronbach (consistencia interna; aceptable ≥ 0.70). "
+               "Puntajes orientados a bienestar (mayor = mejor).")
+
+    st.markdown("#### Correlación entre dimensiones (orientadas)")
+    mat = _dim_score_matrix(df)
+    if mat.shape[1] >= 2:
+        corr = mat.corr()
+        fig = px.imshow(corr, text_auto=".2f", aspect="auto",
+                        color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
+        fig.update_layout(height=560, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("#### Comparación por grupo")
+    cat_cols = [c for c in df.columns
+                if (c.startswith("(SD)") or c.startswith("(LB)"))
+                and 1 < df[c].nunique(dropna=True) <= 12]
+    if cat_cols and mat.shape[1] >= 1:
+        c1, c2 = st.columns(2)
+        group_col = c1.selectbox("Agrupar por:", cat_cols,
+                                 format_func=lambda c: c.split(")")[-1].strip())
+        dim_acr = c2.selectbox("Dimensión:", list(mat.columns))
+        comp = mat[[dim_acr]].copy()
+        comp["_grupo"] = df[group_col].values
+        agg = comp.groupby("_grupo")[dim_acr].agg(["mean", "count"]).reset_index()
+        agg = agg.sort_values("mean", ascending=False)
+        fig = px.bar(agg, x="_grupo", y="mean", text=agg["mean"].round(2),
+                     color="mean", color_continuous_scale="Blues",
+                     labels={"_grupo": group_col.split(")")[-1].strip(), "mean": "Puntaje medio"})
+        fig.update_layout(height=380, margin=dict(l=40, r=20, t=20, b=80),
+                          coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("N por grupo: " + ", ".join(f"{r['_grupo']}={int(r['count'])}" for _, r in agg.iterrows()))
+    else:
+        st.caption("No hay variables de agrupación adecuadas en los datos.")
+
+
+# ── Sidebar (reporte + filtros + descarga) ──────────────────────
+def _sidebar(df_full):
+    with st.sidebar:
+        st.subheader("📄 Informe")
+        org = st.text_input("Organización", "Organización", key="dash_org")
+        if st.button("Generar Informe PDF", use_container_width=True):
+            from src.reports.report_builder import ReportBuilder
+            with st.spinner("Generando informe profesional..."):
+                try:
+                    pdf_bytes = ReportBuilder(
+                        st.session_state.get("_df_view", df_full),
+                        title="Informe de Diagnóstico de Bienestar", org_name=org,
+                    ).build_report()
+                    st.download_button(
+                        "⬇️ Descargar Informe PDF", data=pdf_bytes,
+                        file_name="informe_bienestar.pdf", mime="application/pdf",
+                        use_container_width=True)
+                    st.success("✅ Informe generado.")
+                except Exception as e:
+                    st.error(f"Error al generar informe: {e}")
+        st.divider()
+
+    # Filtros multiselección (añaden controles a la sidebar)
+    df_view = render_filtering_sidebar(df_full)
+    st.session_state["_df_view"] = df_view
+
+    with st.sidebar:
+        csv = df_view.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Descargar datos filtrados (CSV)", data=csv,
+                           file_name="datos_filtrados.csv", mime="text/csv",
+                           use_container_width=True)
+    return df_view
+
 
 def render_dashboard():
-    df = st.session_state.df
-    
+    df = get_processed_data()
     if df is None:
-        st.info("⚠️ No hay datos cargados. Ve a la sección 'Cargar Datos' para comenzar.")
+        st.info("⚠️ No hay datos cargados. Ve a 'Cargar Datos' para comenzar.")
         return
 
     st.markdown("## 📊 Dashboard de Salud Organizacional")
-    
-    # --- Sidebar Filters ---
-    with st.sidebar:
-        st.subheader("📄 Reporte")
-        if st.button("Generar Informe PDF"):
-            from src.reports.report_builder import ReportBuilder
-            with st.spinner("Generando informe profesional (esto puede tardar unos segundos)..."):
-                try:
-                    builder = ReportBuilder(df, "SaludOrganizacional_Reporte.pdf")
-                    pdf_path = builder.build()
-                    
-                    with open(pdf_path, "rb") as f:
-                        st.download_button(
-                            label="⬇️ Descargar Informe PDF",
-                            data=f,
-                            file_name="SaludOrganizacional_Reporte.pdf",
-                            mime="application/pdf"
-                        )
-                    st.success("✅ Informe generado exitosamente.")
-                except Exception as e:
-                    st.error(f"Error al generar informe: {e}")
-        
-        st.divider()
-        st.subheader("🔍 Filtros Globales")
-        # Filter by a categorical column if exists
-        cat_cols = df.select_dtypes(include=['category', 'object']).columns
-        if len(cat_cols) > 0:
-            filter_col = st.selectbox("Filtrar por:", ["Ninguno"] + list(cat_cols))
-            if filter_col != "Ninguno":
-                unique_vals = df[filter_col].unique()
-                selected_val = st.selectbox(f"Valor de {filter_col}:", unique_vals)
-                df = df[df[filter_col] == selected_val]
-                st.info(f"Filtrando por {filter_col} = {selected_val} ({len(df)} registros)")
+    df_view = _sidebar(df)
+    scores = _scores(df_view)
 
-    # --- TABS ---
-    tab_socio, tab_labor, tab_dims = st.tabs(["👥 Sociodemográficas", "🏢 Laborales", "🧠 Dimensiones"])
-
-    # --- 1. Sociodemográficas ---
-    with tab_socio:
-        st.markdown("### Variables Sociodemográficas")
-        socio_vars = DATA_DICTIONARY.get("Variables Sociodemográficas", {})
-        
-        # Grid layout
-        cols = st.columns(2)
-        for i, (var_name, config) in enumerate(socio_vars.items()):
-            # Find actual column name in df (fuzzy match or exact)
-            # For now, assume exact match or simple normalization. 
-            # In a real scenario, we'd use the map created by processor.
-            # Here we try to find the column that contains the var_name
-            found_col = next((c for c in df.columns if var_name in c), None)
-            
-            if found_col:
-                with cols[i % 2]:
-                    st.markdown(f"**{var_name}**")
-                    if pd.api.types.is_numeric_dtype(df[found_col]):
-                        st.dataframe(df[found_col].describe().to_frame().T)
-                        fig = px.histogram(df, x=found_col, marginal="box")
-                    else:
-                        counts = df[found_col].value_counts().reset_index()
-                        counts.columns = ['Valor', 'Frecuencia']
-                        fig = px.bar(counts, x='Valor', y='Frecuencia', color='Frecuencia')
-                    
-                    fig.update_layout(
-                        height=300,
-                        margin=dict(l=60, r=40, t=50, b=80),
-                        xaxis=dict(automargin=True),
-                        yaxis=dict(automargin=True)
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-            else:
-                # Try looking for it without the (SD) prefix
-                clean_name = var_name.split(')')[-1]
-                found_col = next((c for c in df.columns if clean_name in c), None)
-                if found_col:
-                     with cols[i % 2]:
-                        st.markdown(f"**{var_name}**")
-                        counts = df[found_col].value_counts().reset_index()
-                        counts.columns = ['Valor', 'Frecuencia']
-                        fig = px.bar(counts, x='Valor', y='Frecuencia', color='Frecuencia')
-                        fig.update_layout(height=CC['height_default'], margin=CC['margin_compact'],
-                                          xaxis=dict(automargin=True), yaxis=dict(automargin=True))
-                        st.plotly_chart(fig, use_container_width=True)
-
-    # --- 2. Laborales ---
-    with tab_labor:
-        st.markdown("### Variables Laborales")
-        labor_vars = DATA_DICTIONARY.get("Variables Laborales", {})
-        
-        cols = st.columns(2)
-        for i, (var_name, config) in enumerate(labor_vars.items()):
-            found_col = next((c for c in df.columns if var_name in c), None)
-            
-            if found_col:
-                with cols[i % 2]:
-                    st.markdown(f"**{var_name}**")
-                    if pd.api.types.is_numeric_dtype(df[found_col]):
-                        st.dataframe(df[found_col].describe().to_frame().T)
-                        fig = px.histogram(df, x=found_col)
-                    else:
-                        counts = df[found_col].value_counts().reset_index()
-                        counts.columns = ['Valor', 'Frecuencia']
-                        fig = px.bar(counts, x='Valor', y='Frecuencia', color='Frecuencia')
-                    
-                    fig.update_layout(height=CC['height_default'], margin=CC['margin_compact'],
-                                      xaxis=dict(automargin=True), yaxis=dict(automargin=True))
-                    st.plotly_chart(fig, use_container_width=True)
-
-    # --- 3. Dimensiones ---
-    with tab_dims:
-        st.markdown("### Dimensiones de Bienestar y Salud Mental")
-        
-        dims = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {})
-        dim_names = list(dims.keys())
-        
-        selected_dim = st.selectbox("Selecciona una Dimensión para analizar:", dim_names)
-        
-        if selected_dim:
-            st.markdown(f"#### {selected_dim}")
-            dim_config = dims[selected_dim]
-            questions = dim_config.get("Preguntas", [])
-            
-            # Find columns
-            valid_cols = [c for c in df.columns if c in questions and pd.api.types.is_numeric_dtype(df[c])]
-            
-            if valid_cols:
-                # --- Special Handling for Specific Dimensions ---
-                
-                # 1. Conflicto Familia-Trabajo (Split)
-                if selected_dim == "Conflicto Familia-Trabajo":
-                    c1, c2 = st.columns(2)
-                    
-                    # First 5: Familia -> Trabajo
-                    ft_cols = valid_cols[:5]
-                    ft_avg = df[ft_cols].mean(axis=1).mean() if ft_cols else 0
-                    with c1:
-                        st.metric("Familia -> Trabajo", f"{ft_avg:.2f} / 7.0")
-                        st.plotly_chart(render_gauge(ft_avg, "Familia -> Trabajo", color_scale=['green', 'yellow', 'red']), use_container_width=True)
-                        if ft_cols:
-                            st.plotly_chart(render_likert_distribution(df, ft_cols, "Familia -> Trabajo"), use_container_width=True)
-
-                    # Last 5: Trabajo -> Familia
-                    tf_cols = valid_cols[5:]
-                    tf_avg = df[tf_cols].mean(axis=1).mean() if tf_cols else 0
-                    with c2:
-                        st.metric("Trabajo -> Familia", f"{tf_avg:.2f} / 7.0")
-                        st.plotly_chart(render_gauge(tf_avg, "Trabajo -> Familia", color_scale=['green', 'yellow', 'red']), use_container_width=True)
-                        if tf_cols:
-                            st.plotly_chart(render_likert_distribution(df, tf_cols, "Trabajo -> Familia"), use_container_width=True)
-                            
-                # 2. Bienestar Psicosocial (Tanks)
-                elif "Bienestar Psicosocial" in selected_dim:
-                    # Expect pairs of adjectives. 
-                    # The questions in config are like "(BM),(PA)2", etc.
-                    # We need to map these to the adjectives if possible, or just show the items.
-                    # The user prompt had specific pairs like "Insatisfecho - Satisfecho".
-                    # Since we don't have the exact mapping in the config questions list (it just says indices),
-                    # we might need to rely on the column names in the CSV if they are descriptive,
-                    # OR hardcode the labels if they are fixed.
-                    # For now, we'll iterate the valid columns and show a tank for each.
-                    
-                    st.markdown("##### Escala Diferencial Semántico")
-                    for col in valid_cols:
-                        val = df[col].mean()
-                        # Try to extract label from column name if it has text
-                        label = col.split(')')[-1] if ')' in col else col
-                        st.plotly_chart(render_tank(val, "Izquierda", "Derecha"), use_container_width=True)
-                        st.caption(f"{label}: {val:.2f}")
-
-                # 3. Standard Likert Dimensions
-                else:
-                    avg = df[valid_cols].mean(axis=1).mean()
-                    st.metric("Promedio General", f"{avg:.2f}")
-                    
-                    st.plotly_chart(render_gauge(avg, selected_dim), use_container_width=True)
-                    
-                    st.markdown("#### Detalle por Pregunta")
-                    for col in valid_cols:
-                        st.markdown(f"**{col}**")
-                        # Use a unique key or title to distinguish
-                        st.plotly_chart(render_likert_distribution(df, [col], col), use_container_width=True)
-
-                    with st.expander("Ver Estadísticas Descriptivas"):
-                        stats_df = df[valid_cols].describe().T[['mean', 'std', 'min', 'max']]
-                        st.dataframe(stats_df.style.format("{:.2f}"))
-
-                # --- Full Data Table ---
-                st.markdown("### 📋 Datos Completos de la Dimensión")
-                st.dataframe(df[valid_cols], use_container_width=True)
-
-                # --- AI Interpretation Button ---
-                st.markdown("---")
-                if st.button(f"✨ Interpretar {selected_dim} con IA"):
-                    client = GeminiClient()
-                    if not client.is_configured():
-                        st.error("⚠️ API Key no configurada.")
-                    else:
-                        with st.spinner("Generando análisis experto..."):
-                            stats_summary = df[valid_cols].describe().to_string()
-                            prompt = f"""
-                            Actúa como experto en Psicología Organizacional.
-                            Analiza la dimensión: {selected_dim}
-                            
-                            Datos Estadísticos:
-                            {stats_summary}
-                            
-                            1. Describe el estado actual.
-                            2. Identifica puntos críticos (preguntas con promedios bajos/altos).
-                            3. Sugiere 2 acciones de mejora basadas en evidencia.
-                            """
-                            response = client.generate_response(prompt, df_context=None)
-                            st.markdown(response)
-            else:
-                st.warning(f"No se encontraron columnas de datos para {selected_dim}")
+    tab_exec, tab_dim, tab_perfil, tab_acad = st.tabs(
+        ["🏢 Resumen ejecutivo", "🧠 Dimensiones", "👥 Perfil", "🎓 Vista académica"]
+    )
+    with tab_exec:
+        _view_executive(df_view, scores)
+    with tab_dim:
+        _view_dimension(df_view, scores)
+    with tab_perfil:
+        _view_profile(df_view)
+    with tab_acad:
+        _view_academic(df_view, scores)
