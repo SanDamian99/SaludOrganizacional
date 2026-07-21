@@ -418,3 +418,85 @@ MATPLOTLIB_CONFIG = {
     "savefig_bbox": "tight",
     "savefig_pad_inches": 0.3,
 }
+
+# --- Valencia psicométrica por ítem -----------------------------------------
+# +1 = una respuesta más alta implica MÁS bienestar (ítem directo)
+# -1 = una respuesta más alta implica MENOS bienestar (ítem inverso; se invierte)
+#
+# Estructura: por dimensión, una valencia `default` y una lista `flip` de subcadenas
+# de los ítems cuya valencia es OPUESTA al default. Esto orienta todas las dimensiones
+# a "mayor = mejor bienestar". Documentado en docs/METODOLOGIA_PUNTAJES.md.
+# Es la fuente de verdad: corregir aquí actualiza dashboard y reportes.
+DIMENSION_VALENCE = {
+    "Control del Tiempo": {"default": +1, "flip": [
+        "me presionan para que trabaje muchas horas",
+        "plazos de entrega inalcanzables",
+        "presiones de tiempo poco realistas",
+        "descuidar algunas tareas",
+    ]},
+    "Compromiso del Líder": {"default": +1, "flip": []},
+    "Apoyo del Grupo": {"default": +1, "flip": []},
+    "Claridad de Rol": {"default": +1, "flip": [
+        "difíciles de hacer al mismo tiempo",
+        "cosas contradictorias",
+        "solicitudes incompatibles",
+    ]},
+    "Cambio Organizacional": {"default": +1, "flip": []},
+    "Responsabilidad Organizacional": {"default": +1, "flip": []},
+    "Conflicto Familia-Trabajo": {"default": -1, "flip": []},
+    "Síntomas de Burnout": {"default": -1, "flip": []},
+    "Compromiso": {"default": +1, "flip": []},
+    "Defensa de la Organización": {"default": +1, "flip": []},
+    "Satisfacción": {"default": +1, "flip": []},
+    "Intención de Retiro": {"default": -1, "flip": [
+        "me veo trabajando en este lugar",
+    ]},
+    "Bienestar Psicosocial (Escala de Afectos)": {"default": +1, "flip": []},
+    "Bienestar Psicosocial (Escala de Competencias)": {"default": +1, "flip": []},
+    "Bienestar Psicosocial (Escala de Expectativas)": {"default": +1, "flip": []},
+    "Factores de Efectos Colaterales (Escala de Somatización)": {"default": -1, "flip": []},
+    "Factores de Efectos Colaterales (Escala de Desgaste)": {"default": -1, "flip": []},
+    "Factores de Efectos Colaterales (Escala de Alienación)": {"default": -1, "flip": []},
+}
+
+# Dimensiones que representan RIESGO (su lectura natural es "más = peor").
+# Se orientan a bienestar para el semáforo, pero se reporta también su nivel de riesgo.
+RISK_DIMENSIONS = {
+    "Conflicto Familia-Trabajo",
+    "Síntomas de Burnout",
+    "Intención de Retiro",
+    "Factores de Efectos Colaterales (Escala de Somatización)",
+    "Factores de Efectos Colaterales (Escala de Desgaste)",
+    "Factores de Efectos Colaterales (Escala de Alienación)",
+}
+
+
+def item_valence(dim_name: str, question: str) -> int:
+    """Devuelve +1 (directo) o -1 (inverso) para un ítem de una dimensión.
+
+    Ver docs/METODOLOGIA_PUNTAJES.md. Ítems no registrados se asumen directos (+1).
+    """
+    cfg = DIMENSION_VALENCE.get(dim_name)
+    if not cfg:
+        return +1
+    q = _norm_key(question)
+    default = cfg.get("default", +1)
+    for sub in cfg.get("flip", []):
+        if _norm_key(sub) in q:
+            return -default
+    return default
+
+
+def get_scale_range(dim_name: str):
+    """Rango (min, max) de la escala de una dimensión, leído del DATA_DICTIONARY."""
+    details = DATA_DICTIONARY.get("Dimensiones de Bienestar y Salud Mental", {}).get(dim_name, {})
+    escala = details.get("Escala", {})
+    vals = [k for k in escala.keys() if isinstance(k, (int, float))] if isinstance(escala, dict) else []
+    if vals:
+        return min(vals), max(vals)
+    # Fallbacks razonables por familia de dimensión
+    if "Burnout" in dim_name:
+        return 1, 5
+    if any(s in dim_name for s in ["Compromiso", "Defensa", "Satisfacción", "Retiro"]):
+        return 1, 6
+    return 1, 7

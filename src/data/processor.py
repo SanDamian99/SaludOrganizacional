@@ -164,6 +164,22 @@ def guess_type(series: pd.Series):
     return 'Categórica', None
 
 
+# Columnas que NUNCA se numerizan ni se imputan (identificadores / metadatos).
+_PROTECTED_EXACT = {
+    'id', 'nombre', 'correo electronico', 'correo', 'email',
+    'hora de inicio', 'hora de finalizacion', 'marca temporal', 'timestamp',
+}
+_PROTECTED_KEYWORDS = ('correo', 'email', 'timestamp', 'marca temporal')
+
+
+def is_protected_column(colname: str) -> bool:
+    """True si la columna es un identificador/metadato que debe conservarse intacto."""
+    n = normalize_text(colname)
+    if n in _PROTECTED_EXACT:
+        return True
+    return any(kw in n for kw in _PROTECTED_KEYWORDS)
+
+
 class ExcelProcessor:
     def __init__(self):
         self.report = {
@@ -179,23 +195,31 @@ class ExcelProcessor:
             "extra_variables": []
         }
 
-    def _impute_missing(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _impute_missing(self, df: pd.DataFrame, protected=None) -> pd.DataFrame:
+        """Imputación responsable: solo ítems numéricos/escala (mediana).
+
+        Columnas protegidas (identificadores) y categóricas/texto NO se imputan;
+        sus faltantes se conservan y quedan visibles en el diagnóstico.
+        """
+        protected = protected or set()
         imputations = 0
+        by_col = {}
         for col in df.columns:
-            missing_count = df[col].isna().sum()
-            if missing_count > 0:
-                if pd.api.types.is_numeric_dtype(df[col]):
-                    median_val = df[col].median()
-                    if pd.isna(median_val): # All NaN case
-                        median_val = 0
-                    df[col] = df[col].fillna(median_val)
-                    imputations += missing_count
-                else:
-                    mode_val = df[col].mode()
-                    fill_val = mode_val.iloc[0] if not mode_val.empty else "Desconocido"
-                    df[col] = df[col].fillna(fill_val)
-                    imputations += missing_count
+            if col in protected:
+                continue
+            missing_count = int(df[col].isna().sum())
+            if missing_count <= 0:
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                median_val = df[col].median()
+                if pd.isna(median_val):
+                    continue  # columna totalmente vacía: no se inventan datos
+                df[col] = df[col].fillna(median_val)
+                imputations += missing_count
+                by_col[col] = missing_count
+            # categóricas/texto: se preservan los NaN (no se imputan)
         self.report["n_cells_imputed"] = int(imputations)
+        self.report["imputation_by_column"] = by_col
         return df
 
     def _detect_likert_and_ranges(self, df: pd.DataFrame):
@@ -211,7 +235,10 @@ class ExcelProcessor:
 
     def _map_columns(self, df: pd.DataFrame, reference_schema=None):
         mapped_columns = {}
-        schema_cols = reference_schema.columns.tolist() if reference_schema is not None else []
+        schema_cols = (
+            reference_schema.columns.tolist()
+            if isinstance(reference_schema, pd.DataFrame) else []
+        )
         
         # Build list of known keys from DATA_DICTIONARY
         known_keys = ['ID']
@@ -275,7 +302,10 @@ class ExcelProcessor:
         self.report["n_cols_unmapped"] = unmapped
         return df
 
-    def process_complex_excel(self, file_path_or_buffer, df_input=None, encoding='utf-8'):
+    COVERAGE_MIN = 0.60  # cobertura mínima para aceptar una conversión de escala
+
+    def process_complex_excel(self, file_path_or_buffer, reference_schema=None,
+                              df_input=None, skip_unmapped=False, encoding='utf-8'):
         try:
             if df_input is not None:
                 df = df_input.copy()
@@ -288,20 +318,56 @@ class ExcelProcessor:
             self.report["n_cols_original"] = len(df.columns)
             self.report["encoding_detected"] = encoding
 
-            df = self._map_columns(df)
-            
-            # Numeric coercions mapping from basic preprocessor concepts logic if needed
-            for col in df.columns:
-                if df[col].dtype == 'object':
-                     # try to coerce to numeric if possible safely
-                     converted = pd.to_numeric(df[col], errors='ignore')
-                     if pd.api.types.is_numeric_dtype(converted):
-                         df[col] = converted
+            df = self._map_columns(df, reference_schema=reference_schema)
 
-            df = self._impute_missing(df)
+            # Opcional: descartar columnas no reconocidas
+            if skip_unmapped:
+                drop = [c for c in self.report["extra_variables"] if c in df.columns]
+                df = df.drop(columns=drop)
+
+            # Columnas protegidas: identificadores / metadatos → intactas
+            protected = {c for c in df.columns if is_protected_column(c)}
+            self.report["protected_columns"] = sorted(protected)
+
+            # Transformación de escalas: cascada override → numérico → response-set
+            scale_map = {}
+            for col in df.columns:
+                if col in protected:
+                    continue
+                series = df[col]
+                if not pd.api.types.is_numeric_dtype(series):
+                    codes, cov, method_o, _levels = try_column_override(col, series)
+                    if codes is not None and cov >= self.COVERAGE_MIN:
+                        df[col] = codes
+                        scale_map[col] = {"method": method_o, "coverage": round(cov, 3)}
+                    else:
+                        typ, num = guess_type(series)
+                        if typ == 'Continua':
+                            df[col] = num
+                            scale_map[col] = {"method": "numeric_flexible"}
+                        else:
+                            name, mapped, cov2 = best_response_set(series)
+                            if cov2 >= self.COVERAGE_MIN:
+                                df[col] = mapped
+                                scale_map[col] = {"method": name, "coverage": round(cov2, 3)}
+                            # else: se conserva como categórica/texto (sin pérdida)
+
+                # Reverse-coding intrínseco (patrones), solo si quedó numérica
+                is_rev, _ = is_reverse_column(col)
+                if is_rev and pd.api.types.is_numeric_dtype(df[col]):
+                    df[col] = reverse_numeric(df[col])
+                    scale_map.setdefault(col, {})["reversed"] = True
+
+            self.report["scale_map"] = scale_map
+            self.report["n_cols_scaled"] = len(scale_map)
+
+            df = self._impute_missing(df, protected=protected)
             self._detect_likert_and_ranges(df)
 
             self.report["n_rows_final"] = len(df)
+            # Alias de compatibilidad (contratos de tests / diagnósticos)
+            self.report["rows_cleaned"] = len(df)
+            self.report["columns_processed"] = len(df.columns)
             return df, self.report
 
         except Exception as e:

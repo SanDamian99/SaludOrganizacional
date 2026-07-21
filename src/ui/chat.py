@@ -1,95 +1,76 @@
 """
-Chat con IA — Asistente Virtual Especializado en Psicología Organizacional.
-Incluye pathways para preguntas sensibles e individuales, y preguntas sugeridas.
+Chat con IA — Asistente experto en Psicología Organizacional.
+
+Ancla las respuestas a datos reales (puntajes de dimensión calculados) y a fuentes
+académicas recuperadas del RAG, reduciendo alucinaciones. Usa el enrutador de
+respuestas para manejar temas sensibles, solicitudes individuales y ambigüedad.
 """
 import streamlit as st
-from src.ai.gemini_client import GeminiClient
+
+from src.core.state import get_processed_data
+from src.ai.gemini_client import get_cached_client
+from src.ai.knowledge_base import get_cached_kb
+from src.ai.response_router import ResponseRouter
+from src.ai.prompt_builder import PromptBuilder
+from src.analysis import scoring
 
 
-SYSTEM_PROMPT = """Eres un experto en psicología organizacional y bienestar laboral, 
-parte del equipo de investigación de una universidad. Tu rol es ayudar a personas 
-(empleados, directivos, investigadores) a entender los resultados de un estudio 
-sobre salud mental en el trabajo.
-
-REGLAS:
-- Usa lenguaje claro y simple. Si usas un término técnico, explícalo inmediatamente.
-- Contextualiza siempre los números: "un puntaje de 5.2/7 indica que..."
-- Cita fuentes académicas en formato APA cuando hagas afirmaciones sobre bienestar laboral.
-- Si no tienes datos para responder algo, di exactamente qué SÍ puedes responder.
-- NUNCA reveles datos de individuos específicos, solo promedios y tendencias grupales.
-- NUNCA inventes cifras. Si no hay datos, dilo claramente.
-- Al final de cada respuesta, sugiere 2-3 preguntas de seguimiento relevantes.
-
-SOBRE LOS DATOS DISPONIBLES:
-{dataset_context}
-"""
-
-
-def _build_system_prompt(df=None) -> str:
-    """Construye el prompt con contexto real del dataset."""
+def _data_context(df) -> str:
+    """Resumen compacto de puntajes de dimensión para dar contexto real a la IA."""
     if df is None or df.empty:
-        dataset_context = "No hay datos cargados aún."
-    else:
-        n_rows = len(df)
-        n_dims = len([c for c in df.columns if any(
-            p in str(c) for p in ['(BM)', '(CT)', '(CL)', '(AG)']
-        )])
-        dataset_context = (
-            f"Dataset activo: {n_rows:,} participantes, "
-            f"aproximadamente {n_dims} dimensiones de bienestar medidas."
-        )
-    return SYSTEM_PROMPT.format(dataset_context=dataset_context)
+        return "No hay datos cargados."
+    try:
+        scores = scoring.compute_dimension_scores(df)
+    except Exception:
+        scores = {}
+    if not scores:
+        return f"Dataset con {len(df):,} participantes. Sin dimensiones puntuables detectadas."
 
-
-def _classify_question(question: str) -> str:
-    """
-    Clasifica la pregunta antes de enviarla a Gemini.
-    Returns: "answerable" | "individual_data" | "sensitive"
-    """
-    q_lower = question.lower()
-
-    # Solicitud de datos individuales
-    individual_kw = ["persona específica", "empleado x", "quién tiene", "nombre",
-                     "correo", "quien", "fulano", "pedro", "maria"]
-    if any(w in q_lower for w in individual_kw) and any(
-        w2 in q_lower for w2 in ["peor", "mejor", "puntaje", "dato"]
-    ):
-        return "individual_data"
-
-    # Tema sensible de salud mental
-    sensitive_kw = ["suicidio", "autolesión", "crisis", "emergencia", "matar",
-                    "depresion clinica", "ansiedad severa", "morir", "daño"]
-    if any(w in q_lower for w in sensitive_kw):
-        return "sensitive"
-
-    return "answerable"
+    fort, riesgo, inter = scoring.classify_dimensions(scores)
+    lines = [f"Dataset activo: {len(df):,} participantes, {len(scores)} dimensiones evaluadas.",
+             "Puntajes orientados a bienestar (mayor = mejor):"]
+    for dim, info in sorted(scores.items(), key=lambda kv: kv[1]["score"]):
+        alpha = info.get("alpha")
+        a = f", α={alpha:.2f}" if isinstance(alpha, float) else ""
+        lines.append(f"  - {dim}: {info['score']:.2f}/{info['scale_max']:.0f} "
+                     f"({info['estado']}, N={info['n']}{a})")
+    if riesgo:
+        lines.append("Principales riesgos: " + ", ".join(d for d, _ in riesgo[:3]))
+    if fort:
+        lines.append("Principales fortalezas: " + ", ".join(d for d, _ in fort[:3]))
+    return "\n".join(lines)
 
 
 def render_chat():
     st.markdown("## 🤖 Asistente Virtual Especializado")
-    st.caption("Impulsado por Gemini 2.5 Flash Lite — Especialista en Psicología Organizacional")
+    st.caption("Experto en Psicología Organizacional · respuestas ancladas en tus datos y en literatura científica")
 
-    client = GeminiClient()
-
+    client = get_cached_client()
     if not client.is_configured():
         st.error(
-            "⚠️ API Key de Gemini no encontrada. Por favor, configúrala en "
-            "`.streamlit/secrets.toml` o en tus variables de entorno."
+            "⚠️ API Key de Gemini no encontrada. Configúrala en "
+            "`.streamlit/secrets.toml` (`YOUR_API_KEY`) o como variable de entorno "
+            "`GEMINI_API_KEY`."
         )
         return
 
-    # Warning si no hay datos
-    df = st.session_state.get("df")
+    df = get_processed_data()
+    client.current_df = df  # habilita las herramientas analíticas
+    kb = get_cached_kb()
+    router = ResponseRouter()
+
+    if kb.enabled and not kb.is_empty():
+        st.caption(f"📚 Base de conocimiento: {kb.count()} referencias disponibles para citar.")
+
     if df is None:
         st.warning(
-            "📊 No hay datos cargados actualmente. El modelo te responderá basándose "
-            "en su conocimiento general de psicometría, pero no realizará cálculos "
-            "sobre tu organización. Ve a 'Cargar Datos' para analizar un conjunto específico."
+            "📊 No hay datos cargados. Responderé con conocimiento general de "
+            "psicometría, pero sin calcular sobre tu organización. Ve a 'Cargar Datos'."
         )
 
-    # Preguntas sugeridas (empty state)
+    # Empty state con preguntas sugeridas
     if not st.session_state.get("messages"):
-        st.info("👋 ¡Hola! Soy tu Asistente Virtual. Estoy aquí para ayudarte a interpretar las encuestas de bienestar.")
+        st.info("👋 Soy tu asistente. Te ayudo a interpretar las encuestas de bienestar.")
         st.markdown("**💡 Puedes empezar preguntando:**")
         suggested = [
             "¿Cuál es la dimensión con mayor riesgo en la organización?",
@@ -103,52 +84,74 @@ def render_chat():
                 st.session_state["prefill_question"] = q
                 st.rerun()
 
-    # Mostrar Historial
+    # Historial
     for msg in st.session_state.get("messages", []):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Check for prefilled question
     prefill = st.session_state.pop("prefill_question", None)
-
-    # Input Box
     user_input = st.chat_input("Haz una pregunta sobre los datos de bienestar...")
     prompt = prefill or user_input
 
-    if prompt:
-        # Agregar mensaje del usuario
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    if not prompt:
+        return
 
-        # Pathway classification
-        pathway = _classify_question(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            if pathway == "individual_data":
-                response = (
-                    "Por razones de confidencialidad, no puedo mostrar datos de personas "
-                    "específicas. Puedo mostrarte promedios por grupo, departamento o "
-                    "cualquier otra segmentación agregada. ¿Qué grupo te interesa analizar?"
+    available = {"columns": list(df.columns)} if df is not None else {}
+    pathway = router.route(prompt, available)
+
+    with st.chat_message("assistant"):
+        if pathway == "sensitive_topic":
+            response = (
+                "Este tema requiere atención especializada. Si alguien del equipo está "
+                "en una situación difícil, recomiendo contactar a un profesional de salud "
+                "mental o a la línea de crisis local.\n\nSobre los datos del estudio, puedo "
+                "mostrarte indicadores de bienestar **agregados** del grupo si lo deseas."
+            )
+            st.markdown(response)
+
+        elif pathway == "out_of_scope":
+            response = (
+                "Por confidencialidad no puedo identificar a personas específicas. "
+                "Puedo darte promedios por grupo, área o cualquier segmentación agregada. "
+                "¿Qué grupo te interesa analizar?"
+            )
+            st.markdown(response)
+
+        elif pathway == "needs_clarification":
+            response = (
+                "¿Podrías precisar tu pregunta? Por ejemplo, indícame la dimensión "
+                "(burnout, satisfacción, apoyo del líder…) o el grupo que te interesa."
+            )
+            st.markdown(response)
+
+        else:
+            with st.spinner("Analizando con la IA..."):
+                data_ctx = _data_context(df)
+                rag_ctx = kb.query_knowledge(prompt) if kb.enabled else ""
+
+                system_prompt = PromptBuilder().build_system_prompt(
+                    {"n_rows": len(df) if df is not None else 0,
+                     "columns": list(scoring.compute_dimension_scores(df).keys()) if df is not None else []},
+                    stats_context=data_ctx,
                 )
+
+                references_block = (
+                    f"\n\nREFERENCIAS CIENTÍFICAS DISPONIBLES (cita SOLO estas en APA):\n{rag_ctx}"
+                    if rag_ctx else
+                    "\n\n(No hay referencias del RAG disponibles; evita inventar citas.)"
+                )
+
+                full_prompt = (
+                    f"INSTRUCCIONES DEL SISTEMA:\n{system_prompt}"
+                    f"{references_block}\n\n"
+                    f"DATOS DEL ESTUDIO:\n{data_ctx}\n\n"
+                    f"PREGUNTA DEL USUARIO:\n{prompt}"
+                )
+                response = client.generate_response(full_prompt, df_context=df)
                 st.markdown(response)
 
-            elif pathway == "sensitive":
-                response = (
-                    "Este tema requiere atención especializada. Si alguien del equipo "
-                    "está en una situación difícil, te recomiendo contactar a un profesional "
-                    "de salud mental.\n\nRespecto a los datos del estudio, puedo mostrarte "
-                    "los indicadores de bienestar general del grupo si lo deseas."
-                )
-                st.markdown(response)
-
-            else:
-                with st.spinner("Analizando con Gemini (esto puede tomar varios segundos)..."):
-                    # Build enriched prompt with system context
-                    system_ctx = _build_system_prompt(df)
-                    full_prompt = f"INSTRUCCIONES DEL SISTEMA:\n{system_ctx}\n\nPREGUNTA DEL USUARIO:\n{prompt}"
-                    response = client.generate_response(full_prompt, df_context=df)
-                    st.markdown(response)
-
-        # Save assistant response
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    st.session_state.messages.append({"role": "assistant", "content": response})
