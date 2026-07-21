@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class KnowledgeBase:
-    COLLECTION = "organizational_psychology"
+    # Versionado: fuerza una colección nueva con la función de embeddings actual
+    # (evita conflictos con colecciones persistidas por versiones anteriores).
+    COLLECTION = "org_psychology_v2_onnx"
 
     def __init__(self, persist_directory=".chroma", test_mode=False):
         self.enabled = False

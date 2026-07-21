@@ -5,6 +5,8 @@ Usa ReportBuilder para crear el documento con estructura narrativa completa.
 import streamlit as st
 import pandas as pd
 from src.reports.report_builder import ReportBuilder
+from src.reports.indicator_report import IndicatorReportBuilder
+from src.analysis import indicators
 
 
 def render_reports_page():
@@ -91,12 +93,22 @@ def render_reports_page():
 
         with st.spinner("⏳ Analizando datos y generando PDF profesional..."):
             try:
-                builder = ReportBuilder(
-                    df_filtered,
-                    title=report_title,
-                    org_name=org_name,
-                    include_academic_annex=include_annex,
-                )
+                if indicators.is_wellbeing_dataset(df_filtered):
+                    builder = ReportBuilder(
+                        df_filtered,
+                        title=report_title,
+                        org_name=org_name,
+                        include_academic_annex=include_annex,
+                    )
+                    file_name = "informe_bienestar.pdf"
+                else:
+                    # Dataset genérico (p. ej. docentes): informe de indicadores
+                    doc_title = (report_title
+                                 if report_title != "Informe de Diagnóstico de Bienestar"
+                                 else "Informe de Salud Mental y Bienestar Docente")
+                    builder = IndicatorReportBuilder(
+                        df_filtered, title=doc_title, org_name=org_name)
+                    file_name = "informe_salud_mental_docente.pdf"
                 pdf_bytes = builder.build_report()
 
                 if pdf_bytes and len(pdf_bytes) > 1000:
@@ -107,7 +119,7 @@ def render_reports_page():
                     st.download_button(
                         "📥 Descargar PDF",
                         data=pdf_bytes,
-                        file_name="informe_bienestar.pdf",
+                        file_name=file_name,
                         mime="application/pdf",
                     )
                 else:

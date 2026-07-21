@@ -511,25 +511,32 @@ def _view_generic_academic(df, enr):
 # ── Sidebar (reporte + filtros + descarga) ──────────────────────
 def _sidebar(df_full, wellbeing=True):
     with st.sidebar:
-        if wellbeing:
-            st.subheader("📄 Informe")
-            org = st.text_input("Organización", "Organización", key="dash_org")
-            if st.button("Generar Informe PDF", use_container_width=True):
-                from src.reports.report_builder import ReportBuilder
-                with st.spinner("Generando informe profesional..."):
-                    try:
+        st.subheader("📄 Informe")
+        org = st.text_input("Organización", "Organización", key="dash_org")
+        if st.button("Generar Informe PDF", use_container_width=True):
+            with st.spinner("Generando informe profesional..."):
+                try:
+                    data = st.session_state.get("_df_view", df_full)
+                    if wellbeing:
+                        from src.reports.report_builder import ReportBuilder
                         pdf_bytes = ReportBuilder(
-                            st.session_state.get("_df_view", df_full),
-                            title="Informe de Diagnóstico de Bienestar", org_name=org,
-                        ).build_report()
-                        st.download_button(
-                            "⬇️ Descargar Informe PDF", data=pdf_bytes,
-                            file_name="informe_bienestar.pdf", mime="application/pdf",
-                            use_container_width=True)
-                        st.success("✅ Informe generado.")
-                    except Exception as e:
-                        st.error(f"Error al generar informe: {e}")
-            st.divider()
+                            data, title="Informe de Diagnóstico de Bienestar",
+                            org_name=org).build_report()
+                        fname = "informe_bienestar.pdf"
+                    else:
+                        from src.reports.indicator_report import IndicatorReportBuilder
+                        pdf_bytes = IndicatorReportBuilder(
+                            data, title="Informe de Salud Mental y Bienestar Docente",
+                            org_name=org).build_report()
+                        fname = "informe_salud_mental_docente.pdf"
+                    st.download_button(
+                        "⬇️ Descargar Informe PDF", data=pdf_bytes,
+                        file_name=fname, mime="application/pdf",
+                        use_container_width=True)
+                    st.success("✅ Informe generado.")
+                except Exception as e:
+                    st.error(f"Error al generar informe: {e}")
+        st.divider()
 
     # Filtros multiselección (añaden controles a la sidebar)
     df_view = render_filtering_sidebar(df_full)
