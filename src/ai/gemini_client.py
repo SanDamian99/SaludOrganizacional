@@ -29,6 +29,7 @@ class GeminiClient:
     def __init__(self):
         self.api_key = get_gemini_api_key()
         self.model = None
+        self.current_df = None  # contexto de datos para las herramientas analíticas
         self._call_timestamps: list[float] = []
         self._response_cache: dict[str, tuple[float, str]] = {}
         self._cache_ttl = 3600  # 1 hora
@@ -140,6 +141,51 @@ class GeminiClient:
         """Retorna estadísticas de uso de la sesión actual."""
         return {**self._session_stats, "model": self.MODEL, "configured": self.is_configured()}
 
+    # ------ Herramientas analíticas (anclan las respuestas a datos reales) ------
+
+    def _df(self, df=None):
+        return df if df is not None else self.current_df
+
+    def calculate_correlation(self, col1: str, col2: str, df=None) -> str:
+        """Correlación de Pearson entre dos columnas numéricas."""
+        import pandas as pd
+        d = self._df(df)
+        if d is None or col1 not in d.columns or col2 not in d.columns:
+            return f"Error: no se encontraron las columnas '{col1}' y/o '{col2}'."
+        s1 = pd.to_numeric(d[col1], errors="coerce")
+        s2 = pd.to_numeric(d[col2], errors="coerce")
+        if s1.notna().sum() < 2 or s2.notna().sum() < 2:
+            return f"Error: '{col1}' o '{col2}' no son numéricas o no tienen datos suficientes."
+        r = s1.corr(s2)
+        if pd.isna(r):
+            return f"Error: no se pudo calcular la correlación entre '{col1}' y '{col2}'."
+        return f"Correlation between '{col1}' and '{col2}': {r:.4f}"
+
+    def compare_groups(self, group_col: str, value_col: str, df=None) -> str:
+        """Promedio de una métrica por grupo."""
+        import pandas as pd
+        d = self._df(df)
+        if d is None or group_col not in d.columns or value_col not in d.columns:
+            return f"Error: no se encontraron las columnas '{group_col}' y/o '{value_col}'."
+        vals = pd.to_numeric(d[value_col], errors="coerce")
+        if vals.notna().sum() < 1:
+            return f"Error: '{value_col}' no es numérica."
+        means = vals.groupby(d[group_col]).mean().sort_values(ascending=False)
+        lines = [f"Average '{value_col}' by '{group_col}':"]
+        for g, v in means.items():
+            lines.append(f"  {g}: {v:.2f}")
+        return "\n".join(lines)
+
+    def get_summary_statistics(self, col: str, df=None) -> str:
+        """Estadísticos descriptivos de una columna."""
+        d = self._df(df)
+        if d is None or col not in d.columns:
+            return f"Error: no se encontró la columna '{col}'."
+        try:
+            return f"Statistics for '{col}':\n{d[col].describe().to_string()}"
+        except Exception as e:
+            return f"Error calculando estadísticas de '{col}': {e}"
+
 
 def get_gemini_client() -> Optional[GeminiClient]:
     """Helper para obtener una instancia configurada del cliente."""
@@ -147,3 +193,20 @@ def get_gemini_client() -> Optional[GeminiClient]:
     if client.is_configured():
         return client
     return None
+
+
+def get_cached_client() -> "GeminiClient":
+    """Instancia única de GeminiClient por sesión de Streamlit.
+
+    Preserva caché de respuestas y estado de rate-limit entre reruns.
+    """
+    try:
+        import streamlit as st
+
+        @st.cache_resource(show_spinner=False)
+        def _make():
+            return GeminiClient()
+
+        return _make()
+    except Exception:
+        return GeminiClient()

@@ -14,13 +14,17 @@ ENV/
 logs/
 *.log
 
-# Data & PDF Tests
+# Datos y artefactos generados (no versionados)
 *.pdf
-processed_output_test.csv
 *.xlsx
+*.xls
 *.csv
-!scripts/
-!src/data/samples/  # Permitir muestras si existen
+*.png
+*.jpg
+*.jpeg
+# Excepción: dataset de muestra versionado para demo
+!src/data/samples/
+!src/data/samples/*.csv
 
 # IDEs
 .vscode/
@@ -29,3 +33,6 @@ processed_output_test.csv
 
 # ChromaDB
 .chroma/
+
+# Playwright / capturas E2E
+.playwright-mcp/

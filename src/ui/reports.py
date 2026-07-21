@@ -79,6 +79,9 @@ def render_reports_page():
     report_title = st.sidebar.text_input(
         "Título del Informe", "Informe de Diagnóstico de Bienestar"
     )
+    include_annex = st.sidebar.checkbox(
+        "Incluir anexo técnico/académico (α, tablas)", value=True
+    )
 
     # --- Generate Report ---
     if st.button("🚀 Generar Informe General PDF"):
@@ -92,6 +95,7 @@ def render_reports_page():
                     df_filtered,
                     title=report_title,
                     org_name=org_name,
+                    include_academic_annex=include_annex,
                 )
                 pdf_bytes = builder.build_report()
 

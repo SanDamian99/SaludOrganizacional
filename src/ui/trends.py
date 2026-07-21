@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from src.core.state import get_processed_data
-from src.ai.gemini_client import get_gemini_client, GeminiClient
+from src.ai.gemini_client import get_cached_client
 
 def render_trends():
     st.title("📈 Análisis de Tendencias")
@@ -30,7 +30,7 @@ def render_trends():
                 selected_metric = st.selectbox("Selecciona métrica para ver tendencia:", numeric_cols)
                 
                 # Group by date (e.g., monthly)
-                trend_df = df.groupby(pd.Grouper(key=date_col, freq='M'))[selected_metric].mean().reset_index()
+                trend_df = df.groupby(pd.Grouper(key=date_col, freq='ME'))[selected_metric].mean().reset_index()
                 
                 fig = px.line(trend_df, x=date_col, y=selected_metric, title=f"Tendencia de {selected_metric} en el tiempo", markers=True)
                 fig.update_layout(
@@ -99,8 +99,8 @@ def render_trends():
             if st.button("Generar Análisis Prospectivo"):
                 with st.spinner("Analizando tendencias..."):
                     try:
-                        client = get_gemini_client()
-                        if client:
+                        client = get_cached_client()
+                        if client and client.is_configured():
                             # Prepare summary data for AI
                             summary_stats = df.groupby(group_by_col)[metric_col].describe().to_markdown()
                             prompt = f"""

@@ -39,9 +39,12 @@ SaludOrganizacional/
 ├── main.py                          # Punto de entrada de la aplicación
 ├── src/
 │   ├── core/                        # Funcionalidades centrales
-│   │   ├── config.py               # Configuración y diccionario de datos
+│   │   ├── config.py               # Diccionario de datos + valencia por ítem
 │   │   ├── state.py                # Gestión de estado de sesión
-│   │   └── ai.py                   # Funciones de IA
+│   │   ├── logger.py               # Logging estructurado (JSON)
+│   │   └── ai.py                   # Funciones de IA (prompt de reporte)
+│   ├── analysis/                    # Núcleo psicométrico
+│   │   └── scoring.py              # Puntuación orientada (valencia, α, IC) — única verdad
 │   ├── ui/                         # Componentes de interfaz
 │   │   ├── dashboard.py            # Panel principal con visualizaciones
 │   │   ├── chat.py                 # Chat con IA
