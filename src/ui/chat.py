@@ -12,13 +12,26 @@ from src.ai.gemini_client import get_cached_client
 from src.ai.knowledge_base import get_cached_kb
 from src.ai.response_router import ResponseRouter
 from src.ai.prompt_builder import PromptBuilder
-from src.analysis import scoring
+from src.analysis import scoring, indicators
 
 
 def _data_context(df) -> str:
-    """Resumen compacto de puntajes de dimensión para dar contexto real a la IA."""
+    """Resumen compacto de los datos (dimensiones de bienestar o indicadores) para la IA."""
     if df is None or df.empty:
         return "No hay datos cargados."
+
+    # Datasets genéricos (no de bienestar): resumir indicadores detectados
+    if not indicators.is_wellbeing_dataset(df):
+        inds = indicators.detect_indicators(df)
+        stats = indicators.indicator_stats(df, inds)
+        if not stats:
+            return f"Dataset con {len(df):,} participantes. Sin indicadores numéricos claros."
+        lines = [f"Dataset activo: {len(df):,} participantes, {len(stats)} indicadores.",
+                 "Indicadores (media [mín-máx], N) — la dirección depende de cada instrumento:"]
+        for c, v in stats.items():
+            lines.append(f"  - {c}: {v['mean']:.2f} [{v['min']:.0f}-{v['max']:.0f}], N={v['n']}")
+        return "\n".join(lines)
+
     try:
         scores = scoring.compute_dimension_scores(df)
     except Exception:

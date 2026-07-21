@@ -13,7 +13,7 @@ import pandas as pd
 
 from src.core.config import DATA_DICTIONARY, get_scale_range
 from src.core.state import get_processed_data
-from src.analysis import scoring
+from src.analysis import scoring, indicators
 from src.ai.gemini_client import get_cached_client
 from src.ui.components.filtering import render_filtering_sidebar
 
@@ -331,27 +331,128 @@ def _view_academic(df, scores):
         st.caption("No hay variables de agrupación adecuadas en los datos.")
 
 
+# ── Vistas genéricas (datasets que no son de bienestar (BM)) ────
+@st.cache_data(show_spinner=False)
+def _indicator_stats(df, cols):
+    return indicators.indicator_stats(df, cols)
+
+
+def _group_columns(df, exclude):
+    """Columnas categóricas/de agrupación (baja cardinalidad), excluyendo indicadores."""
+    cols = []
+    for c in df.columns:
+        if c in exclude:
+            continue
+        from src.data.processor import is_protected_column
+        if is_protected_column(c):
+            continue
+        nun = df[c].nunique(dropna=True)
+        if 1 < nun <= 12:
+            cols.append(c)
+    return cols
+
+
+def _label(c):
+    return str(c).split(")")[-1].strip()
+
+
+def _view_indicators(df, inds, stats):
+    st.caption("Este dataset no usa el esquema de dimensiones de bienestar del Observatorio. "
+               "Se muestran sus **indicadores** (totales de subescala) de forma descriptiva; "
+               "la dirección (mayor = mejor/peor) depende de cada instrumento.")
+    c1, c2 = st.columns(2)
+    c1.metric("👥 Participantes", f"{len(df):,}")
+    c2.metric("📐 Indicadores detectados", len(inds))
+
+    st.markdown("#### Indicadores (resumen descriptivo)")
+    table = pd.DataFrame([
+        {"Indicador": c, "Media": round(v["mean"], 2), "DE": round(v["std"], 2),
+         "Mín": round(v["min"], 1), "Máx": round(v["max"], 1), "N": v["n"]}
+        for c, v in stats.items()
+    ])
+    st.dataframe(table, use_container_width=True, hide_index=True)
+
+    st.markdown("#### Explorar un indicador")
+    sel = st.selectbox("Indicador:", list(stats.keys()))
+    if sel:
+        g, h = st.columns([1, 1.4])
+        with g:
+            v = stats[sel]
+            st.metric("Media", f"{v['mean']:.2f}")
+            st.metric("Rango observado", f"{v['min']:.0f} – {v['max']:.0f}")
+            st.metric("N", v["n"])
+        with h:
+            fig = px.histogram(df, x=sel, nbins=20, color_discrete_sequence=["#2E5FAC"])
+            fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40),
+                              xaxis_title=sel, yaxis_title="Frecuencia")
+            st.plotly_chart(fig, use_container_width=True)
+
+        groups = _group_columns(df, exclude=set(inds))
+        if groups:
+            gcol = st.selectbox("Comparar por grupo:", groups, format_func=_label)
+            agg = df.groupby(gcol)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
+            fig2 = px.bar(agg, x=gcol, y="mean", text=agg["mean"].round(2),
+                          color="mean", color_continuous_scale="Blues",
+                          labels={gcol: _label(gcol), "mean": f"{sel} (media)"})
+            fig2.update_layout(height=340, margin=dict(l=40, r=20, t=20, b=70),
+                               coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
+            st.plotly_chart(fig2, use_container_width=True)
+            st.caption("N por grupo: " + ", ".join(f"{r[gcol]}={int(r['count'])}" for _, r in agg.iterrows()))
+
+        if st.button(f"✨ Interpretar «{sel}» con IA"):
+            client = get_cached_client()
+            client.current_df = df
+            if not client.is_configured():
+                st.error("⚠️ API Key no configurada.")
+            else:
+                with st.spinner("Generando análisis..."):
+                    desc = df[sel].describe().to_string()
+                    prompt = (
+                        f"Actúa como psicólogo experto. El indicador '{sel}' de un estudio con "
+                        f"docentes tiene estos estadísticos:\n{desc}\n\n"
+                        "1. Explica en lenguaje claro qué mide probablemente este indicador.\n"
+                        "2. Interpreta el nivel observado (indica si asumes una dirección y por qué).\n"
+                        "3. Sugiere 2 acciones o análisis de seguimiento."
+                    )
+                    st.markdown(client.generate_response(prompt))
+
+
+def _view_generic_academic(df, inds):
+    st.markdown("#### Correlación entre indicadores")
+    num = df[inds].apply(pd.to_numeric, errors="coerce")
+    if num.shape[1] >= 2:
+        corr = num.corr()
+        fig = px.imshow(corr, text_auto=False, aspect="auto",
+                        color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
+        fig.update_layout(height=640, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Correlaciones de Pearson entre los indicadores detectados.")
+    else:
+        st.caption("Se necesitan al menos 2 indicadores numéricos.")
+
+
 # ── Sidebar (reporte + filtros + descarga) ──────────────────────
-def _sidebar(df_full):
+def _sidebar(df_full, wellbeing=True):
     with st.sidebar:
-        st.subheader("📄 Informe")
-        org = st.text_input("Organización", "Organización", key="dash_org")
-        if st.button("Generar Informe PDF", use_container_width=True):
-            from src.reports.report_builder import ReportBuilder
-            with st.spinner("Generando informe profesional..."):
-                try:
-                    pdf_bytes = ReportBuilder(
-                        st.session_state.get("_df_view", df_full),
-                        title="Informe de Diagnóstico de Bienestar", org_name=org,
-                    ).build_report()
-                    st.download_button(
-                        "⬇️ Descargar Informe PDF", data=pdf_bytes,
-                        file_name="informe_bienestar.pdf", mime="application/pdf",
-                        use_container_width=True)
-                    st.success("✅ Informe generado.")
-                except Exception as e:
-                    st.error(f"Error al generar informe: {e}")
-        st.divider()
+        if wellbeing:
+            st.subheader("📄 Informe")
+            org = st.text_input("Organización", "Organización", key="dash_org")
+            if st.button("Generar Informe PDF", use_container_width=True):
+                from src.reports.report_builder import ReportBuilder
+                with st.spinner("Generando informe profesional..."):
+                    try:
+                        pdf_bytes = ReportBuilder(
+                            st.session_state.get("_df_view", df_full),
+                            title="Informe de Diagnóstico de Bienestar", org_name=org,
+                        ).build_report()
+                        st.download_button(
+                            "⬇️ Descargar Informe PDF", data=pdf_bytes,
+                            file_name="informe_bienestar.pdf", mime="application/pdf",
+                            use_container_width=True)
+                        st.success("✅ Informe generado.")
+                    except Exception as e:
+                        st.error(f"Error al generar informe: {e}")
+            st.divider()
 
     # Filtros multiselección (añaden controles a la sidebar)
     df_view = render_filtering_sidebar(df_full)
@@ -372,17 +473,41 @@ def render_dashboard():
         return
 
     st.markdown("## 📊 Dashboard de Salud Organizacional")
-    df_view = _sidebar(df)
-    scores = _scores(df_view)
+    label = st.session_state.get("current_dataset")
+    if label:
+        st.caption(f"Dataset activo: **{label}** · {len(df):,} registros")
 
-    tab_exec, tab_dim, tab_perfil, tab_acad = st.tabs(
-        ["🏢 Resumen ejecutivo", "🧠 Dimensiones", "👥 Perfil", "🎓 Vista académica"]
-    )
-    with tab_exec:
-        _view_executive(df_view, scores)
-    with tab_dim:
-        _view_dimension(df_view, scores)
-    with tab_perfil:
-        _view_profile(df_view)
-    with tab_acad:
-        _view_academic(df_view, scores)
+    wellbeing = indicators.is_wellbeing_dataset(df)
+    df_view = _sidebar(df, wellbeing)
+
+    if wellbeing:
+        scores = _scores(df_view)
+        tab_exec, tab_dim, tab_perfil, tab_acad = st.tabs(
+            ["🏢 Resumen ejecutivo", "🧠 Dimensiones", "👥 Perfil", "🎓 Vista académica"]
+        )
+        with tab_exec:
+            _view_executive(df_view, scores)
+        with tab_dim:
+            _view_dimension(df_view, scores)
+        with tab_perfil:
+            _view_profile(df_view)
+        with tab_acad:
+            _view_academic(df_view, scores)
+    else:
+        inds = indicators.detect_indicators(df_view)
+        stats = _indicator_stats(df_view, inds) if inds else {}
+        tab_ind, tab_perfil, tab_corr = st.tabs(
+            ["📇 Indicadores", "👥 Perfil", "🎓 Correlaciones"]
+        )
+        with tab_ind:
+            if stats:
+                _view_indicators(df_view, inds, stats)
+            else:
+                st.warning("No se detectaron indicadores numéricos en este dataset.")
+        with tab_perfil:
+            _view_profile(df_view)
+        with tab_corr:
+            if inds:
+                _view_generic_academic(df_view, inds)
+            else:
+                st.caption("Sin indicadores para correlacionar.")

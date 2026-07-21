@@ -20,17 +20,17 @@ def init_session_state():
     if "df" not in st.session_state:
         st.session_state.df = None
 
-        # Cargar datos por defecto: dataset maestro local, o el sample versionado.
+        # Cargar el dataset precargado principal (el primero disponible).
         try:
-            from src.core.config import MASTER_DATA_PATH, SAMPLE_DATA_PATH
-            import os
+            from src.data.loader import available_datasets, load_dataset
 
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            for path in (MASTER_DATA_PATH, SAMPLE_DATA_PATH):
-                candidate = path if os.path.exists(path) else os.path.join(base_dir, path)
-                if os.path.exists(candidate):
-                    st.session_state.df = pd.read_csv(candidate)
-                    break
+            datasets = available_datasets()
+            if datasets:
+                df, report = load_dataset(datasets[0]["resolved"])
+                st.session_state.df = df
+                st.session_state.last_ingestion_report = report
+                st.session_state.current_dataset = datasets[0]["label"]
+                st.session_state["_loaded_selector"] = datasets[0]["label"]
         except Exception as e:
             logger.warning(f"Error loading default data: {e}")
 

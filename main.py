@@ -33,6 +33,27 @@ if not get_gemini_api_key():
         "```toml\nYOUR_API_KEY = 'tu-api-key-aqui'\n```"
     )
 
+# --- Selector de dataset precargado ---
+from src.data.loader import available_datasets, load_dataset
+
+_datasets = available_datasets()
+if _datasets:
+    with st.sidebar:
+        _labels = [d["label"] for d in _datasets]
+        _sel = st.selectbox("📁 Dataset precargado", _labels, key="dataset_selector")
+    # Recargar solo cuando el usuario cambia la selección (preserva archivos subidos)
+    if st.session_state.get("_loaded_selector") != _sel:
+        _chosen = next(d for d in _datasets if d["label"] == _sel)
+        try:
+            _df, _report = load_dataset(_chosen["resolved"])
+            st.session_state.df = _df
+            st.session_state.last_ingestion_report = _report
+            st.session_state.current_dataset = _sel
+            st.session_state["_loaded_selector"] = _sel
+            st.session_state.messages = []  # chat fresco para el nuevo dataset
+        except Exception as e:
+            st.sidebar.error(f"No se pudo cargar «{_sel}»: {e}")
+
 # --- Sidebar Navigation ---
 with st.sidebar:
     st.title("Navegación")

@@ -24,6 +24,14 @@ def get_supabase_key():
 MASTER_DATA_PATH = "cleaned_data - cleaned_data.csv"
 SAMPLE_DATA_PATH = "src/data/samples/sample_bienestar.csv"
 
+# Datasets precargados seleccionables (el primero que exista es el principal/por defecto).
+# Los archivos de datos no se versionan; se muestran solo los presentes en disco.
+PRELOADED_DATASETS = [
+    {"label": "Docentes (AUDIT)", "path": "Datos_Docentes_AUDIT 2.xlsx"},
+    {"label": "Bienestar laboral", "path": MASTER_DATA_PATH},
+    {"label": "Muestra de bienestar", "path": SAMPLE_DATA_PATH},
+]
+
 # --- Data Dictionary & Configuration ---
 
 DATA_DICTIONARY = {
