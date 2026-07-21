@@ -74,7 +74,13 @@ Panel técnico de diagnóstico: añade `?debug=1` a la URL.
 pytest -q
 ```
 
-## Notas de datos
+## Datos que puedes cargar
 
-Los archivos de datos (`.csv`, `.xlsx`) y PDFs generados no se versionan (ver
-`.gitignore`); solo se incluye un dataset de muestra pequeño para la demo.
+La app se adapta a dos tipos de dataset: el **esquema de Bienestar** (prefijos
+`(SD)/(LB)/(BM)`, con diagnóstico completo e informe PDF) y **datasets genéricos**
+(baterías con totales de subescala, p. ej. docentes) que entran en **modo Indicadores**
+con foco en salud mental. Guía completa: **[docs/GUIA_DATASETS.md](docs/GUIA_DATASETS.md)**.
+
+Puedes elegir entre datasets precargados en la barra lateral o subir el tuyo en
+“Cargar Datos”. Los archivos de datos (`.csv`, `.xlsx`) y PDFs generados no se versionan
+(ver `.gitignore`); solo se incluye un dataset de muestra pequeño para la demo.
