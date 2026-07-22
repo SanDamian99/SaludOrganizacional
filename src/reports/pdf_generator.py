@@ -146,7 +146,7 @@ def build_cover_page(canvas, doc, report_title="Informe de Diagnóstico",
                              "OBSERVATORIO DE SALUD ORGANIZACIONAL")
     canvas.setFont(*FONTS["body"])
     canvas.drawCentredString(width / 2, height * 0.83,
-                             "Facultad de Psicología")
+                             "Facultad de Ciencias del Comportamiento")
 
     # === TÍTULO PRINCIPAL ===
     canvas.setFillColor(HexColor(COLORS["brand_blue"]))
