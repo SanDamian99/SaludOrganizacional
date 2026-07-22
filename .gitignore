@@ -36,3 +36,6 @@ logs/
 
 # Playwright / capturas E2E
 .playwright-mcp/
+
+# Artefactos de video (no versionar)
+video_assets/

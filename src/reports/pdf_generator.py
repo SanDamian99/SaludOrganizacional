@@ -132,7 +132,10 @@ def build_cover_page(canvas, doc, report_title="Informe de Diagnóstico",
     """Portada profesional con banda azul superior e inferior."""
     width, height = letter
     if date_str is None:
-        date_str = datetime.now().strftime("%d de %B de %Y")
+        _MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                  "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+        _now = datetime.now()
+        date_str = f"{_now.day} de {_MESES[_now.month - 1]} de {_now.year}"
 
     canvas.saveState()
 
