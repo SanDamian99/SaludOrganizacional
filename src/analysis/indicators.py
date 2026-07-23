@@ -103,6 +103,38 @@ def detect_indicators(df: pd.DataFrame) -> list:
     return out
 
 
+def _is_scale_like(series) -> bool:
+    if not pd.api.types.is_numeric_dtype(series):
+        return False
+    s = series.dropna()
+    if s.empty:
+        return False
+    rng = float(s.max() - s.min())
+    return 0 < rng <= 80 and s.nunique() <= 60
+
+
+def classify_columns(df: pd.DataFrame, columns: list):
+    """Clasifica columnas en (indicadores/totales, ítems de escala, no reconocidas).
+
+    Sirve para presentar el diagnóstico de ingesta de forma precisa: las columnas de
+    otros instrumentos (que no siguen el esquema de bienestar) se reconocen igual como
+    indicadores o ítems de escala; solo el metadato/texto real queda 'no reconocido'.
+    """
+    inds, scales, unknown = [], [], []
+    for c in columns:
+        if df is None or c not in df.columns:
+            unknown.append(c)
+            continue
+        base = _base_key(c)
+        if _TOTAL_RE.search(str(c)) or base in INDICATOR_CATALOG:
+            inds.append(c)
+        elif _is_scale_like(df[c]):
+            scales.append(c)
+        else:
+            unknown.append(c)
+    return inds, scales, unknown
+
+
 def indicator_stats(df: pd.DataFrame, cols: list) -> dict:
     """Estadísticos descriptivos por indicador."""
     rows = {}

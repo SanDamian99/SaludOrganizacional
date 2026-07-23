@@ -55,21 +55,28 @@ def render_upload():
 
                         # Reporte visual de ingesta
                         with st.expander("📋 Ver diagnóstico de ingesta", expanded=False):
-                            col1, col2, col3 = st.columns(3)
-                            col1.metric("Filas procesadas", report["n_rows_final"])
-                            col2.metric("Columnas mapeadas", report.get("n_cols_mapped", "N/A"))
-                            col3.metric("Celdas imputadas", report["n_cells_imputed"])
+                            from src.analysis import indicators
+                            extras = report.get("unmapped_columns", [])
+                            inds, scales, unknown = indicators.classify_columns(df_clean, extras)
+                            n_rec = len(inds) + len(scales)
 
-                            if report.get("unmapped_columns"):
-                                st.warning(
-                                    f"⚠️ {len(report['unmapped_columns'])} columnas no reconocidas "
-                                    f"(se conservan en los datos): "
-                                    f"{', '.join(report['unmapped_columns'][:10])}"
+                            c1, c2, c3, c4 = st.columns(4)
+                            c1.metric("Filas", report["n_rows_final"])
+                            c2.metric("Mapeadas (esquema)", report.get("n_cols_mapped", "N/A"))
+                            c3.metric("Indicadores/escalas", n_rec)
+                            c4.metric("Celdas imputadas", report["n_cells_imputed"])
+
+                            if n_rec:
+                                st.success(
+                                    f"✅ {n_rec} columnas reconocidas como indicadores o ítems "
+                                    f"de escala, listas para el análisis."
                                 )
-
-                            if report["warnings"]:
-                                for w in report["warnings"]:
-                                    st.info(f"ℹ️ {w}")
+                            if unknown:
+                                st.warning(
+                                    f"⚠️ {len(unknown)} columnas no reconocidas (se conservan igual): "
+                                    f"{', '.join(str(c) for c in unknown[:10])}"
+                                    + (" …" if len(unknown) > 10 else "")
+                                )
 
                         # Upload to Supabase (Optional)
                         try:

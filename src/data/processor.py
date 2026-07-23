@@ -295,7 +295,9 @@ class ExcelProcessor:
                  mapped_columns[col] = col
                  unmapped += 1
                  self.report["extra_variables"].append(col)
-                 self.report["warnings"].append(f"Column '{col}' did not map to any known schema format.")
+                 # No se emite advertencia por columna: muchas columnas legítimas
+                 # (indicadores/ítems de otros instrumentos) no siguen el esquema de
+                 # bienestar y se conservan igual. El diagnóstico las clasifica aparte.
 
         df = df.rename(columns=mapped_columns)
         self.report["n_cols_mapped"] = mapped
