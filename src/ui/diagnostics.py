@@ -44,20 +44,37 @@ def _render_ingestion_diagnostics():
 
     st.subheader("Último reporte de ingesta")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Filas originales", report.get("n_rows_original", "—"))
-    col2.metric("Filas finales", report.get("n_rows_final", "—"))
-    col3.metric("Columnas mapeadas", report.get("n_cols_mapped", "—"))
-    col4.metric("Celdas imputadas", report.get("n_cells_imputed", 0))
+    extras = report.get("unmapped_columns") or report.get("extra_variables", [])
+    inds, scales, unknown = ([], [], [])
+    if df is not None and isinstance(df, pd.DataFrame):
+        from src.analysis import indicators
+        inds, scales, unknown = indicators.classify_columns(df, extras)
+    n_reconocidas = len(inds) + len(scales)
 
-    unmapped = report.get("unmapped_columns") or report.get("extra_variables", [])
-    if unmapped:
-        st.warning(f"Columnas no mapeadas: `{'`, `'.join(str(c) for c in unmapped)}`")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Filas", report.get("n_rows_final", "—"))
+    col2.metric("Mapeadas (esquema)", report.get("n_cols_mapped", "—"))
+    col3.metric("Indicadores/escalas", n_reconocidas)
+    col4.metric("No reconocidas", len(unknown))
+    col5.metric("Celdas imputadas", report.get("n_cells_imputed", 0))
 
-    if report.get("warnings"):
-        st.subheader("Advertencias")
-        for w in report["warnings"]:
-            st.write(f"• {w}")
+    if n_reconocidas:
+        st.success(
+            f"✅ {n_reconocidas} columnas se reconocieron como indicadores o ítems de "
+            f"escala y están disponibles para el análisis (aunque no sigan el esquema de "
+            f"bienestar del Observatorio)."
+        )
+    if unknown:
+        st.warning(
+            "Columnas no reconocidas (se conservan igual, por si las necesitas): "
+            f"`{'`, `'.join(str(c) for c in unknown)}`"
+        )
+
+    other_warnings = [w for w in report.get("warnings", []) if "did not map" not in w]
+    if other_warnings:
+        with st.expander("Detalles de mapeo"):
+            for w in other_warnings:
+                st.write(f"• {w}")
 
     if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
         st.subheader("Preview del DataFrame procesado")
