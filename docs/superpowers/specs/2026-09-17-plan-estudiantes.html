@@ -1,0 +1,963 @@
+<title>Módulo Estudiantes 360</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F5F8FC; --surface:#FFFFFF; --surface-2:#EDF2F8; --surface-3:#E3EAF4;
+  --ink:#121B2A; --ink-2:#43506A; --ink-3:#6E7B93;
+  --rule:#D7E0EC; --rule-strong:#B9C6D8;
+  --navy:#1B3358; --navy-2:#2E5288; --navy-tint:#E6EDF8;
+  --b1:#1C7A59; --b2:#B88A28; --b3:#C0602A; --b4:#A02B2B;
+  --b1-t:#DFF0E8; --b2-t:#F7EBD3; --b3-t:#F8E3D6; --b4-t:#F6DEDE;
+  --warn:#8A5A12; --warn-t:#FBF0DC; --warn-rule:#E4C88A;
+  --on-band:#FFFFFF;
+  --shadow:0 1px 2px rgba(18,27,42,.05), 0 8px 24px -12px rgba(18,27,42,.18);
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1420; --surface:#151F2D; --surface-2:#1C2837; --surface-3:#243244;
+    --ink:#E7EDF6; --ink-2:#A6B3C7; --ink-3:#7C8AA0;
+    --rule:#2A3849; --rule-strong:#3B4B60;
+    --navy:#8DB2E3; --navy-2:#A8C6EC; --navy-tint:#1B2942;
+    --b1:#45AE84; --b2:#D8AD4E; --b3:#E08453; --b4:#D66463;
+    --b1-t:#13302A; --b2-t:#332B15; --b3-t:#35221A; --b4-t:#341D1F;
+    --warn:#DCB268; --warn-t:#2A2114; --warn-rule:#5A4620;
+    --on-band:#0D1420;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1420; --surface:#151F2D; --surface-2:#1C2837; --surface-3:#243244;
+  --ink:#E7EDF6; --ink-2:#A6B3C7; --ink-3:#7C8AA0;
+  --rule:#2A3849; --rule-strong:#3B4B60;
+  --navy:#8DB2E3; --navy-2:#A8C6EC; --navy-tint:#1B2942;
+  --b1:#45AE84; --b2:#D8AD4E; --b3:#E08453; --b4:#D66463;
+  --b1-t:#13302A; --b2-t:#332B15; --b3-t:#35221A; --b4-t:#341D1F;
+  --warn:#DCB268; --warn-t:#2A2114; --warn-rule:#5A4620;
+  --on-band:#0D1420;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+.col{max-width:70ch}
+
+h1,h2,h3,h4{font-family:var(--serif); text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,4.4vw,46px); line-height:1.1; font-weight:700; letter-spacing:-.015em}
+h2{font-size:clamp(21px,2.5vw,27px); font-weight:600; line-height:1.25}
+h3{font-size:18px; font-weight:600; line-height:1.3}
+h4{font-size:15px; font-weight:600; font-family:var(--sans)}
+p{margin:0}
+a{color:var(--navy-2)}
+
+.eyebrow{
+  font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-3); font-family:var(--sans);
+}
+.lede{font-size:17px; color:var(--ink-2); line-height:1.55}
+.small{font-size:13px; color:var(--ink-2)}
+.tiny{font-size:12px; color:var(--ink-3); line-height:1.5}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* ── header ───────────────────────────────────────────── */
+header.top{
+  border-bottom:1px solid var(--rule); background:var(--surface);
+  padding-block:40px 32px; margin-bottom:8px;
+}
+.top-inner{display:flex; flex-direction:column; gap:18px}
+.crumb{display:flex; flex-wrap:wrap; align-items:center; gap:10px}
+.dot{width:3px;height:3px;border-radius:50%;background:var(--rule-strong)}
+.status{
+  display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600;
+  padding:4px 10px; border-radius:100px; background:var(--warn-t); color:var(--warn);
+  border:1px solid var(--warn-rule);
+}
+.status::before{content:""; width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* ── sections ─────────────────────────────────────────── */
+section{padding-block:44px; border-bottom:1px solid var(--rule)}
+section:last-of-type{border-bottom:0}
+.sec-head{display:flex; flex-direction:column; gap:10px; margin-bottom:24px}
+.stack{display:flex; flex-direction:column; gap:16px}
+.stack-sm{display:flex; flex-direction:column; gap:9px}
+
+/* ── tables ───────────────────────────────────────────── */
+.tscroll{overflow-x:auto; border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:13.5px; min-width:560px}
+th,td{padding:9px 13px; text-align:left; border-bottom:1px solid var(--rule); vertical-align:top}
+thead th{
+  background:var(--surface-2); font-size:11px; font-weight:600; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--ink-2); white-space:nowrap; border-bottom:1px solid var(--rule-strong);
+}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
+td strong{font-weight:600}
+caption{caption-side:bottom; padding:9px 13px; text-align:left; color:var(--ink-3); font-size:12px; border-top:1px solid var(--rule)}
+
+/* ── band ramp (the motif) ────────────────────────────── */
+.band{
+  display:inline-block; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;
+  font-family:var(--mono); white-space:nowrap;
+}
+.b1{background:var(--b1-t); color:var(--b1)}
+.b2{background:var(--b2-t); color:var(--b2)}
+.b3{background:var(--b3-t); color:var(--b3)}
+.b4{background:var(--b4-t); color:var(--b4)}
+
+.ramp{display:flex; gap:3px; align-items:stretch; margin-block:4px}
+.ramp div{height:7px; border-radius:2px}
+
+.seg{display:flex; width:100%; border-radius:5px; overflow:hidden; height:30px; border:1px solid var(--rule)}
+.seg span{
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+  font-family:var(--mono); color:var(--on-band); min-width:0;
+}
+
+/* ── toggle ───────────────────────────────────────────── */
+.switch{display:inline-flex; background:var(--surface-2); border:1px solid var(--rule); border-radius:7px; padding:3px; gap:3px}
+.switch button{
+  font:inherit; font-size:12.5px; font-weight:600; font-family:var(--sans);
+  padding:6px 13px; border-radius:5px; border:0; background:transparent; color:var(--ink-2); cursor:pointer;
+}
+.switch button[aria-pressed="true"]{background:var(--navy); color:var(--surface)}
+.switch button:focus-visible{outline:2px solid var(--navy-2); outline-offset:2px}
+
+/* ── callouts ─────────────────────────────────────────── */
+.note{
+  border-left:3px solid var(--warn-rule); background:var(--warn-t);
+  padding:13px 16px; border-radius:0 7px 7px 0; font-size:13.5px; color:var(--ink);
+}
+.note strong{color:var(--warn)}
+.keep{
+  border-left:3px solid var(--b1); background:var(--b1-t);
+  padding:13px 16px; border-radius:0 7px 7px 0; font-size:13.5px;
+}
+.keep strong{color:var(--b1)}
+
+/* ── mockup frame ─────────────────────────────────────── */
+.screen{
+  border:1px solid var(--rule-strong); border-radius:11px; background:var(--surface);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.chrome{
+  display:flex; align-items:center; gap:10px; padding:9px 14px;
+  background:var(--surface-2); border-bottom:1px solid var(--rule);
+}
+.lights{display:flex; gap:5px}
+.lights i{width:9px;height:9px;border-radius:50%;background:var(--rule-strong); display:block}
+.chrome .path{font-family:var(--mono); font-size:11.5px; color:var(--ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mock-tag{
+  margin-left:auto; font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--warn); background:var(--warn-t); border:1px solid var(--warn-rule);
+  padding:2px 8px; border-radius:100px; white-space:nowrap;
+}
+.app{display:grid; grid-template-columns:186px 1fr}
+.side{background:var(--surface-2); border-right:1px solid var(--rule); padding:16px 14px; display:flex; flex-direction:column; gap:15px}
+.side-lbl{font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3)}
+.pick{background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:7px 10px; font-size:12.5px; display:flex; justify-content:space-between; gap:8px; align-items:center}
+.pick::after{content:"▾"; color:var(--ink-3); font-size:10px}
+.navlist{display:flex; flex-direction:column; gap:2px}
+.navlist span{padding:6px 9px; border-radius:5px; font-size:13px; color:var(--ink-2)}
+.navlist span.on{background:var(--navy-tint); color:var(--navy-2); font-weight:600}
+.body-area{padding:20px; display:flex; flex-direction:column; gap:18px; min-width:0}
+
+.roles{display:flex; gap:7px; flex-wrap:wrap}
+.role{
+  padding:6px 12px; border-radius:100px; border:1px solid var(--rule); font-size:12.5px;
+  background:var(--surface); color:var(--ink-2);
+}
+.role.on{background:var(--navy); border-color:var(--navy); color:var(--surface); font-weight:600}
+
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:13px}
+.card{border:1px solid var(--rule); border-radius:9px; padding:15px; background:var(--surface); display:flex; flex-direction:column; gap:9px}
+.card .big{font-family:var(--serif); font-size:27px; font-weight:700; line-height:1.05; letter-spacing:-.01em}
+.card .lbl{font-size:12.5px; color:var(--ink-2); line-height:1.4}
+.card .meaning{font-size:12px; color:var(--ink-2); line-height:1.45; padding-top:9px; border-top:1px dashed var(--rule)}
+.card .act{font-size:12px; line-height:1.45}
+.card .act b{color:var(--navy-2)}
+
+.route{border:1px solid var(--rule); border-radius:9px; background:var(--surface-2); padding:15px; display:flex; flex-direction:column; gap:9px}
+.route ul{margin:0; padding-left:17px; font-size:12.5px; color:var(--ink-2); line-height:1.75}
+
+.tabs{display:flex; gap:2px; border-bottom:1px solid var(--rule); overflow-x:auto}
+.tabs span{padding:7px 12px; font-size:12.5px; color:var(--ink-3); white-space:nowrap; border-bottom:2px solid transparent}
+.tabs span.on{color:var(--navy-2); font-weight:600; border-bottom-color:var(--navy)}
+
+.chips{display:flex; gap:7px; flex-wrap:wrap}
+.chip{font-size:11.5px; font-family:var(--mono); padding:4px 9px; border-radius:5px; background:var(--surface-2); border:1px solid var(--rule); color:var(--ink-2)}
+
+figcaption{font-size:12px; color:var(--ink-3); margin-top:9px; line-height:1.5}
+figure{margin:0}
+
+.two{display:grid; grid-template-columns:1fr 1fr; gap:22px}
+.grid3{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px}
+.panel{border:1px solid var(--rule); border-radius:9px; padding:16px; background:var(--surface); display:flex; flex-direction:column; gap:9px}
+.panel h4{margin-bottom:2px}
+
+ul.clean{margin:0; padding-left:19px; line-height:1.65}
+ul.clean li{margin-bottom:5px}
+ol.steps{margin:0; padding-left:0; list-style:none; counter-reset:s; display:flex; flex-direction:column; gap:13px}
+ol.steps li{counter-increment:s; display:grid; grid-template-columns:27px 1fr; gap:13px; align-items:start}
+ol.steps li::before{
+  content:counter(s); font-family:var(--mono); font-size:12px; font-weight:600;
+  width:27px; height:27px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  background:var(--navy-tint); color:var(--navy-2); border:1px solid var(--rule);
+}
+
+.q{display:grid; grid-template-columns:24px 1fr; gap:12px; align-items:start; padding-block:12px; border-bottom:1px solid var(--rule)}
+.q:last-child{border-bottom:0}
+.q .mk{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--navy-2)}
+
+@media (max-width:780px){
+  .two{grid-template-columns:1fr}
+  .app{grid-template-columns:1fr}
+  .side{border-right:0; border-bottom:1px solid var(--rule); flex-direction:row; flex-wrap:wrap; align-items:center}
+  .navlist{flex-direction:row; flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="crumb">
+      <span class="eyebrow">Observatorio 360 · Chía, Cundinamarca</span>
+      <span class="dot"></span>
+      <span class="eyebrow">17 de septiembre de 2026</span>
+    </div>
+    <h1>Módulo Estudiantes 360</h1>
+    <p class="lede col">Plan para recibir el autorreporte de los estudiantes y convertirlo en dos
+      productos: uno para los colegios y las familias, otro para el equipo investigador. Este
+      documento se revisa y se ajusta antes de escribir código.</p>
+    <div><span class="status">El dataset todavía no llega</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ══ 1. QUÉ VAMOS A RECIBIR ══════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Punto de partida</span>
+    <h2>Qué vamos a recibir</h2>
+    <p class="lede col">Autorreporte del estudiante: 97 ítems en seis escalas, más cuatro variables
+      de identificación. Es la tercera voz del Observatorio. Ya tenemos la del docente y la del
+      cuidador; faltaba la del propio estudiante.</p>
+  </div>
+
+  <div class="stack">
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr><th>Escala</th><th>Qué mide</th><th class="n">Ítems</th><th class="n">Edad</th><th>Respuesta</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>SDQ</strong><br><span class="tiny">Cualidades y dificultades</span></td>
+            <td>Síntomas emocionales, conducta, hiperactividad, pares y conducta prosocial</td>
+            <td class="n">25</td><td class="n">11–17</td>
+            <td class="tiny">3 puntos<br>No es cierto → Muy cierto</td>
+          </tr>
+          <tr>
+            <td><strong>ARI</strong><br><span class="tiny">Reactividad afectiva</span></td>
+            <td>Irritabilidad en los últimos siete días, más un ítem de deterioro</td>
+            <td class="n">7</td><td class="n">9–17</td>
+            <td class="tiny">3 puntos<br>No es cierto → Muy cierto</td>
+          </tr>
+          <tr>
+            <td><strong>RCADS-25</strong><br><span class="tiny">Ansiedad y depresión</span></td>
+            <td>Depresión mayor (10 ítems) y ansiedad total (15 ítems)</td>
+            <td class="n">25</td><td class="n">8–18</td>
+            <td class="tiny">4 puntos<br>Nunca → Siempre</td>
+          </tr>
+          <tr>
+            <td><strong>ERQ-CA</strong><br><span class="tiny">Regulación emocional</span></td>
+            <td>Reevaluación cognitiva (6) y supresión expresiva (4)</td>
+            <td class="n">10</td><td class="n">8–18</td>
+            <td class="tiny">5 puntos<br>Nada parecido a mí → Igual a mí</td>
+          </tr>
+          <tr>
+            <td><strong>MSPSS</strong><br><span class="tiny">Apoyo social percibido</span></td>
+            <td>Apoyo de familia, amigos y otro significativo</td>
+            <td class="n">12</td><td class="n">10+</td>
+            <td class="tiny">5 puntos<br>Nunca → Siempre</td>
+          </tr>
+          <tr>
+            <td><strong>PSSM</strong><br><span class="tiny">Pertenencia a la escuela</span></td>
+            <td>Sentirse aceptado, respetado e incluido en el colegio</td>
+            <td class="n">18</td><td class="n">8–17</td>
+            <td class="tiny">5 puntos<br>No es cierto → Completamente cierto</td>
+          </tr>
+        </tbody>
+        <caption>Los ítems, las subescalas y los ítems inversos de cada escala quedaron mapeados en
+          <span class="num">docs/instrumentos/INSTRUMENTO_ESTUDIANTES.md</span>.</caption>
+      </table>
+    </div>
+
+    <div class="note col">
+      <strong>El rango de edad efectivo es 11 a 17 años.</strong> Es la intersección de las seis
+      escalas: el SDQ autoinforme no baja de 11 y el MSPSS no baja de 10. Si llegan estudiantes de
+      8 a 10 años, responden cuatro de las seis escalas y se analizan aparte.
+    </div>
+  </div>
+</section>
+
+<!-- ══ 2. PUNTOS DE CORTE ══════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">El corazón de lo que pidió el equipo</span>
+    <h2>Los puntos de corte de cada prueba</h2>
+    <p class="lede col">El equipo pidió ver los niveles de cada grupo contra los puntos de corte.
+      Estos son los cortes verificados en fuente, escala por escala. Son la unidad de significado de
+      todo el módulo: de aquí salen los colores, las tarjetas y las tablas.</p>
+  </div>
+
+  <div class="stack">
+    <div>
+      <h3 style="margin-bottom:6px">SDQ, las cuatro bandas</h3>
+      <p class="small col" style="margin-bottom:14px">La versión que responde el estudiante tiene
+        cortes distintos de la que responde el cuidador. Mezclarlas cambiaría la prevalencia varios
+        puntos. Este selector existe para tener las dos a la vista y no confundirlas.</p>
+
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:13px">
+        <div class="switch" role="group" aria-label="Versión del SDQ">
+          <button type="button" id="btn-self" aria-pressed="true">Autoinforme · estudiante</button>
+          <button type="button" id="btn-par" aria-pressed="false">Padres · cuidador</button>
+        </div>
+        <span class="tiny" id="ver-note">Lo que vamos a recibir</span>
+      </div>
+
+      <div class="tscroll">
+        <table id="sdq-table">
+          <thead>
+            <tr>
+              <th>Escala</th>
+              <th class="n">Cercano al promedio</th>
+              <th class="n">Ligeramente elevado</th>
+              <th class="n">Alto</th>
+              <th class="n">Muy alto</th>
+            </tr>
+          </thead>
+          <tbody id="sdq-body"></tbody>
+          <caption id="sdq-cap"></caption>
+        </table>
+      </div>
+
+      <div class="ramp" style="margin-top:14px" aria-hidden="true">
+        <div style="flex:80; background:var(--b1)"></div>
+        <div style="flex:10; background:var(--b2)"></div>
+        <div style="flex:5; background:var(--b3)"></div>
+        <div style="flex:5; background:var(--b4)"></div>
+      </div>
+      <p class="tiny">Las bandas se construyeron para que en una población general caiga cerca del
+        80 %, 10 %, 5 % y 5 % en cada tramo. Ese reparto es la referencia contra la que se lee
+        nuestra muestra.</p>
+    </div>
+
+    <div class="grid3">
+      <div class="panel">
+        <h4>ARI · irritabilidad</h4>
+        <p class="small">Suman solo los ítems 1 a 6, rango <span class="num">0–12</span>. El ítem 7
+          mide deterioro y no entra al total.</p>
+        <div class="stack-sm" style="margin-top:2px">
+          <div><span class="band b3">&gt; 2</span> <span class="tiny">cribado de irritabilidad severa. Sensibilidad 84 %, especificidad 77 %</span></div>
+          <div><span class="band b4">≥ 4</span> <span class="tiny">indicador de psicopatología general. AUC 0,86</span></div>
+        </div>
+        <p class="tiny">Se reportan los dos. El corte de padres es otro y no aplica aquí.</p>
+      </div>
+
+      <div class="panel">
+        <h4>RCADS-25 · ansiedad y depresión</h4>
+        <p class="small">Depresión <span class="num">0–30</span>, ansiedad <span class="num">0–45</span>.
+          Los cortes van sobre puntuación T, no sobre la bruta.</p>
+        <div class="stack-sm" style="margin-top:2px">
+          <div><span class="band b3">T 65–69</span> <span class="tiny">límite clínico</span></div>
+          <div><span class="band b4">T ≥ 70</span> <span class="tiny">clínicamente significativo</span></div>
+        </div>
+        <p class="tiny">Las tablas T son de escolares de Hawái de 1998. Hay decisión pendiente
+          al respecto.</p>
+      </div>
+
+      <div class="panel">
+        <h4>Sin corte clínico</h4>
+        <p class="small">ERQ-CA, MSPSS y PSSM son medidas dimensionales. No existe un umbral que
+          diga «clínico».</p>
+        <p class="small">Se reportan por terciles de nuestra muestra, siempre etiquetados como
+          relativos, y sobre todo comparados entre grupos, que es donde sirven.</p>
+        <p class="tiny">El MSPSS de este instrumento es de 5 puntos, no de 7. Los cortes clásicos
+          de Zimet no aplican y usarlos sobreestimaría el apoyo.</p>
+      </div>
+    </div>
+
+    <div class="note col">
+      <strong>Ninguna norma es colombiana.</strong> El SDQ viene del Reino Unido, el RCADS de
+      Estados Unidos, el ARI de muestras clínicas. Todo corte se presenta como referencia externa y
+      va siempre acompañado del percentil de nuestra propia muestra. Es una limitación que el
+      artículo debe declarar, no un detalle técnico.
+    </div>
+  </div>
+</section>
+
+<!-- ══ 3. VISTA COMUNIDAD ══════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Vista principal</span>
+    <h2>Para colegios, familias y el municipio</h2>
+    <p class="lede col">Quien abre esta vista quiere saber tres cosas: cómo está mi grupo, qué
+      significa eso y qué hago mañana. Cinco tarjetas como máximo, lenguaje sin jerga, y una ruta de
+      atención siempre visible. Nada individual, nunca.</p>
+  </div>
+
+  <figure class="stack">
+    <div class="screen">
+      <div class="chrome">
+        <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span class="path">observatorio360 · estudiantes · vista comunidad</span>
+        <span class="mock-tag">Maqueta · datos de ejemplo</span>
+      </div>
+      <div class="app">
+        <aside class="side">
+          <div class="stack-sm">
+            <span class="side-lbl">Colegio</span>
+            <div class="pick">Todos los colegios</div>
+          </div>
+          <div class="stack-sm">
+            <span class="side-lbl">Grado</span>
+            <div class="pick">Todos</div>
+          </div>
+          <div class="navlist">
+            <span class="on">Resultados</span>
+            <span>Ruta de atención</span>
+            <span>Descargar informe</span>
+          </div>
+        </aside>
+
+        <div class="body-area">
+          <div class="stack-sm">
+            <span class="side-lbl">Estoy viendo esto como</span>
+            <div class="roles">
+              <span class="role on">Rector o docente</span>
+              <span class="role">Madre, padre o cuidador</span>
+              <span class="role">Funcionario del municipio</span>
+            </div>
+          </div>
+
+          <div class="stack-sm">
+            <h4>Cómo está el grupo</h4>
+            <div class="seg" role="img" aria-label="Distribución de ejemplo del total de dificultades: 62 por ciento cercano al promedio, 16 ligeramente elevado, 9 alto, 13 muy alto">
+              <span style="flex:62; background:var(--b1)">62 %</span>
+              <span style="flex:16; background:var(--b2)">16 %</span>
+              <span style="flex:9; background:var(--b3)">9 %</span>
+              <span style="flex:13; background:var(--b4)">13 %</span>
+            </div>
+            <div style="display:flex; gap:13px; flex-wrap:wrap">
+              <span class="band b1">Cercano al promedio</span>
+              <span class="band b2">Ligeramente elevado</span>
+              <span class="band b3">Alto</span>
+              <span class="band b4">Muy alto</span>
+            </div>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <div class="big" style="color:var(--b4)">1 de cada 5</div>
+              <div class="lbl">estudiantes reporta dificultades altas o muy altas</div>
+              <div class="meaning">En una población general se espera 1 de cada 10. Aquí es el doble.</div>
+              <div class="act"><b>Qué hacer:</b> priorizar orientación escolar en los grados con más casos.</div>
+            </div>
+            <div class="card">
+              <div class="big" style="color:var(--b3)">28 %</div>
+              <div class="lbl">está por encima del corte de irritabilidad</div>
+              <div class="meaning">Enojo frecuente e intenso que al estudiante le cuesta controlar.</div>
+              <div class="act"><b>Qué hacer:</b> talleres de regulación emocional en el aula.</div>
+            </div>
+            <div class="card">
+              <div class="big" style="color:var(--b1)">72 %</div>
+              <div class="lbl">siente que pertenece a su colegio</div>
+              <div class="meaning">Es un factor protector. Donde es alto, las dificultades son menores.</div>
+              <div class="act"><b>Qué hacer:</b> sostener lo que ya funciona y mirar los cursos bajos.</div>
+            </div>
+            <div class="card">
+              <div class="big" style="color:var(--b2)">4,1<span style="font-size:15px; color:var(--ink-3)"> / 5</span></div>
+              <div class="lbl">apoyo que percibe de su familia</div>
+              <div class="meaning">Los amigos puntúan más alto que la familia en los grados mayores.</div>
+              <div class="act"><b>Qué hacer:</b> llevar el dato a la escuela de padres.</div>
+            </div>
+          </div>
+
+          <div class="route">
+            <h4>Si un estudiante necesita ayuda</h4>
+            <ul>
+              <li>Orientación escolar del colegio, primer contacto siempre.</li>
+              <li>Línea 106, atención psicológica gratuita, 24 horas.</li>
+              <li>Secretaría de Salud de Chía, ruta de salud mental.</li>
+              <li>Comisaría de Familia si hay riesgo en el hogar.</li>
+            </ul>
+            <p class="tiny" style="margin-top:2px">Esto es un tamizaje de grupo, no un diagnóstico.
+              Ningún resultado corresponde a un estudiante identificable.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><strong>Maqueta.</strong> Los porcentajes son inventados para mostrar la forma de la
+      vista. El dataset todavía no llega y ninguna cifra de esta pantalla es un resultado real.</figcaption>
+  </figure>
+
+  <div class="two" style="margin-top:26px">
+    <div class="stack-sm">
+      <h4>Decisiones de diseño</h4>
+      <ul class="clean small">
+        <li><strong>Cinco tarjetas como techo.</strong> Más deja de leerse. Cada una trae el dato,
+          qué significa y qué hacer.</li>
+        <li><strong>Los mensajes son fijos.</strong> Vienen de un catálogo que revisa el equipo, no
+          los redacta la IA. Un texto sobre salud mental infantil no puede improvisarse.</li>
+        <li><strong>El rol cambia el contenido, no solo el tono.</strong> Un padre no ve
+          desagregación por colegio; un rector sí.</li>
+        <li><strong>Diez casos como mínimo</strong> para mostrar cualquier grupo. Menos permite
+          reconocer estudiantes.</li>
+      </ul>
+    </div>
+    <div class="stack-sm">
+      <h4>Lo que esta vista nunca hace</h4>
+      <ul class="clean small">
+        <li>Mostrar un estudiante, ni siquiera anonimizado.</li>
+        <li>Decir «depresión» o «trastorno». Dice «síntomas» y «por encima del corte».</li>
+        <li>Cruzar dos variables que juntas identifiquen a alguien.</li>
+        <li>Publicar un ranking de colegios. Comparar sí, ranquear no.</li>
+      </ul>
+      <div class="keep" style="margin-top:4px">
+        <strong>Condición previa.</strong> La ruta de derivación se acuerda con los colegios antes de
+        devolver ningún resultado. Encontrar casos sin tener a dónde remitirlos es peor que no medir.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 4. VISTA INVESTIGADOR ═══════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Vista secundaria</span>
+    <h2>Para el equipo investigador</h2>
+    <p class="lede col">La misma base de datos, otra profundidad. Esta vista produce material listo
+      para publicar: la tabla de descriptivos con alfa, la matriz de correlaciones con intervalos y
+      corrección, las comparaciones por grupo con tamaño de efecto, y un paquete exportable.</p>
+  </div>
+
+  <figure class="stack">
+    <div class="screen">
+      <div class="chrome">
+        <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span class="path">observatorio360 · estudiantes · vista investigador</span>
+        <span class="mock-tag">Maqueta · datos de ejemplo</span>
+      </div>
+      <div class="body-area" style="gap:16px">
+        <div class="tabs">
+          <span>Muestra</span>
+          <span class="on">Tabla 1 · descriptivos</span>
+          <span>Correlaciones</span>
+          <span>Por grupo</span>
+          <span>Calidad de datos</span>
+          <span>Exportar</span>
+        </div>
+
+        <div class="tscroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Escala</th><th class="n">N</th><th class="n">M</th><th class="n">DE</th>
+                <th class="n">Rango</th><th class="n">α</th><th class="n">% sobre corte</th><th>Corte aplicado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>SDQ total dificultades</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–40</td><td class="n">—</td><td class="n">—</td><td class="tiny">≥ 18 alto o muy alto</td></tr>
+              <tr><td>SDQ emocional</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–10</td><td class="n">—</td><td class="n">—</td><td class="tiny">≥ 6</td></tr>
+              <tr><td>SDQ conducta</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–10</td><td class="n">—</td><td class="n">—</td><td class="tiny">≥ 5</td></tr>
+              <tr><td>SDQ hiperactividad</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–10</td><td class="n">—</td><td class="n">—</td><td class="tiny">≥ 7</td></tr>
+              <tr><td>SDQ pares</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–10</td><td class="n">—</td><td class="n">—</td><td class="tiny">≥ 4</td></tr>
+              <tr><td>SDQ prosocial</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–10</td><td class="n">—</td><td class="n">—</td><td class="tiny">≤ 5 bajo</td></tr>
+              <tr><td>ARI irritabilidad</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–12</td><td class="n">—</td><td class="n">—</td><td class="tiny">&gt; 2 y ≥ 4</td></tr>
+              <tr><td>RCADS depresión</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–30</td><td class="n">—</td><td class="n">—</td><td class="tiny">T ≥ 65 y T ≥ 70</td></tr>
+              <tr><td>RCADS ansiedad</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0–45</td><td class="n">—</td><td class="n">—</td><td class="tiny">T ≥ 65 y T ≥ 70</td></tr>
+              <tr><td>ERQ-CA reevaluación</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">1–5</td><td class="n">—</td><td class="n">—</td><td class="tiny">terciles de la muestra</td></tr>
+              <tr><td>ERQ-CA supresión</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">1–5</td><td class="n">—</td><td class="n">—</td><td class="tiny">terciles de la muestra</td></tr>
+              <tr><td>MSPSS total</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">1–5</td><td class="n">—</td><td class="n">—</td><td class="tiny">terciles de la muestra</td></tr>
+              <tr><td>PSSM pertenencia</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">1–5</td><td class="n">—</td><td class="n">—</td><td class="tiny">terciles de la muestra</td></tr>
+            </tbody>
+            <caption>La tabla se rellena sola cuando entre el dataset. Las columnas y los cortes ya
+              están fijados; por eso las filas existen y las celdas están vacías.</caption>
+          </table>
+        </div>
+
+        <div class="two" style="gap:16px">
+          <div class="stack-sm">
+            <h4 style="font-size:13px">Correlaciones entre escalas</h4>
+            <svg viewBox="0 0 300 186" width="100%" style="max-width:100%; height:auto" role="img" aria-label="Boceto de matriz de correlaciones entre las seis escalas, sin valores todavía">
+              <g font-family="IBM Plex Mono, monospace" font-size="8" fill="var(--ink-3)">
+                <text x="58" y="12">SDQ</text><text x="92" y="12">ARI</text><text x="122" y="12">RCA</text>
+                <text x="154" y="12">ERQ</text><text x="186" y="12">MSP</text><text x="216" y="12">PSS</text>
+                <text x="4" y="30">SDQ</text><text x="4" y="56">ARI</text><text x="4" y="82">RCADS</text>
+                <text x="4" y="108">ERQ</text><text x="4" y="134">MSPSS</text><text x="4" y="160">PSSM</text>
+              </g>
+              <g>
+                <rect x="54" y="20" width="24" height="24" fill="var(--b4)" opacity=".85"/>
+                <rect x="84" y="20" width="24" height="24" fill="var(--b3)" opacity=".5"/>
+                <rect x="114" y="20" width="24" height="24" fill="var(--b3)" opacity=".62"/>
+                <rect x="144" y="20" width="24" height="24" fill="var(--surface-3)"/>
+                <rect x="174" y="20" width="24" height="24" fill="var(--b1)" opacity=".42"/>
+                <rect x="204" y="20" width="24" height="24" fill="var(--b1)" opacity=".5"/>
+
+                <rect x="84" y="46" width="24" height="24" fill="var(--b4)" opacity=".85"/>
+                <rect x="114" y="46" width="24" height="24" fill="var(--b3)" opacity=".45"/>
+                <rect x="144" y="46" width="24" height="24" fill="var(--b2)" opacity=".3"/>
+                <rect x="174" y="46" width="24" height="24" fill="var(--surface-3)"/>
+                <rect x="204" y="46" width="24" height="24" fill="var(--b1)" opacity=".3"/>
+
+                <rect x="114" y="72" width="24" height="24" fill="var(--b4)" opacity=".85"/>
+                <rect x="144" y="72" width="24" height="24" fill="var(--surface-3)"/>
+                <rect x="174" y="72" width="24" height="24" fill="var(--b1)" opacity=".45"/>
+                <rect x="204" y="72" width="24" height="24" fill="var(--b1)" opacity=".38"/>
+
+                <rect x="144" y="98" width="24" height="24" fill="var(--b4)" opacity=".85"/>
+                <rect x="174" y="98" width="24" height="24" fill="var(--b1)" opacity=".28"/>
+                <rect x="204" y="98" width="24" height="24" fill="var(--b1)" opacity=".22"/>
+
+                <rect x="174" y="124" width="24" height="24" fill="var(--b4)" opacity=".85"/>
+                <rect x="204" y="124" width="24" height="24" fill="var(--b1)" opacity=".52"/>
+
+                <rect x="204" y="150" width="24" height="24" fill="var(--b4)" opacity=".85"/>
+              </g>
+              <g font-family="IBM Plex Mono, monospace" font-size="7.5" fill="var(--ink-3)">
+                <text x="240" y="30">riesgo</text>
+                <rect x="240" y="36" width="46" height="7" fill="var(--b3)" opacity=".6"/>
+                <text x="240" y="58">protector</text>
+                <rect x="240" y="64" width="46" height="7" fill="var(--b1)" opacity=".5"/>
+                <text x="240" y="86">sin relación</text>
+                <rect x="240" y="92" width="46" height="7" fill="var(--surface-3)"/>
+              </g>
+            </svg>
+            <p class="tiny">Spearman, con intervalos por bootstrap y corrección por comparaciones
+              múltiples. Las intensidades del boceto son ilustrativas.</p>
+          </div>
+
+          <div class="stack-sm">
+            <h4 style="font-size:13px">Lo que exporta</h4>
+            <div class="chips">
+              <span class="chip">tabla1_descriptivos.csv</span>
+              <span class="chip">correlaciones.csv</span>
+              <span class="chip">comparaciones_grupo.csv</span>
+              <span class="chip">figuras_300dpi/</span>
+              <span class="chip">diccionario_datos.md</span>
+              <span class="chip">metodologia.md</span>
+              <span class="chip">version_analisis.txt</span>
+            </div>
+            <p class="tiny">Un ZIP por corrida, con la versión del script. Lo que se publique tiene
+              que poder rastrearse hasta la corrida que lo produjo.</p>
+            <h4 style="font-size:13px; margin-top:6px">Y además</h4>
+            <ul class="clean tiny" style="line-height:1.6">
+              <li>Alfa de Cronbach por escala, con aviso si baja de 0,70.</li>
+              <li>Comparaciones por sexo, edad, grado y colegio con d de Cohen.</li>
+              <li>Flujo de exclusiones para el diagrama de la muestra.</li>
+              <li>Borrador del apartado de métodos con las cifras reales insertadas.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><strong>Maqueta.</strong> La tabla aparece vacía a propósito: su estructura y sus
+      cortes ya están decididos, faltan los datos. La matriz es un boceto de forma, no de resultados.</figcaption>
+  </figure>
+</section>
+
+<!-- ══ 5. EL 360 ═══════════════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Por qué este dataset vale más de lo que parece</span>
+    <h2>Tres informantes, los mismos colegios</h2>
+    <p class="lede col">El estudiante comparte dos instrumentos con el cuidador. Eso convierte tres
+      encuestas sueltas en un diseño con informantes cruzados, que es mucho más publicable que
+      cualquiera de las tres por separado.</p>
+  </div>
+
+  <div class="stack">
+    <div class="tscroll">
+      <table>
+        <thead><tr><th>Fuente</th><th class="n">N</th><th>Instrumentos</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Docentes</strong></td><td class="n">189</td>
+            <td class="small">PSS-10, burnout BAT-12, IRI, regulación emocional, recursos laborales, conflicto trabajo-familia</td>
+            <td><span class="band b1">En la plataforma</span></td>
+          </tr>
+          <tr>
+            <td><strong>Cuidadores</strong><br><span class="tiny">reportan sobre el niño</span></td><td class="n">172</td>
+            <td class="small"><strong>SDQ versión padres</strong>, <strong>MSPSS</strong>, EPDS, PSS-10, APQ, PSI-SF, riesgo barrial</td>
+            <td><span class="band b2">Corregido, falta cargar</span></td>
+          </tr>
+          <tr>
+            <td><strong>Estudiantes</strong><br><span class="tiny">autorreporte</span></td><td class="n">por definir</td>
+            <td class="small"><strong>SDQ autoinforme</strong>, <strong>MSPSS</strong>, ARI, RCADS-25, ERQ-CA, PSSM</td>
+            <td><span class="band b3">Pendiente</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h4>Puente 1 · el SDQ en dos voces</h4>
+        <p class="small">Mismo constructo, mismas subescalas, mismos ítems inversos. El cuidador
+          responde sobre el niño y el niño responde sobre sí mismo.</p>
+        <p class="small">Permite estudiar el acuerdo entre informantes, que tiene literatura propia y
+          un hallazgo robusto: los padres suelen ver menos malestar interno del que el adolescente
+          reporta. Ver eso en Chía es publicable por sí solo.</p>
+      </div>
+      <div class="panel">
+        <h4>Puente 2 · el MSPSS en la misma familia</h4>
+        <p class="small">Estudiante y cuidador responden el mismo instrumento, con la misma escala
+          de cinco puntos. Son directamente comparables.</p>
+        <p class="small">Apoyo social percibido entre generaciones del mismo hogar, con el colegio
+          como tercer nivel. Es un diseño poco común en la región.</p>
+      </div>
+    </div>
+
+    <div class="note col">
+      <strong>La petición que hay que hacer ya, antes de que envíen el archivo.</strong> Si existe
+      cualquier forma de enlazar al estudiante con su cuidador, aunque sea un código de familia sin
+      nombres, que venga en el dataset. Con enlace, los dos puentes se analizan a nivel individual.
+      Sin enlace, solo a nivel de colegio, y se pierde la mitad del valor. Si no es posible, también
+      necesitamos saberlo ya para diseñar el análisis de otra forma.
+    </div>
+  </div>
+</section>
+
+<!-- ══ 6. QUÉ NECESITAMOS ══════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Para que la carga sea inmediata</span>
+    <h2>Qué necesitamos del archivo</h2>
+  </div>
+
+  <div class="two">
+    <div class="stack-sm">
+      <h4>Formato</h4>
+      <ul class="clean small">
+        <li>Una fila por estudiante. Excel o CSV en UTF-8.</li>
+        <li><strong>Ítem por ítem, no totales precalculados.</strong> Los totales se recalculan aquí
+          para poder reportar alfa y aplicar los cortes correctos.</li>
+        <li>Las respuestas pueden venir como texto o como número, indistinto.</li>
+        <li>Columnas sugeridas: <span class="num">SDQ1…SDQ25</span>,
+          <span class="num">ARI1…ARI7</span>, <span class="num">RCADS1…RCADS25</span>,
+          <span class="num">ERQ1…ERQ10</span>, <span class="num">MSPSS1…MSPSS12</span>,
+          <span class="num">PSSM1…PSSM18</span>. Son 102 columnas con las de identificación.</li>
+        <li>Códigos de colegio ya existentes: <span class="num">CND, SJMEB, JJC, DiosCh, SMR, LauV,
+          CdP, SaLu, Fagua, Fusca</span>. Si llega el nombre completo, la app lo normaliza.</li>
+        <li>Identificador anonimizado. Nunca nombres.</li>
+      </ul>
+    </div>
+    <div class="stack-sm">
+      <h4>Y dos confirmaciones</h4>
+      <div class="note">
+        <strong>El orden de los ítems.</strong> Toda la puntuación depende de que el orden sea el del
+        instrumento original. Si el formulario los reordenó o aleatorizó, necesitamos el mapeo. Ante
+        la duda, que manden también el archivo crudo con los enunciados completos como encabezado.
+      </div>
+      <div class="note">
+        <strong>Las etiquetas del SDQ.</strong> El documento del instrumento muestra dos juegos: en
+        las instrucciones dice «Falso / Medianamente verdadero / Muy verdadero» y en los indicadores
+        dice «No es cierto / Algo cierto / Muy cierto». No cambia la puntuación, las dos son 0-1-2,
+        pero sí cambia lo que escribimos en el artículo. Hay que preguntarle a quien aplicó.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 7. CÓMO SE CONSTRUYE ════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Orden de trabajo</span>
+    <h2>Cómo se construye</h2>
+    <p class="lede col">Los pasos 1 y 2 se pueden hacer antes de que llegue el dataset, porque no
+      dependen de él. Es lo que permite que el día que llegue el archivo ya haya algo que mirar.</p>
+  </div>
+
+  <ol class="steps col">
+    <li>
+      <div class="stack-sm">
+        <h4>Catálogo de instrumentos</h4>
+        <p class="small">Un archivo con cada escala: ítems, inversos, rango, dirección, cortes con su
+          fuente, y los textos de «qué significa» y «qué puedo hacer» por rol. Es la única fuente de
+          verdad: si un corte cambia, cambia en un solo sitio y toda la app se actualiza.</p>
+      </div>
+    </li>
+    <li>
+      <div class="stack-sm">
+        <h4>Motor de puntuación y sus pruebas</h4>
+        <p class="small">Puntúa las seis escalas desde los ítems, con pruebas hechas con datos
+          sintéticos de resultado conocido. Se escribe contra el catálogo, no contra el dataset, así
+          que no hay que esperar al archivo.</p>
+      </div>
+    </li>
+    <li>
+      <div class="stack-sm">
+        <h4>Ingesta y verificación</h4>
+        <p class="small">Llega el archivo, se valida contra el catálogo, se revisa el diagnóstico de
+          ingesta y los alfas. Si algo no cuadra con el instrumento, se detiene aquí.</p>
+      </div>
+    </li>
+    <li>
+      <div class="stack-sm">
+        <h4>Vista comunidad</h4>
+        <p class="small">La principal. Tarjetas, ruta de atención, informe de una página por colegio.</p>
+      </div>
+    </li>
+    <li>
+      <div class="stack-sm">
+        <h4>Vista investigador</h4>
+        <p class="small">Tabla 1, correlaciones, comparaciones por grupo, exportables.</p>
+      </div>
+    </li>
+    <li>
+      <div class="stack-sm">
+        <h4>Los puentes con cuidadores</h4>
+        <p class="small">Acuerdo entre informantes en el SDQ y comparación del MSPSS. Depende de si
+          hay enlace individual.</p>
+      </div>
+    </li>
+  </ol>
+
+  <div class="stack" style="margin-top:28px">
+    <h3>Dónde viven las dos vistas</h3>
+    <p class="small col">La plataforma ya tiene dos modos de dataset y un dashboard con cuatro
+      pestañas. Hay dos formas de meter esto y conviene decidirla ahora, porque cambia el trabajo
+      posterior.</p>
+    <div class="two">
+      <div class="panel">
+        <h4>A · Ampliar el dashboard actual</h4>
+        <p class="small">Dos pestañas más sobre lo que ya existe.</p>
+        <p class="tiny"><strong>A favor:</strong> menos trabajo inmediato.</p>
+        <p class="tiny"><strong>En contra:</strong> el dashboard ya tiene cuatro pestañas y 600
+          líneas. Mezcla dos audiencias que necesitan cosas opuestas, y una vista pública que
+          comparte código con una de análisis es más fácil de romper sin darse cuenta.</p>
+      </div>
+      <div class="panel" style="border-color:var(--navy); border-width:1.5px">
+        <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap">
+          <h4>B · Selector de audiencia</h4>
+          <span class="band b1">Recomendada</span>
+        </div>
+        <p class="small">Un selector arriba decide qué vista se arma, con módulos separados para
+          comunidad e investigador.</p>
+        <p class="tiny"><strong>A favor:</strong> cada vista se prueba sola, la de comunidad no puede
+          filtrar datos que no debe, y sirve igual para los datasets de docentes y cuidadores.</p>
+        <p class="tiny"><strong>En contra:</strong> hay que tocar el despachador del dashboard.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 8. DECISIONES ═══════════════════════════════════════ -->
+<section style="border-bottom:0">
+  <div class="sec-head">
+    <span class="eyebrow">Lo que hay que resolver</span>
+    <h2>Decisiones pendientes</h2>
+    <p class="lede col">Las cuatro primeras las decide el equipo investigador. Las dos últimas, quien
+      revise este plan.</p>
+  </div>
+
+  <div class="col">
+    <div class="q"><span class="mk">01</span><div>
+      <strong>El RCADS.</strong> ¿Puntuaciones T de Estados Unidos con advertencia, brutas con
+      percentiles propios, o ambas? La recomendación es ambas: brutas y percentiles como resultado
+      principal, T como anexo comparativo. Si se usan las T hay que conseguir las tablas por grado y
+      sexo.</div></div>
+    <div class="q"><span class="mk">02</span><div>
+      <strong>El enlace estudiante-cuidador.</strong> ¿Se puede pedir antes de que envíen el archivo?
+      Es la decisión con más consecuencias de toda la lista.</div></div>
+    <div class="q"><span class="mk">03</span><div>
+      <strong>Los menores de 11 años.</strong> Si vienen, ¿se excluyen del SDQ y del MSPSS y se
+      analizan aparte en las otras cuatro escalas, o se deja la muestra en 11 a 17?</div></div>
+    <div class="q"><span class="mk">04</span><div>
+      <strong>La ruta de derivación.</strong> ¿Quién la acuerda con los colegios y para cuándo? La
+      vista comunidad no se publica sin esto.</div></div>
+    <div class="q"><span class="mk">05</span><div>
+      <strong>Arquitectura.</strong> ¿Opción A u opción B?</div></div>
+    <div class="q"><span class="mk">06</span><div>
+      <strong>Mínimo por grupo.</strong> ¿Diez estudiantes para poder desagregar por colegio o
+      grado? Con menos se puede reconocer a alguien.</div></div>
+  </div>
+
+  <div class="keep col" style="margin-top:26px">
+    <strong>Qué ya está hecho.</strong> El instrumento quedó revisado, con sus 97 ítems mapeados a
+    subescalas, ítems inversos identificados y puntos de corte verificados en fuente. El archivo se
+    movió de <span class="num">video_assets/</span> a <span class="num">docs/instrumentos/</span> y
+    su contenido quedó escrito en <span class="num">INSTRUMENTO_ESTUDIANTES.md</span>, que es lo que
+    gobierna el código. El día que llegue el dataset no hay que descifrar nada.
+  </div>
+
+  <p class="tiny col" style="margin-top:26px">Observatorio 360 · Universidad de La Sabana ·
+    Documento de trabajo, 17 de septiembre de 2026. Las pantallas son maquetas con datos inventados;
+    no hay ningún resultado de estudiantes todavía.</p>
+</section>
+
+</main>
+
+<script>
+const SDQ = {
+  self: {
+    note: "Lo que vamos a recibir",
+    cap: "Cuatro bandas, versión autoinforme 11-17. Fuente: Scoring the Strengths & Difficulties Questionnaire for age 4-17, tabla 3, sdqinfo.org.",
+    rows: [
+      ["Total dificultades", "0–14", "15–17", "18–19", "20–40"],
+      ["Síntomas emocionales", "0–4", "5", "6", "7–10"],
+      ["Problemas de conducta", "0–3", "4", "5", "6–10"],
+      ["Hiperactividad", "0–5", "6", "7", "8–10"],
+      ["Problemas con pares", "0–2", "3", "4", "5–10"],
+      ["Conducta prosocial *", "7–10", "6", "5", "0–4"]
+    ]
+  },
+  par: {
+    note: "Ya en uso con el dataset de cuidadores",
+    cap: "Cuatro bandas, versión para padres 4-17. Se muestran para contraste: no se aplican al autorreporte del estudiante.",
+    rows: [
+      ["Total dificultades", "0–13", "14–16", "17–19", "20–40"],
+      ["Síntomas emocionales", "0–3", "4", "5–6", "7–10"],
+      ["Problemas de conducta", "0–2", "3", "4–5", "6–10"],
+      ["Hiperactividad", "0–5", "6–7", "8", "9–10"],
+      ["Problemas con pares", "0–2", "3", "4", "5–10"],
+      ["Conducta prosocial *", "8–10", "7", "6", "0–5"]
+    ]
+  }
+};
+
+const body = document.getElementById("sdq-body");
+const cap = document.getElementById("sdq-cap");
+const note = document.getElementById("ver-note");
+const bSelf = document.getElementById("btn-self");
+const bPar = document.getElementById("btn-par");
+
+function render(which) {
+  const d = SDQ[which];
+  body.innerHTML = d.rows.map(r =>
+    `<tr><td>${r[0]}</td><td class="n"><span class="band b1">${r[1]}</span></td>` +
+    `<td class="n"><span class="band b2">${r[2]}</span></td>` +
+    `<td class="n"><span class="band b3">${r[3]}</span></td>` +
+    `<td class="n"><span class="band b4">${r[4]}</span></td></tr>`
+  ).join("");
+  cap.textContent = d.cap + " En prosocial (*) las bandas se leen al revés: ligeramente disminuido, bajo, muy bajo.";
+  note.textContent = d.note;
+  bSelf.setAttribute("aria-pressed", which === "self");
+  bPar.setAttribute("aria-pressed", which === "par");
+}
+
+bSelf.addEventListener("click", () => render("self"));
+bPar.addEventListener("click", () => render("par"));
+render("self");
+</script>
