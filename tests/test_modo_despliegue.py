@@ -177,3 +177,18 @@ def test_no_queda_el_parametro_de_ancho_obsoleto():
         if "use_container_width" in f.read_text(encoding="utf-8"):
             culpables.append(str(f.relative_to(raiz)))
     assert not culpables, f"usan un parámetro obsoleto: {culpables}"
+
+
+def test_la_pagina_inicial_depende_del_modo(con_modo):
+    m = con_modo("investigador")
+    assert m.pagina_por_defecto() == "Estudiantes 360"
+    m = con_modo("comunidad")
+    assert m.pagina_por_defecto() == "Estudiantes 360"
+    m = con_modo(None)
+    assert m.pagina_por_defecto() == "Dashboard"
+
+
+def test_el_punto_de_entrada_usa_la_pagina_inicial_del_modo():
+    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
+    assert "pagina_por_defecto()" in fuente
+    assert "index=_indice" in fuente

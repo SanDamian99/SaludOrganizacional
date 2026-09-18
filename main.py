@@ -78,7 +78,10 @@ with st.sidebar:
               "Analisis de tendencias", "Reportes"]
     _permitidas = modo_app.paginas_permitidas()
     _opciones = [p for p in _todas if _permitidas is None or p in _permitidas]
-    page = st.radio("Ir a:", _opciones)
+    # El modo decide con qué página abre; después manda lo que elija la persona.
+    _inicial = modo_app.pagina_por_defecto()
+    _indice = _opciones.index(_inicial) if _inicial in _opciones else 0
+    page = st.radio("Ir a:", _opciones, index=_indice)
 
 # --- Main Routing ---
 if page == "Dashboard":

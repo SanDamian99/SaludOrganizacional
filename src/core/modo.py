@@ -76,3 +76,15 @@ def audiencias_permitidas() -> list[str] | None:
 def audiencia_por_defecto() -> str:
     """Vista con la que abre el módulo de estudiantes en este modo."""
     return "investigador" if modo() == INVESTIGADOR else "comunidad"
+
+
+PAGINA_ESTUDIANTES = "Estudiantes 360"
+
+
+def pagina_por_defecto() -> str:
+    """Página con la que abre la aplicación.
+
+    En los dos modos pensados para estudiantes se aterriza en su módulo, que es
+    a lo que entra la gente; desde ahí se navega al resto.
+    """
+    return PAGINA_ESTUDIANTES if modo() in (INVESTIGADOR, COMUNIDAD) else "Dashboard"
