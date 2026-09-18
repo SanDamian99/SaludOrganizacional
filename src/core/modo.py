@@ -4,13 +4,21 @@ Modo de despliegue — Observatorio 360.
 Una misma base de código sirve para dos despliegues con audiencias distintas, y
 la diferencia no puede depender de que nadie haga clic donde no debe.
 
-    OBS360_MODO = "completo"      (por defecto) todo: local y equipo interno
+    OBS360_MODO = "completo"      (por defecto) todo, y el módulo de
+                                  estudiantes abre en la vista de comunidad.
+                                  Es el modo de trabajo local.
+    OBS360_MODO = "investigador"  todo también, pero el módulo de estudiantes
+                                  abre en la vista de investigación. Es el
+                                  despliegue privado del equipo: quien entra
+                                  puede recorrer el resto de la plataforma y
+                                  enseñarla, porque es quien la conoce.
     OBS360_MODO = "comunidad"     SOLO la vista de estudiantes para colegios,
-                                  familias y municipio. Es lo que se despliega
-                                  en público.
-    OBS360_MODO = "investigador"  solo el módulo de estudiantes, vista de
-                                  investigación, para un despliegue privado del
-                                  equipo.
+                                  familias y municipio. Es el único modo que
+                                  restringe, y es lo que se despliega en
+                                  público.
+
+El candado es para los actores no investigadores. Un investigador es, a efectos
+de la aplicación, un administrador: ve todo.
 
 En modo «comunidad» la aplicación **no importa** el módulo de la vista de
 investigación, ni el cargador de archivos, ni el chat, ni los informes: no es que
@@ -52,20 +60,19 @@ def es_publico() -> bool:
 
 
 def paginas_permitidas() -> list[str] | None:
-    """Páginas visibles en este modo. None = todas."""
-    m = modo()
-    if m == COMUNIDAD:
-        return ["Estudiantes 360"]
-    if m == INVESTIGADOR:
-        return ["Estudiantes 360"]
-    return None
+    """Páginas visibles en este modo. None = todas.
+
+    Solo el modo comunidad restringe. En investigador se ve toda la plataforma:
+    quien revisa también la va a enseñar, y conviene que la conozca entera.
+    """
+    return ["Estudiantes 360"] if modo() == COMUNIDAD else None
 
 
 def audiencias_permitidas() -> list[str] | None:
     """Vistas del módulo de estudiantes disponibles. None = las dos."""
-    m = modo()
-    if m == COMUNIDAD:
-        return ["comunidad"]
-    if m == INVESTIGADOR:
-        return ["investigador"]
-    return None
+    return ["comunidad"] if modo() == COMUNIDAD else None
+
+
+def audiencia_por_defecto() -> str:
+    """Vista con la que abre el módulo de estudiantes en este modo."""
+    return "investigador" if modo() == INVESTIGADOR else "comunidad"

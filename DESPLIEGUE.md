@@ -45,6 +45,12 @@ Conviene hacer dos, del mismo repositorio, con distinta configuración.
 
 ### A · Para el equipo investigador (privado)
 
+En este modo el investigador ve **toda** la plataforma: dashboard, tendencias,
+carga de datos, informes y las dos vistas de estudiantes. La única diferencia
+con el modo local es con qué vista abre el módulo de estudiantes. Es deliberado:
+quien revisa también va a enseñar la herramienta, y conviene que la conozca
+entera. El candado es para los actores que no son del equipo.
+
 | Ajuste | Valor |
 |---|---|
 | Rama | `feature/vistas-investigador-comunidad` (o `main` tras la fusión) |
@@ -59,8 +65,9 @@ SUPABASE_URL = "https://nkjyuviycatgrzqjnsoa.supabase.co"
 SUPABASE_KEY = "clave-anon"
 ```
 
-Quien entre ve solo el módulo de estudiantes con las ocho pestañas, las tablas
-exportables y el ZIP de la corrida. No hay cargador de archivos ni chat.
+Quien entre aterriza en la vista de investigación, con las ocho pestañas, las
+tablas exportables y el ZIP de la corrida, y puede moverse al resto de la
+plataforma desde la navegación.
 
 ### B · Para colegios, familias y municipio (público)
 

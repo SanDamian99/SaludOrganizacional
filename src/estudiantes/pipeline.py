@@ -91,7 +91,9 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
         n=len(d),
         sexo=d["Sexo"].value_counts().to_dict(),
         edad_M=round(float(d["Edad"].mean()), 2), edad_DE=round(float(d["Edad"].std()), 2),
-        edad=d["Edad"].value_counts().sort_index().to_dict(),
+        # claves enteras: «13», no «13.0», que es lo que se muestra al lector
+        edad={int(k): int(v) for k, v in
+              d["Edad"].dropna().value_counts().sort_index().items()},
         grado=d["Grado"].value_counts().to_dict(),
         colegio=d["Colegio"].value_counts().to_dict(),
         fechas=([str(d["ts"].min().date()), str(d["ts"].max().date())]

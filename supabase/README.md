@@ -147,9 +147,9 @@ público. Es reversible en una línea de SQL.
 
 | `OBS360_MODO` | Qué existe en esa ejecución |
 |---|---|
-| `completo` (por defecto) | todo: local y equipo interno |
+| `completo` (por defecto) | todo; estudiantes abre en la vista de comunidad |
+| `investigador` | todo; estudiantes abre en la vista de investigación |
 | `comunidad` | **solo** la vista de estudiantes para colegios, familias y municipio |
-| `investigador` | solo el módulo de estudiantes, vista de investigación |
 
 En modo `comunidad` el punto de entrada corta **antes** de importar la vista de
 investigación, el cargador de archivos, el chat, los informes y el panel técnico:
@@ -159,10 +159,11 @@ URL, y `?debug=1` no abre nada. Un valor mal escrito en la configuración cae en
 
 ### Los tres caminos, según quién tenga que ver
 
-1. **Rectores y orientación escolar.** Un despliegue privado en Streamlit
-   Community Cloud con `OBS360_MODO = "investigador"` o `"completo"` y la lista
-   de correos autorizados (*Settings → Sharing → invite viewers*). Entran con su
-   correo; no hay contraseñas que repartir.
+1. **Equipo investigador, rectores y orientación escolar.** Un despliegue
+   privado en Streamlit Community Cloud con `OBS360_MODO = "investigador"` y la
+   lista de correos autorizados (*Settings → Sharing → invite viewers*). Entran
+   con su correo; no hay contraseñas que repartir. Ven la plataforma completa y
+   aterrizan en la vista de investigación.
 2. **Cada colegio, su propio enlace.** El mismo despliegue público admite
    `?colegio=LauV`, que deja ese colegio preseleccionado. Un código inexistente o
    un colegio con menos de 10 respuestas se ignora, así que el parámetro no sirve

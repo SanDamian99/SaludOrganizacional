@@ -155,7 +155,11 @@ def render_estudiantes() -> None:
         st.markdown("---")
         st.markdown("**Estudiantes 360**")
         if len(permitidas) > 1:
-            clave = st.radio("Vista", permitidas, format_func=lambda k: AUDIENCIAS[k],
+            # El modo decide con cuál abre; después manda lo que elija la persona.
+            inicial = modo_app.audiencia_por_defecto()
+            indice = permitidas.index(inicial) if inicial in permitidas else 0
+            clave = st.radio("Vista", permitidas, index=indice,
+                             format_func=lambda k: AUDIENCIAS[k],
                              key="estudiantes_audiencia")
         else:
             clave = permitidas[0]

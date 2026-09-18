@@ -216,3 +216,45 @@ def test_ninguna_vista_revienta_con_conteos_enmascarados(reconstruido):
     # y las funciones puras de las dos vistas corren de punta a punta
     assert not vi.tabla1(remoto).empty
     assert vi.paquete_zip(remoto, informes)
+
+
+def test_toda_tabla_que_se_muestra_es_convertible_a_arrow(reconstruido):
+    """`st.dataframe` serializa a Arrow: una columna con números y texto falla.
+
+    Ocurrió en el despliegue: los conteos enmascarados como «<10» convivían con
+    enteros en la columna `n` y cada recarga llenaba el registro de trazas.
+    """
+    import pyarrow as pa
+    from src.ui.views import estudiantes_investigador as vi
+    remoto, informes = reconstruido
+    a = remoto["secundaria"]
+    m = a.muestra
+
+    tablas = {
+        "sexo": vi._tabla_conteos(sorted((m.get("sexo") or {}).items()), "Sexo"),
+        "edad": vi._tabla_conteos(
+            sorted([(vi._edad_legible(k), v) for k, v in (m.get("edad") or {}).items()],
+                   key=lambda kv: vi._conteo(kv[0])), "Edad"),
+        "grado": vi._tabla_conteos(sorted((m.get("grado") or {}).items()), "Grado"),
+        "colegio": vi._tabla_conteos(
+            sorted((m.get("colegio") or {}).items(), key=lambda kv: -vi._conteo(kv[1])),
+            "Colegio"),
+        "tabla1": vi.tabla1(remoto),
+        "bandas_y_cortes": vi.bandas_y_cortes(remoto),
+        "correlaciones": vi.correlaciones_bh(remoto),
+        "comparaciones": vi.comparaciones_grupo(remoto),
+        "modelos": vi.modelos_tabla(remoto),
+        "icc": vi.icc_tabla(remoto),
+    }
+    for nombre, t in tablas.items():
+        if t is None or t.empty:
+            continue
+        pa.Table.from_pandas(t)          # lanza si alguna columna mezcla tipos
+
+
+def test_la_edad_se_muestra_sin_decimales():
+    from src.ui.views import estudiantes_investigador as vi
+    assert vi._edad_legible("13.0") == "13"
+    assert vi._edad_legible(13.0) == "13"
+    assert vi._edad_legible(13) == "13"
+    assert vi._edad_legible("sin dato") == "sin dato"

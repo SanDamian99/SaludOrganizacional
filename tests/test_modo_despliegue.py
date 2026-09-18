@@ -43,12 +43,29 @@ def test_modo_comunidad_solo_deja_la_vista_comunidad(con_modo):
     assert m.es_publico()
     assert m.paginas_permitidas() == ["Estudiantes 360"]
     assert m.audiencias_permitidas() == ["comunidad"]
+    assert m.audiencia_por_defecto() == "comunidad"
 
 
-def test_modo_investigador_solo_deja_la_vista_de_investigacion(con_modo):
+def test_el_investigador_ve_todo_pero_abre_en_su_vista(con_modo):
+    """Un investigador es, a efectos de la aplicación, un administrador.
+
+    Va a enseñar la plataforma a otros, así que necesita recorrerla entera; lo
+    que cambia es con qué vista abre.
+    """
     m = con_modo("investigador")
-    assert m.audiencias_permitidas() == ["investigador"]
     assert not m.es_publico()
+    assert m.paginas_permitidas() is None          # todas
+    assert m.audiencias_permitidas() is None       # las dos
+    assert m.audiencia_por_defecto() == "investigador"
+
+
+def test_solo_el_modo_comunidad_restringe(con_modo):
+    for valor in ("completo", "investigador"):
+        m = con_modo(valor)
+        assert m.paginas_permitidas() is None, valor
+        assert m.audiencias_permitidas() is None, valor
+    m = con_modo("comunidad")
+    assert m.paginas_permitidas() == ["Estudiantes 360"]
 
 
 @pytest.mark.parametrize("valor", ["", "  ", "publico", "COMPLETO ", "cualquier-cosa"])
@@ -62,6 +79,7 @@ def test_un_valor_desconocido_cae_en_el_modo_mas_restrictivo(con_modo, valor):
     else:
         assert m.modo() == m.COMUNIDAD
         assert m.audiencias_permitidas() == ["comunidad"]
+        assert m.paginas_permitidas() == ["Estudiantes 360"]
 
 
 def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
@@ -145,3 +163,17 @@ def test_el_error_de_clave_invalida_se_explica_sin_jerga():
     i = fuente.index("Invalid API key")
     bloque = fuente[i:i + 1400]
     assert "service_role" in bloque and "anon" in bloque
+
+
+def test_no_queda_el_parametro_de_ancho_obsoleto():
+    """`use_container_width` se elimina de Streamlit y llenaba el registro.
+
+    Todas las llamadas usaban `True`, así que el reemplazo es `width="stretch"`.
+    """
+    import pathlib
+    raiz = pathlib.Path(RAIZ)
+    culpables = []
+    for f in list((raiz / "src").rglob("*.py")) + [raiz / "main.py"]:
+        if "use_container_width" in f.read_text(encoding="utf-8"):
+            culpables.append(str(f.relative_to(raiz)))
+    assert not culpables, f"usan un parámetro obsoleto: {culpables}"

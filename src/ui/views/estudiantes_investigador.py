@@ -521,6 +521,29 @@ def paquete_zip(analisis, informes: list | None = None) -> bytes:
 # ══════════════════════════════════════════════════════════════════════════
 # Pestañas de la vista
 # ══════════════════════════════════════════════════════════════════════════
+def _edad_legible(clave) -> str:
+    """«13.0» → «13». La edad es un entero y así se lee."""
+    try:
+        return str(int(float(clave)))
+    except (TypeError, ValueError):
+        return str(clave)
+
+
+def _tabla_conteos(pares, etiqueta: str) -> pd.DataFrame:
+    """Tabla de conteos con la columna `n` en un solo tipo.
+
+    Los conteos de una corrida publicada pueden venir enmascarados como «<10».
+    Mezclar números y texto en la misma columna hace fallar la conversión a
+    Arrow que usa `st.dataframe`: Streamlit lo arregla solo, pero llena el
+    registro de trazas. Se formatea todo a texto, que además alinea mejor.
+    """
+    filas = [(clave, f"{int(valor):,}".replace(",", " ")
+              if isinstance(valor, (int, float)) and not isinstance(valor, bool)
+              else str(valor))
+             for clave, valor in pares]
+    return pd.DataFrame(filas, columns=[etiqueta, "n"])
+
+
 def _conteo(valor) -> float:
     """Conteo como número para poder ordenar.
 
@@ -548,13 +571,14 @@ def _tab_muestra(a, informe, nivel: str) -> None:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Sexo**")
-        st.dataframe(pd.DataFrame(sorted((m.get("sexo") or {}).items()),
-                                  columns=["Sexo", "n"]),
-                     hide_index=True, use_container_width=True)
+        st.dataframe(_tabla_conteos(sorted((m.get("sexo") or {}).items()), "Sexo"),
+                     hide_index=True, width="stretch")
         st.markdown("**Edad**")
-        st.dataframe(pd.DataFrame(sorted((m.get("edad") or {}).items()),
-                                  columns=["Edad", "n"]),
-                     hide_index=True, use_container_width=True)
+        # Las corridas anteriores guardaron la edad como «13.0»; se limpia al
+        # mostrarla para no enseñar un decimal que no significa nada.
+        edades = [(_edad_legible(k), v) for k, v in (m.get("edad") or {}).items()]
+        st.dataframe(_tabla_conteos(sorted(edades, key=lambda kv: _conteo(kv[0])), "Edad"),
+                     hide_index=True, width="stretch")
     with c2:
         orden = (cat.ORDEN_GRADOS_SEC if nivel == cat.NIVEL_SECUNDARIA
                  else cat.ORDEN_GRADOS_PRI)
@@ -562,13 +586,13 @@ def _tab_muestra(a, informe, nivel: str) -> None:
         filas = [(g, grados[g]) for g in orden if g in grados]
         filas += [(g, n) for g, n in grados.items() if g not in orden]
         st.markdown("**Grado**")
-        st.dataframe(pd.DataFrame(filas, columns=["Grado", "n"]),
-                     hide_index=True, use_container_width=True)
+        st.dataframe(_tabla_conteos(filas, "Grado"),
+                     hide_index=True, width="stretch")
         st.markdown("**Colegio**")
         colegios = sorted((m.get("colegio") or {}).items(),
                           key=lambda kv: -_conteo(kv[1]))
-        st.dataframe(pd.DataFrame(colegios, columns=["Colegio", "n"]),
-                     hide_index=True, use_container_width=True)
+        st.dataframe(_tabla_conteos(colegios, "Colegio"),
+                     hide_index=True, width="stretch")
         st.caption(f"Los colegios con menos de {cat.MIN_GROUP_N} estudiantes entran en el "
                    "total pero no se muestran desagregados en ninguna otra pestaña.")
 
@@ -586,7 +610,7 @@ def _tab_muestra(a, informe, nivel: str) -> None:
             filas.append({"Paso": f"− {etiqueta}", "Casos": -quitadas, "Quedan": restantes})
         filas.append({"Paso": "Respuestas válidas analizadas", "Casos": None,
                       "Quedan": int(getattr(informe, "filas_validas", restantes) or restantes)})
-        st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
         erq = int(getattr(informe, "erq_invalidado", 0) or 0)
         if erq:
             st.warning(f"{erq} respuesta(s) conservan la fila pero pierden el bloque de "
@@ -615,7 +639,7 @@ def _tab_tabla1(a, nivel: str) -> None:
                 else f"color: {COLOR_OK}")
 
     st.dataframe(vista.style.map(_pinta_alpha, subset=["α"]),
-                 hide_index=True, use_container_width=True)
+                 hide_index=True, width="stretch")
     bajas = t[t["alpha"].notna() & (t["alpha"].astype(float) < ALPHA_MINIMO)]
     st.caption(NOTA_ALPHA)
     if not bajas.empty:
@@ -641,7 +665,7 @@ def _tab_cortes(a) -> None:
                            "pct_b0": "Cercano al promedio", "pct_b1": "Ligeramente elevado",
                            "pct_b2": "Alto", "pct_b3": "Muy alto",
                            "pct_alto_o_muy_alto": "Alto + muy alto"})
-        st.dataframe(tabla, hide_index=True, use_container_width=True)
+        st.dataframe(tabla, hide_index=True, width="stretch")
         fig = px.bar(largo, x="pct", y="Escala", color="Banda", orientation="h",
                      text="pct", custom_data=["n"],
                      category_orders={"Escala": list(bandas["escala"])},
@@ -653,7 +677,7 @@ def _tab_cortes(a) -> None:
         fig.update_layout(barmode="stack", height=60 * len(bandas) + 140,
                           xaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=30, b=10),
                           legend=dict(orientation="h", y=-0.2))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("En la banda prosocial las etiquetas se leen al revés: la puntuación alta "
                    "es lo deseable, así que «bajo» y «muy bajo» son las bandas de alerta.")
     else:
@@ -669,7 +693,7 @@ def _tab_cortes(a) -> None:
         vista = vista[["indicador", "n", "casos", "pct", "IC 95 %", "fuente"]].rename(
             columns={"indicador": "Indicador", "n": "Base N", "casos": "Casos",
                      "pct": "%", "fuente": "Fuente del corte"})
-        st.dataframe(vista, hide_index=True, use_container_width=True)
+        st.dataframe(vista, hide_index=True, width="stretch")
     else:
         st.info("No hay prevalencias sobre corte para este nivel.")
 
@@ -683,7 +707,7 @@ def _tab_cortes(a) -> None:
                                                   "corte_bajo": "Corte bajo (P33)",
                                                   "corte_alto": "Corte alto (P67)",
                                                   "nota": "Nota"}).drop(columns=["clave"]),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width="stretch")
         else:
             st.caption("Sin terciles para este nivel.")
     with c2:
@@ -692,7 +716,7 @@ def _tab_cortes(a) -> None:
         if isinstance(pc, pd.DataFrame) and not pc.empty:
             st.dataframe(pc.drop(columns=["clave"]).rename(columns={"escala": "Escala",
                                                                     "sexo": "Sexo", "n": "N"}),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width="stretch")
             st.caption("Sustituyen a las puntuaciones T del RCADS, que exigen tablas "
                        "normativas que este proyecto no tiene.")
         else:
@@ -713,7 +737,7 @@ def _tab_correlaciones(a) -> None:
                           margin=dict(l=10, r=10, t=30, b=10),
                           coloraxis_colorbar=dict(title="ρ"))
         fig.update_xaxes(tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("Escala divergente centrada en cero: el rojo marca asociación positiva y "
                    "el azul negativa. Todo es autorreporte del mismo informante, así que "
                    "estas correlaciones comparten varianza de método.")
@@ -744,7 +768,7 @@ def _tab_correlaciones(a) -> None:
         columns={"etiqueta_a": "Variable A", "etiqueta_b": "Variable B", "rho": "ρ",
                  "q_bh": "q (BH)", "n": "N"})
     st.dataframe(tabla.style.format({"p": "{:.4f}", "q (BH)": "{:.4f}"}),
-                 hide_index=True, use_container_width=True)
+                 hide_index=True, width="stretch")
     st.caption(f"{len(vista)} de {len(corr)} pares cumplen los filtros.")
 
 
@@ -758,7 +782,7 @@ def _tab_por_grupo(a) -> None:
             "DE_hombre": "DE hombres", "d": "d de Cohen", "magnitud": "Magnitud",
             "q_bh": "q (BH)"})
         st.dataframe(vista.style.format({"p": "{:.4f}", "q (BH)": "{:.4f}"}),
-                     hide_index=True, use_container_width=True)
+                     hide_index=True, width="stretch")
         st.caption("d positiva = las mujeres puntúan más alto. Magnitud según los umbrales "
                    "convencionales: < 0,20 trivial, < 0,50 pequeño, < 0,80 mediano.")
     else:
@@ -779,7 +803,7 @@ def _tab_por_grupo(a) -> None:
             vista = df.drop(columns=["clave"]).rename(columns={"escala": "Escala",
                                                                "q_bh": "q (BH)"})
             st.dataframe(vista.style.format({"p": "{:.4f}", "q (BH)": "{:.4f}"}),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width="stretch")
             st.caption(nota)
         else:
             st.info("Sin datos suficientes para esta comparación en este nivel.")
@@ -820,7 +844,7 @@ def _tab_modelos(a) -> None:
                 return ["font-weight: 700" if fuerte else "" for _ in fila]
 
             st.dataframe(vista.style.apply(_pinta, axis=1).format({"p": "{:.4f}"}),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width="stretch")
         if m.get("aviso"):
             st.warning(m["aviso"])
         st.divider()
@@ -830,7 +854,7 @@ def _tab_modelos(a) -> None:
     if icc:
         tabla = pd.DataFrame([dict(Escala=cat.meta(k)["label"], CCI=v)
                               for k, v in icc.items()])
-        st.dataframe(tabla, hide_index=True, use_container_width=True)
+        st.dataframe(tabla, hide_index=True, width="stretch")
     else:
         st.info("No hay CCI para este nivel.")
     st.caption(NOTA_ICC)
@@ -851,7 +875,7 @@ def _tab_calidad(a, informe) -> None:
                 tabla = pd.DataFrame(sorted(faltantes.items(),
                                             key=lambda kv: -_conteo(kv[1])),
                                      columns=["Escala", "% faltante"])
-                st.dataframe(tabla, hide_index=True, use_container_width=True)
+                st.dataframe(tabla, hide_index=True, width="stretch")
             else:
                 st.caption("Sin dato de faltantes.")
             st.markdown("**Edades fuera del rango validado**")
@@ -859,7 +883,7 @@ def _tab_calidad(a, informe) -> None:
             if fuera:
                 st.dataframe(pd.DataFrame(sorted(fuera.items()),
                                           columns=["Escala", "Casos fuera de rango"]),
-                             hide_index=True, use_container_width=True)
+                             hide_index=True, width="stretch")
                 st.caption("Se conservan y se declaran; no se excluyen.")
             else:
                 st.caption("Ninguna edad cae fuera del rango validado.")
@@ -869,7 +893,7 @@ def _tab_calidad(a, informe) -> None:
             if no_map:
                 filas = [dict(Escala=k, Etiquetas=" · ".join(map(str, v)))
                          for k, v in no_map.items()]
-                st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
                 st.warning("Estas respuestas quedaron como faltantes. Si son muchas, hay que "
                            "añadir la etiqueta al mapa del catálogo antes de publicar cifras.")
             else:
@@ -892,7 +916,7 @@ def _tab_calidad(a, informe) -> None:
             columns={"escala": "Escala", "n": "N con puntuación",
                      "pct_faltante": "% sin puntuación"})
         st.dataframe(tabla.sort_values("% sin puntuación", ascending=False),
-                     hide_index=True, use_container_width=True)
+                     hide_index=True, width="stretch")
 
     st.divider()
     st.markdown("**Avisos de esta corrida**")
@@ -929,7 +953,7 @@ def _tab_exportar(analisis: dict, informes: list | None) -> None:
             st.download_button(
                 f"⬇️ {nombre}", data=contenido.encode("utf-8-sig"), file_name=nombre,
                 mime="text/csv" if nombre.endswith(".csv") else "text/markdown",
-                disabled=not contenido, use_container_width=True,
+                disabled=not contenido, width="stretch",
                 key=f"inv_dl_{nombre}", help=descripciones.get(nombre, ""))
             st.caption(descripciones.get(nombre, ""))
 
@@ -939,7 +963,7 @@ def _tab_exportar(analisis: dict, informes: list | None) -> None:
         "📦 Descargar el paquete completo (ZIP)",
         data=paquete_zip(analisis, informes),
         file_name=f"estudiantes360_corrida_{sello}.zip",
-        mime="application/zip", type="primary", use_container_width=True,
+        mime="application/zip", type="primary", width="stretch",
         key="inv_dl_zip")
     st.caption(f"Contiene los {len(ARCHIVOS_PAQUETE)} archivos de arriba más el hash de "
                "estructura de la corrida.")

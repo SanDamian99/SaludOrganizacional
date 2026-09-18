@@ -169,7 +169,7 @@ def _view_executive(df, scores):
     c4.metric("🔴 Áreas de atención", len(riesgo))
 
     st.markdown("#### Semáforo de bienestar")
-    st.plotly_chart(render_semaforo(scores), use_container_width=True)
+    st.plotly_chart(render_semaforo(scores), width="stretch")
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -214,11 +214,11 @@ def _view_dimension(df, scores):
         st.plotly_chart(
             render_gauge(info["score"], selected[:30], info["scale_min"],
                          info["scale_max"], SEM_COLORS.get(info["color"], "#2E5FAC")),
-            use_container_width=True)
+            width="stretch")
     with d:
-        st.plotly_chart(render_distribution(df, selected, cols), use_container_width=True)
+        st.plotly_chart(render_distribution(df, selected, cols), width="stretch")
 
-    st.plotly_chart(render_item_bars(df, selected, cols), use_container_width=True)
+    st.plotly_chart(render_item_bars(df, selected, cols), width="stretch")
 
     if st.button(f"✨ Interpretar «{selected}» con IA"):
         client = get_cached_client()
@@ -268,7 +268,7 @@ def _view_profile(df):
                     fig.update_layout(height=300, margin=dict(l=40, r=20, t=20, b=60),
                                       coloraxis_showscale=False,
                                       xaxis=dict(automargin=True), yaxis=dict(automargin=True))
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
                 i += 1
             if i == 0:
                 st.caption("No se encontraron columnas de esta categoría en los datos.")
@@ -294,7 +294,7 @@ def _view_academic(df, scores):
         }
         for dim, info in sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)
     ])
-    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.dataframe(table, width="stretch", hide_index=True)
     st.caption("α = alfa de Cronbach (consistencia interna; aceptable ≥ 0.70). "
                "Puntajes orientados a bienestar (mayor = mejor).")
 
@@ -305,7 +305,7 @@ def _view_academic(df, scores):
         fig = px.imshow(corr, text_auto=".2f", aspect="auto",
                         color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
         fig.update_layout(height=560, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### Comparación por grupo")
     cat_cols = [c for c in df.columns
@@ -325,7 +325,7 @@ def _view_academic(df, scores):
                      labels={"_grupo": group_col.split(")")[-1].strip(), "mean": "Puntaje medio"})
         fig.update_layout(height=380, margin=dict(l=40, r=20, t=20, b=80),
                           coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("N por grupo: " + ", ".join(f"{r['_grupo']}={int(r['count'])}" for _, r in agg.iterrows()))
     else:
         st.caption("No hay variables de agrupación adecuadas en los datos.")
@@ -398,7 +398,7 @@ def _view_indicators(df, enr):
         if not items:
             continue
         st.markdown(f"##### {theme}")
-        st.plotly_chart(_theme_bar(items), use_container_width=True)
+        st.plotly_chart(_theme_bar(items), width="stretch")
         if theme.startswith("🧠"):
             aten = [i["label"] for _, i in items if i["level"] == "Atención"]
             fav = [i["label"] for _, i in items if i["level"] == "Favorable"]
@@ -421,7 +421,7 @@ def _view_indicators(df, enr):
              "N": i["n"], "Nivel (muestra)": i["level"]}
             for _, i in enr.items()
         ])
-        st.dataframe(table, use_container_width=True, hide_index=True)
+        st.dataframe(table, width="stretch", hide_index=True)
 
     st.markdown("#### Explorar un indicador")
     keys = list(enr.keys())
@@ -437,7 +437,7 @@ def _view_indicators(df, enr):
             fig = px.histogram(df, x=sel, nbins=20, color_discrete_sequence=["#2E5FAC"])
             fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40),
                               xaxis_title=info["label"], yaxis_title="Frecuencia")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         groups = _group_columns(df, exclude=set(enr.keys()))
         if groups:
@@ -448,7 +448,7 @@ def _view_indicators(df, enr):
                           labels={gcol: _label(gcol), "mean": f"{info['label']} (media)"})
             fig2.update_layout(height=340, margin=dict(l=40, r=20, t=20, b=70),
                                coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width="stretch")
             st.caption("N por grupo: " + ", ".join(f"{r[gcol]}={int(r['count'])}" for _, r in agg.iterrows()))
 
         if st.button(f"✨ Interpretar «{info['label']}» con IA"):
@@ -501,7 +501,7 @@ def _view_generic_academic(df, enr):
         fig = px.imshow(corr, text_auto=False, aspect="auto",
                         color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
         fig.update_layout(height=680, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("Correlaciones de Pearson entre los indicadores detectados. "
                    "Nota: sobre puntajes crudos (sin orientar).")
     else:
@@ -513,7 +513,7 @@ def _sidebar(df_full, wellbeing=True):
     with st.sidebar:
         st.subheader("📄 Informe")
         org = st.text_input("Organización", "Organización", key="dash_org")
-        if st.button("Generar Informe PDF", use_container_width=True):
+        if st.button("Generar Informe PDF", width="stretch"):
             with st.spinner("Generando informe profesional..."):
                 try:
                     data = st.session_state.get("_df_view", df_full)
@@ -532,7 +532,7 @@ def _sidebar(df_full, wellbeing=True):
                     st.download_button(
                         "⬇️ Descargar Informe PDF", data=pdf_bytes,
                         file_name=fname, mime="application/pdf",
-                        use_container_width=True)
+                        width="stretch")
                     st.success("✅ Informe generado.")
                 except Exception as e:
                     st.error(f"Error al generar informe: {e}")
@@ -546,7 +546,7 @@ def _sidebar(df_full, wellbeing=True):
         csv = df_view.to_csv(index=False).encode("utf-8")
         st.download_button("📥 Descargar datos filtrados (CSV)", data=csv,
                            file_name="datos_filtrados.csv", mime="text/csv",
-                           use_container_width=True)
+                           width="stretch")
     return df_view
 
 

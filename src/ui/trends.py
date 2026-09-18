@@ -40,7 +40,7 @@ def render_trends():
                     xaxis=dict(automargin=True),
                     yaxis=dict(automargin=True)
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
             else:
                 st.warning("No se encontraron columnas numéricas para analizar tendencias temporales.")
         except Exception as e:
@@ -79,7 +79,7 @@ def render_trends():
                 xaxis=dict(tickangle=-45, automargin=True),
                 yaxis=dict(automargin=True)
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width="stretch")
             
             # Box plot for distribution
             st.markdown("#### Distribución Detallada")
@@ -92,7 +92,7 @@ def render_trends():
                 xaxis=dict(tickangle=-45, automargin=True),
                 yaxis=dict(automargin=True)
             )
-            st.plotly_chart(fig_box, use_container_width=True)
+            st.plotly_chart(fig_box, width="stretch")
 
             # --- AI Interpretation ---
             st.markdown("### 🤖 Interpretación IA")
