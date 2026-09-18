@@ -523,3 +523,69 @@ Para preguntas técnicas o reportar problemas:
 ---
 
 **Última actualización**: 2026-02-04
+
+---
+
+## Módulo Estudiantes 360
+
+Autorreporte de estudiantes de colegios oficiales de Chía. Es independiente del
+pipeline de bienestar organizacional: no pasa por `DATA_DICTIONARY` ni por
+`ExcelProcessor`, porque el instrumento es un conjunto de escalas psicométricas
+con puntos de corte publicados, no una batería de indicadores.
+
+### Capas
+
+```
+src/estudiantes/
+├── catalog.py    Única fuente de verdad: ítems, inversos, subescalas, rangos,
+│                 bandas con su fuente, y los textos por audiencia (MENSAJES).
+│                 Si un corte cambia, cambia aquí y toda la app se actualiza.
+├── ingest.py     Lee los dos formularios de Google Forms, anonimiza (hash del
+│                 nombre; la columna de nombre no sale de aquí), normaliza los
+│                 colegios, aplica las reglas de exclusión y convierte etiquetas
+│                 a números. Devuelve (DataFrame, InformeIngesta).
+├── scoring.py    Subescalas con inversos y prorrateo, bandas del SDQ, α de
+│                 Cronbach con IC por bootstrap, descriptivos, prevalencias
+│                 sobre corte, terciles y percentiles propios.
+├── stats.py      Wilson, Spearman con IC y Benjamini-Hochberg, d de Cohen,
+│                 Kruskal-Wallis, OLS con errores robustos por colegio, CCI y
+│                 contrastes por tercil. Toda desagregación respeta MIN_GROUP_N.
+└── pipeline.py   Orquesta lo anterior y devuelve un objeto `Analisis` por nivel
+                  educativo. Es la frontera única entre cálculo y presentación.
+```
+
+```
+src/ui/
+├── estudiantes.py                      Despachador: carga cacheada + selector
+│                                       de audiencia.
+└── views/
+    ├── estudiantes_comunidad.py        Vista principal: colegios, familias y
+    │                                   municipio. Tarjetas con «qué significa»
+    │                                   y «qué hacer», ruta de atención.
+    └── estudiantes_investigador.py     Vista secundaria: Tabla 1, cortes,
+                                        correlaciones, modelos, exportables.
+```
+
+### Reglas estructurales
+
+- **Las vistas no calculan.** Solo presentan lo que devuelve `pipeline.analizar`,
+  para que la vista comunitaria, la de investigación y el artículo no puedan
+  divergir.
+- **Privacidad por construcción.** La ingesta convierte el nombre en un hash y lo
+  descarta; ninguna función devuelve, registra o escribe nombres. Los grupos con
+  menos de `catalog.MIN_GROUP_N` casos no se muestran en ninguna vista.
+- **Los cortes llevan fuente.** Cada banda o umbral del catálogo cita de dónde
+  viene, y ninguno es colombiano: se presentan como referencia externa junto a
+  los percentiles de la propia muestra.
+- **Los textos para la comunidad son fijos.** Vienen de `catalog.MENSAJES` y los
+  revisa el equipo investigador. No los genera la IA.
+
+### Verificación
+
+`tests/test_estudiantes.py` combina pruebas unitarias con datos sintéticos de
+resultado conocido (inversión de ítems, prorrateo, bandas, anonimización,
+invalidación del bloque ERQ-CA) y pruebas de regresión contra la corrida de
+referencia guardada en
+`docs/instrumentos/fixtures/resultados_preliminares_estudiantes.json`. Las de
+regresión se omiten solas si los formularios no están en el directorio de
+trabajo, así que la suite corre en cualquier máquina.

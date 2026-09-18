@@ -305,19 +305,28 @@ estrategias opuestas; «nada» en todo es implausible). Afecta 166 filas (17 % d
 regla, α reevaluación = 0,81 y supresión = 0,70; sin ella, la correlación reevaluación-supresión se
 infla a 0,70 (artefacto).
 
-### 8.5 Reglas de limpieza aplicadas (reproducibles en el script)
-1. Sin consentimiento → fuera (27, todas vacías).
-2. Filas de prueba: mismo nombre el mismo día en colegios distintos, y colegios con una sola
-   respuesta en toda la base (ráfaga de 5 envíos el 4-sep entre 10:15 y 10:45) → fuera (5).
-3. Duplicados por nombre → se conserva el **primer** envío (5; los pares comparten 98-100 % de
-   respuestas idénticas).
-4. Colegio: 14 etiquetas crudas (con variantes «I.EO»/«I.E.O» y sedes) → 6 códigos:
+### 8.5 Reglas de limpieza aplicadas
+Implementadas en `src/estudiantes/ingest.py` y verificadas por `tests/test_estudiantes.py`.
+Se aplican **en este orden**, que importa:
+
+1. **Sin consentimiento → fuera** (27 filas, todas vacías).
+2. **Filas de prueba:** la misma persona, el mismo día, en colegios distintos → fuera (4). Es el
+   patrón de quien prueba el formulario: el 4 de septiembre un mismo nombre aparece en cuatro
+   colegios en media hora.
+3. **Colegios con una sola respuesta en toda la base → fuera** (1). Se recalcula *después* del
+   paso 2, porque quitar una fila de prueba puede dejar a un colegio con una sola respuesta; el
+   cálculo se repite hasta que no quedan colegios de un solo caso.
+4. **Duplicados → se conserva el primer envío** (5 en total: 4 dentro de un mismo formulario y
+   1 entre los dos, de un estudiante que respondió ambos). La deduplicación entre archivos usa
+   el identificador anónimo, que es determinista, así que no necesita el nombre.
+   Los pares duplicados comparten entre el 98 % y el 100 % de las respuestas.
+5. **Colegio:** 14 etiquetas crudas (con variantes «I.EO»/«I.E.O» y sedes) → 6 códigos:
    LauV, JJC, LaBalsa, SJMEB (sedes Principal y Samaria), CdP, DiosCh. Con n ≥ 10 en secundaria:
    LauV 435, JJC 297, LaBalsa 137, SJMEB 63. CdP (8) y DiosCh (3) quedan enmascarados.
-5. Edad 18 (5 casos en 10.º) se conserva con nota; el SDQ autoinforme está validado hasta 17.
-6. Primaria (8-12) responde SDQ y MSPSS por debajo de la edad validada → se analiza **aparte** y
+6. Edad 18 (5 casos en 10.º) se conserva con nota; el SDQ autoinforme está validado hasta 17.
+7. Primaria (8-12) responde SDQ y MSPSS por debajo de la edad validada → se analiza **aparte** y
    se rotula como exploratorio; sus bandas SDQ son orientativas.
-7. Faltantes: mínimos (5 filas en secundaria, máx. 10 ítems, casi todos en Toma de decisiones).
+8. Faltantes: mínimos (5 filas en secundaria, máx. 10 ítems, casi todos en Toma de decisiones).
    Subescala = faltante si falta más de un ítem; si falta uno, prorrateo.
 
 ### 8.6 Fechas

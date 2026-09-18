@@ -59,6 +59,7 @@ with st.sidebar:
     st.title("Navegación")
     page = st.radio("Ir a:", [
         "Dashboard",
+        "Estudiantes 360",
         "Chat con IA",
         "Cargar Datos",
         "Analisis de tendencias",
@@ -69,6 +70,10 @@ with st.sidebar:
 if page == "Dashboard":
     from src.ui.dashboard import render_dashboard
     render_dashboard()
+
+elif page == "Estudiantes 360":
+    from src.ui.estudiantes import render_estudiantes
+    render_estudiantes()
 
 elif page == "Chat con IA":
     from src.ui.chat import render_chat
