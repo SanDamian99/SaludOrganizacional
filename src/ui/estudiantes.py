@@ -16,6 +16,7 @@ import os
 
 import streamlit as st
 
+from src.core import modo as modo_app
 from src.estudiantes import catalog as cat
 from src.estudiantes import pipeline
 
@@ -64,6 +65,29 @@ def _sin_datos(base: str) -> None:
                         f"edad {e.edad_validada[0]}–{e.edad_validada[1]}{marca}")
 
 
+def colegio_de_la_url(analisis) -> str | None:
+    """Colegio pedido en la URL (`?colegio=LauV`), si existe y es mostrable.
+
+    Permite dar a cada colegio su propio enlace sin exponer los de los demás.
+    Un código que no existe, o un colegio con menos de MIN_GROUP_N respuestas,
+    se ignora: el enlace no sirve para sondear la base.
+    """
+    try:
+        pedido = str(st.query_params.get("colegio", "")).strip()
+    except Exception:                                      # noqa: BLE001
+        return None
+    if not pedido:
+        return None
+    for a in (analisis or {}).values():
+        if a is None or "Colegio" not in a.datos.columns:
+            continue
+        cuenta = a.datos["Colegio"].value_counts()
+        for codigo, n in cuenta.items():
+            if str(codigo).lower() == pedido.lower() and n >= cat.MIN_GROUP_N:
+                return str(codigo)
+    return None
+
+
 def render_estudiantes() -> None:
     base = _raiz_proyecto()
     try:
@@ -79,15 +103,26 @@ def render_estudiantes() -> None:
         _sin_datos(base)
         return
 
+    # El modo de despliegue decide qué vistas existen. En un despliegue público
+    # solo hay una, así que no se muestra un selector que no elige nada.
+    permitidas = modo_app.audiencias_permitidas() or list(AUDIENCIAS)
     with st.sidebar:
         st.markdown("---")
         st.markdown("**Estudiantes 360**")
-        clave = st.radio("Vista", list(AUDIENCIAS), format_func=lambda k: AUDIENCIAS[k],
-                         key="estudiantes_audiencia")
+        if len(permitidas) > 1:
+            clave = st.radio("Vista", permitidas, format_func=lambda k: AUDIENCIAS[k],
+                             key="estudiantes_audiencia")
+        else:
+            clave = permitidas[0]
         total = sum(a.n for a in analisis.values())
         st.caption(f"{total:,}".replace(",", " ") + " respuestas válidas")
 
     if clave == "comunidad":
+        # Enlace por colegio: ?colegio=LauV deja su colegio preseleccionado la
+        # primera vez. Después manda lo que la persona elija en el selector.
+        preseleccion = colegio_de_la_url(analisis)
+        if preseleccion and "est_com_colegio" not in st.session_state:
+            st.session_state["est_com_colegio"] = preseleccion
         from src.ui.views.estudiantes_comunidad import render_comunidad
         render_comunidad(analisis, informes)
     else:

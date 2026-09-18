@@ -158,6 +158,16 @@ GRANT SELECT ON obs360.corridas, obs360.resultados, obs360.mensajes
 REVOKE INSERT, UPDATE, DELETE ON obs360.corridas, obs360.resultados,
     obs360.mensajes FROM anon, authenticated;
 
+-- El rol de servicio sí escribe: es el que usa el publicador desde el equipo de
+-- quien procesa. Salta RLS, pero aun así necesita permisos de esquema y tabla.
+GRANT USAGE ON SCHEMA obs360 TO service_role, postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA obs360 TO service_role, postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA obs360 TO service_role, postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA obs360
+    GRANT ALL ON TABLES TO service_role, postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA obs360
+    GRANT ALL ON SEQUENCES TO service_role, postgres;
+
 -- ── 5. Vistas de conveniencia ──────────────────────────────────────────────
 -- Lo que la plataforma consulta: la última corrida publicada.
 CREATE OR REPLACE VIEW obs360.ultima_corrida
@@ -178,7 +188,7 @@ COMMENT ON VIEW obs360.resultados_vigentes IS
   'vista respete las políticas RLS de quien consulta, en lugar de saltárselas.';
 
 GRANT SELECT ON obs360.ultima_corrida, obs360.resultados_vigentes
-    TO anon, authenticated;
+    TO anon, authenticated, service_role;
 
 -- ── 6. Higiene de lo que ya existía ────────────────────────────────────────
 -- La tabla `processed_data` se creó con inserción y lectura anónimas abiertas:

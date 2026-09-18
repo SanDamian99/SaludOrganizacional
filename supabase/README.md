@@ -109,19 +109,94 @@ que nunca entró al historial de git.
 El token de acceso de esta sesión es temporal: conviene **revocarlo** en
 `Supabase → Account → Access Tokens` cuando termine el trabajo.
 
-## Lo que falta para desplegar la aplicación
+## Estado de la carga
 
-1. **Ejecutar la publicación** (el comando de arriba). Está probada en ensayo;
-   solo falta dispararla.
-2. **Decidir si la vista comunidad se abre al público.** El plan aprobado puso
-   como condición previa que la ruta de derivación esté acordada con los
-   colegios. Con un 25 % de estudiantes que reportan pensar en la muerte con
-   frecuencia o siempre, encontrar casos sin tener a dónde remitirlos es peor
-   que no medir. Es la decisión 04 del plan y sigue abierta.
-3. **Desplegar en Streamlit Community Cloud**: conectar el repositorio, apuntar a
-   `main.py` y pegar en *Advanced settings → Secrets* solo `SUPABASE_URL`,
-   `SUPABASE_KEY` y `YOUR_API_KEY`. La clave `service_role` y el token de acceso
-   **no** van ahí.
-4. **Sacar los CSV de la raíz del repositorio.** Están ignorados por git, pero
+**Corrida 2**, versión `2026-09-18-3a83c4639ca7`: 797 filas agregadas
+(secundaria 943, primaria 282) y 20 mensajes por rol. Está **sin aprobar**, y se
+verificó que la puerta funciona:
+
+| Con la corrida sin aprobar | Resultado |
+|---|---|
+| Clave pública leyendo `corridas` | 0 filas |
+| Clave pública leyendo `resultados` | 0 filas |
+| Clave pública intentando escribir | HTTP 401 |
+| Clave de servicio leyendo `resultados` | 797 filas |
+
+Para aprobarla, en el SQL Editor:
+
+```sql
+UPDATE obs360.corridas SET publicada = true WHERE id = 2;
+```
+
+Desde ese momento la clave pública ve las 797 filas, y solo esas: una corrida
+posterior vuelve a entrar oculta.
+
+> El esquema `obs360` tuvo que añadirse a los esquemas expuestos de la API REST
+> (*Settings → API → Exposed schemas*), y el rol `service_role` necesitó permisos
+> propios sobre él. Las dos cosas están en el script.
+
+## Cómo se abre la vista de comunidad a quien tenga que verla
+
+Hay dos puertas distintas y conviene no confundirlas.
+
+**La puerta del contenido** es la bandera `publicada` de la corrida. Mientras esté
+en false, la aplicación no muestra ninguna cifra, ni siquiera desplegada en
+público. Es reversible en una línea de SQL.
+
+**La puerta del acceso** es el modo de despliegue, en `src/core/modo.py`:
+
+| `OBS360_MODO` | Qué existe en esa ejecución |
+|---|---|
+| `completo` (por defecto) | todo: local y equipo interno |
+| `comunidad` | **solo** la vista de estudiantes para colegios, familias y municipio |
+| `investigador` | solo el módulo de estudiantes, vista de investigación |
+
+En modo `comunidad` el punto de entrada corta **antes** de importar la vista de
+investigación, el cargador de archivos, el chat, los informes y el panel técnico:
+no están escondidos, no existen. Un visitante no llega a ellos ni escribiendo la
+URL, y `?debug=1` no abre nada. Un valor mal escrito en la configuración cae en
+`comunidad`, el más restrictivo, nunca en el más permisivo.
+
+### Los tres caminos, según quién tenga que ver
+
+1. **Rectores y orientación escolar.** Un despliegue privado en Streamlit
+   Community Cloud con `OBS360_MODO = "investigador"` o `"completo"` y la lista
+   de correos autorizados (*Settings → Sharing → invite viewers*). Entran con su
+   correo; no hay contraseñas que repartir.
+2. **Cada colegio, su propio enlace.** El mismo despliegue público admite
+   `?colegio=LauV`, que deja ese colegio preseleccionado. Un código inexistente o
+   un colegio con menos de 10 respuestas se ignora, así que el parámetro no sirve
+   para sondear la base. Es comodidad, no seguridad: cualquiera puede cambiar el
+   código y ver a otro colegio, y eso es aceptable porque todo lo que se muestra
+   es agregado.
+3. **Familias.** Lo más práctico y lo más seguro es que **no** necesiten entrar:
+   la vista de comunidad genera un informe de una página descargable, y el colegio
+   lo reparte. Nadie tiene que crear una cuenta para leer cuatro cifras y una ruta
+   de atención. Si aun así se quiere dar acceso, el despliegue público con
+   `OBS360_MODO = "comunidad"` ya es seguro por construcción.
+
+### Desplegar en Streamlit Community Cloud
+
+Conectar el repositorio, apuntar a `main.py` y pegar en *Advanced settings →
+Secrets* **solo** esto:
+
+```toml
+OBS360_MODO = "comunidad"        # o "investigador" para el despliegue del equipo
+SUPABASE_URL = "https://nkjyuviycatgrzqjnsoa.supabase.co"
+SUPABASE_KEY = "clave-anon"
+YOUR_API_KEY = "clave-de-gemini"  # opcional; el modo comunidad no usa IA
+```
+
+La clave `service_role` y el token de acceso **no** van ahí. Nunca.
+
+## Lo que falta
+
+1. **Aprobar la corrida 2** (la línea de SQL de arriba). Es tu decisión en persona.
+2. **La ruta de derivación con los colegios.** El plan aprobado la puso como
+   condición previa para abrir la vista de comunidad. Con un 25 % de estudiantes
+   que reportan pensar en la muerte con frecuencia o siempre, encontrar casos sin
+   tener a dónde remitirlos es peor que no medir.
+3. **Sacar los CSV de la raíz del repositorio.** Están ignorados por git, pero
    contienen nombres de menores: su sitio es una carpeta fuera del proyecto, como
    ya se hizo con los datos de cuidadores.
+4. **Revocar el token de acceso** de esta sesión cuando termine el trabajo.

@@ -2,20 +2,37 @@
 Observatorio de Salud Organizacional — Main Entry Point
 """
 import streamlit as st
+from src.core import modo as modo_app
 from src.core.state import init_session_state
-from src.ai.gemini_client import get_gemini_api_key
-from src.ui.reports import render_reports_page
+
+_MODO = modo_app.modo()
+_PUBLICO = _MODO == modo_app.COMUNIDAD
 
 # Page Config
 st.set_page_config(
-    page_title="Observatorio de Salud Organizacional",
-    page_icon="📊",
+    page_title=("Observatorio 360 · Estudiantes" if _PUBLICO
+                else "Observatorio de Salud Organizacional"),
+    page_icon=("🎒" if _PUBLICO else "📊"),
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # Initialize State
 init_session_state()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Despliegue público: solo la vista de estudiantes para la comunidad.
+# Se corta aquí, antes de importar el cargador de archivos, el chat, los
+# informes o la vista de investigación. En esta ejecución esos módulos no
+# existen, así que no hay URL ni clic que lleve a ellos.
+# ─────────────────────────────────────────────────────────────────────────────
+if _PUBLICO:
+    from src.ui.estudiantes import render_estudiantes
+    render_estudiantes()
+    st.stop()
+
+from src.ai.gemini_client import get_gemini_api_key
+from src.ui.reports import render_reports_page
 
 # --- Debug Mode (query param: ?debug=1 OR ?debug=true) ---
 debug_param = st.query_params.get("debug", "").lower()
@@ -57,14 +74,11 @@ if _datasets:
 # --- Sidebar Navigation ---
 with st.sidebar:
     st.title("Navegación")
-    page = st.radio("Ir a:", [
-        "Dashboard",
-        "Estudiantes 360",
-        "Chat con IA",
-        "Cargar Datos",
-        "Analisis de tendencias",
-        "Reportes"
-    ])
+    _todas = ["Dashboard", "Estudiantes 360", "Chat con IA", "Cargar Datos",
+              "Analisis de tendencias", "Reportes"]
+    _permitidas = modo_app.paginas_permitidas()
+    _opciones = [p for p in _todas if _permitidas is None or p in _permitidas]
+    page = st.radio("Ir a:", _opciones)
 
 # --- Main Routing ---
 if page == "Dashboard":
