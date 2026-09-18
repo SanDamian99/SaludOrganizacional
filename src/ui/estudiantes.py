@@ -18,7 +18,7 @@ import streamlit as st
 
 from src.core import modo as modo_app
 from src.estudiantes import catalog as cat
-from src.estudiantes import pipeline
+from src.estudiantes import lectura, pipeline
 
 AUDIENCIAS = {
     "comunidad": "Colegios, familias y municipio",
@@ -37,18 +37,49 @@ def _analizar(firma: tuple) -> tuple:
     return pipeline.cargar_y_analizar(rutas)
 
 
+@st.cache_resource(show_spinner="Leyendo los resultados publicados…")
+def _leer_publicado(_clave: str) -> tuple:
+    return lectura.cargar_desde_supabase()
+
+
 def cargar_analisis(base: str | None = None):
-    """(analisis, informes) o (None, None) si los formularios no están en disco."""
+    """(analisis, informes, origen).
+
+    Dos fuentes, en este orden:
+      1. **Los formularios en disco.** Es lo que se usa en la máquina de quien
+         procesa: puntúa desde los ítems y permite filtrar por colegio y grado.
+      2. **La corrida publicada en Supabase.** Es lo que usa la aplicación
+         desplegada. Solo trae agregados, así que no hay filtros por grupo, y
+         eso es deliberado: un despliegue no debería poder recalcular nada sobre
+         individuos.
+
+    `origen` es "archivos", "supabase" o None si no hay ninguna de las dos.
+    """
     base = base or _raiz_proyecto()
-    rutas = pipeline.localizar_formularios(base)
-    if not rutas:
-        return None, None
-    firma = tuple((r, os.path.getmtime(r)) for r in rutas)
-    return _analizar(firma)
+    # `OBS360_FUENTE=supabase` fuerza la segunda fuente aunque los archivos estén
+    # en disco. Sirve para ver exactamente lo que mostrará el despliegue.
+    forzada = os.environ.get("OBS360_FUENTE", "").strip().lower()
+    rutas = [] if forzada == "supabase" else pipeline.localizar_formularios(base)
+    if rutas:
+        firma = tuple((r, os.path.getmtime(r)) for r in rutas)
+        analisis, informes = _analizar(firma)
+        return analisis, informes, "archivos"
+
+    if lectura.disponible():
+        analisis, informes, corrida = _leer_publicado("v1")
+        if analisis:
+            return analisis, informes, "supabase"
+    return None, None, None
 
 
 def _sin_datos(base: str) -> None:
     st.title("🎒 Estudiantes 360")
+    if lectura.disponible():
+        st.warning(
+            "Hay conexión con la base de datos, pero **ninguna corrida está "
+            "aprobada** todavía, así que no hay resultados que mostrar.\n\n"
+            "Quien administre el proyecto debe marcar la corrida como publicada.",
+            icon="⏳")
     st.info(
         "Todavía no encuentro los formularios de estudiantes.\n\n"
         "Se esperan dos exportaciones de Google Forms, en `.csv` o `.xlsx`, cuyo nombre "
@@ -91,7 +122,7 @@ def colegio_de_la_url(analisis) -> str | None:
 def render_estudiantes() -> None:
     base = _raiz_proyecto()
     try:
-        analisis, informes = cargar_analisis(base)
+        analisis, informes, origen = cargar_analisis(base)
     except Exception as exc:                                   # noqa: BLE001
         st.title("🎒 Estudiantes 360")
         st.error(f"No se pudieron procesar los formularios: {exc}")
@@ -116,6 +147,11 @@ def render_estudiantes() -> None:
             clave = permitidas[0]
         total = sum(a.n for a in analisis.values())
         st.caption(f"{total:,}".replace(",", " ") + " respuestas válidas")
+        if origen == "supabase":
+            st.caption("Fuente: corrida publicada")
+
+    if origen == "supabase":
+        st.info(lectura.AVISO_SIN_DATOS_CRUDOS, icon="🗄️")
 
     if clave == "comunidad":
         # Enlace por colegio: ?colegio=LauV deja su colegio preseleccionado la

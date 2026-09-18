@@ -117,7 +117,8 @@ def test_el_lote_real_solo_tiene_tipos_y_agrupaciones_previstas(lote_real):
     _, filas = lote_real
     tipos = {f["tipo"] for f in filas}
     assert tipos <= {"descriptivo", "banda", "corte", "correlacion", "grupo",
-                     "modelo", "tercil", "percentil", "icc", "contraste", "item"}
+                     "modelo", "tercil", "percentil", "icc", "contraste", "item",
+                     "muestra", "solapamiento", "ingesta"}
     for f in filas:
         assert f["nivel"] in ("secundaria", "primaria")
         assert isinstance(f["detalle"], dict)
@@ -131,3 +132,26 @@ def test_ninguna_fila_viene_de_datos_individuales(lote_real):
     assert len(filas) < n_estudiantes
     # y toda fila declara un N de grupo, no de individuo
     assert all(f["n"] >= cat.MIN_GROUP_N for f in filas)
+
+
+def test_las_banderas_se_publican_como_booleanos():
+    """`bool` hereda de `int`: convertirlas a 1.0 rompe al leerlas.
+
+    Con una bandera numérica, filtrar un DataFrame por esa columna se
+    interpreta como selección de columnas y la vista revienta.
+    """
+    fila = publicar._fila("secundaria", "correlacion", "SDQ_Total", 943, 0.5,
+                          significativa=True, validada=False, p=0.001, casos=12)
+    assert fila["detalle"]["significativa"] is True
+    assert fila["detalle"]["validada"] is False
+    assert isinstance(fila["detalle"]["p"], float)
+    assert isinstance(fila["detalle"]["casos"], float)
+
+
+def test_el_lote_real_no_trae_banderas_numericas(lote_real):
+    _, filas = lote_real
+    for f in filas:
+        for clave in ("significativa", "significativo", "validada", "orientado"):
+            if clave in f["detalle"]:
+                assert isinstance(f["detalle"][clave], bool), \
+                    f"{f['tipo']}/{f['clave']}: {clave} no es booleano"

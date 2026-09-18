@@ -66,8 +66,18 @@ def _num(v):
 
 def _fila(nivel, tipo, clave, n, valor, *, escala=None, agrupacion="total",
           grupo=None, ic_inf=None, ic_sup=None, **detalle) -> dict:
-    limpio = {k: (_num(v) if isinstance(v, (int, float, np.number)) else v)
-              for k, v in detalle.items() if v is not None and v == v}
+    def limpiar(v):
+        # Los booleanos van antes que los números: `bool` hereda de `int`, y
+        # convertirlos a 1.0 rompe al leerlos (filtrar un DataFrame por una
+        # columna de números se interpreta como selección de columnas).
+        if isinstance(v, (bool, np.bool_)):
+            return bool(v)
+        if isinstance(v, (int, float, np.number)):
+            return _num(v)
+        return v
+
+    limpio = {k: limpiar(v) for k, v in detalle.items()
+              if v is not None and (isinstance(v, (bool, np.bool_)) or v == v)}
     return dict(nivel=nivel, tipo=tipo, clave=str(clave),
                 escala=escala or cat.meta(str(clave))["label"],
                 agrupacion=agrupacion, grupo=grupo, n=int(n),
@@ -205,6 +215,73 @@ def aplanar(analisis: dict) -> list[dict]:
                 filas.append(_fila(nivel, "item", f["item"], f["n"], f["M"],
                                    escala=cat.PSSM.nombre, DE=f["DE"],
                                    orientado=True))
+
+        # descripción de la muestra, en una sola fila cuyo N es el del nivel
+        if a.muestra:
+            # La muestra va anidada en un solo campo: sus claves (n, sexo, edad…)
+            # chocarían con las columnas de la fila.
+            filas.append(_fila(
+                nivel, "muestra", "muestra", a.n, a.n,
+                escala="Descripción de la muestra",
+                muestra={k: (_enmascarar_conteos(v) if isinstance(v, dict) else v)
+                         for k, v in a.muestra.items()},
+                enmascarados=a.enmascarados or {}, escalas=list(a.escalas or []),
+                avisos=list(a.avisos or [])))
+
+        # comorbilidad entre indicadores con corte
+        if a.solapamiento:
+            filas.append(_fila(nivel, "solapamiento", "SDQ_y_ARI",
+                               a.solapamiento.get("n", a.n),
+                               a.solapamiento.get("pct_ambos"),
+                               escala="Solapamiento entre indicadores",
+                               solapamiento={k: v for k, v in a.solapamiento.items()
+                                             if k != "n"}))
+    return filas
+
+
+def _enmascarar_conteos(d: dict) -> dict:
+    """Sustituye por «<10» cualquier celda por debajo del mínimo publicable.
+
+    Las distribuciones de la muestra (edad, colegio) pueden tener celdas de
+    pocos casos. El recuento exacto de esas celdas se queda en la corrida local,
+    que es la que usa el artículo; lo que se publica dice «<10».
+    """
+    salida = {}
+    for k, v in d.items():
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v < cat.MIN_GROUP_N:
+            salida[str(k)] = f"<{cat.MIN_GROUP_N}"
+        else:
+            salida[str(k)] = v
+    return salida
+
+
+CAMPOS_INGESTA = ("filas_archivo", "sin_consentimiento", "excluidas_prueba",
+                  "excluidas_colegio_unico", "duplicados_eliminados",
+                  "filas_validas", "erq_invalidado", "escalas_detectadas",
+                  "escalas_ausentes", "etiquetas_no_mapeadas",
+                  "faltantes_por_escala", "edades_fuera_de_rango",
+                  "colegios_enmascarados", "avisos")
+
+
+def aplanar_ingesta(informes: list) -> list[dict]:
+    """El flujo de exclusiones, que es el diagrama de la muestra del artículo."""
+    filas = []
+    for inf in (informes or []):
+        detalle = {}
+        for campo in CAMPOS_INGESTA:
+            valor = getattr(inf, campo, None)
+            if valor in (None, [], {}):
+                continue
+            detalle[campo] = (_enmascarar_conteos(valor)
+                              if campo == "colegios" else valor)
+        colegios = getattr(inf, "colegios", None)
+        if colegios:
+            detalle["colegios"] = _enmascarar_conteos(colegios)
+        filas.append(_fila(inf.nivel, "ingesta", "flujo_exclusiones",
+                           max(int(getattr(inf, "filas_validas", 0) or 0),
+                               cat.MIN_GROUP_N),
+                           getattr(inf, "filas_validas", None),
+                           escala="Flujo de exclusiones", ingesta=detalle))
     return filas
 
 
@@ -262,9 +339,9 @@ def _cliente(url: str | None = None, key: str | None = None):
 
 
 def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
-             cliente=None) -> dict:
+             cliente=None, informes: list | None = None) -> dict:
     """Sube el lote. Devuelve el resumen de lo insertado."""
-    filas = aplanar(analisis)
+    filas = aplanar(analisis) + aplanar_ingesta(informes)
     verificar(filas)
     cli = cliente or _cliente()
     tabla = lambda t: cli.postgrest.schema(ESQUEMA).table(t)  # noqa: E731
@@ -315,7 +392,7 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     analisis, informes = pipeline.cargar_y_analizar(base=args.base)
-    filas = aplanar(analisis)
+    filas = aplanar(analisis) + aplanar_ingesta(informes)
     try:
         verificar(filas)
     except PublicacionInsegura as exc:
@@ -340,7 +417,8 @@ def main(argv=None) -> int:
         print(f"✓ Ensayo. Nada se subió. Lote escrito en {args.salida}")
         return 0
 
-    resumen = publicar(analisis, notas=args.notas, publicar_ya=args.publicar_ya)
+    resumen = publicar(analisis, notas=args.notas, publicar_ya=args.publicar_ya,
+                       informes=informes)
     print(f"✓ Corrida {resumen['corrida_id']} con {resumen['filas']} filas. "
           f"Publicada: {resumen['publicada']}")
     if not resumen["publicada"]:

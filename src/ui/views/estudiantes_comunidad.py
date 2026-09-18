@@ -188,8 +188,21 @@ def grupos_visibles(analisis, columna: str) -> tuple[list[str], list[str]]:
                  else cat.ORDEN_GRADOS_PRI)
     claves = [g for g in (orden or []) if g in conteo]
     claves += sorted(g for g in conteo if g not in claves)
-    visibles = [g for g in claves if conteo[g] >= cat.MIN_GROUP_N]
-    pequenos = [g for g in claves if conteo[g] < cat.MIN_GROUP_N]
+
+    def suficiente(valor) -> bool:
+        """Un conteo publicado puede venir como «<10» en vez de un número.
+
+        Cuando los resultados se leen de la corrida publicada, las celdas por
+        debajo del mínimo llegan enmascaradas como texto. Un valor que no es un
+        número se trata como grupo pequeño, que es lo que significa.
+        """
+        try:
+            return float(valor) >= cat.MIN_GROUP_N
+        except (TypeError, ValueError):
+            return False
+
+    visibles = [g for g in claves if suficiente(conteo[g])]
+    pequenos = [g for g in claves if not suficiente(conteo[g])]
     return visibles, pequenos
 
 
@@ -423,16 +436,24 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
     b = bandas_sdq_total(analisis, filtros)
     fichas = tarjetas(analisis, rol, filtros)
     if not b and not fichas:
-        # Grupo demasiado pequeño: el informe no puede traer ni una cifra, y
-        # tiene que decir por qué en lugar de salir vacío.
-        lineas += [f"No se muestran resultados de este grupo porque tiene menos de "
-                   f"{cat.MIN_GROUP_N} estudiantes. Con grupos así de pequeños se "
-                   "podría reconocer a un estudiante concreto.",
-                   "",
-                   "Sus respuestas sí cuentan en los totales del colegio y del nivel. "
-                   "Para ver resultados, amplía la selección a todo el colegio o a "
-                   "todo el nivel.",
-                   ""]
+        # Sin cifras que mostrar. Las dos causas posibles son distintas y el
+        # informe no puede confundirlas: decir «grupo pequeño» de un colegio de
+        # 435 estudiantes sería falso.
+        if hay_filtro(filtros) and not hay_datos_crudos(analisis):
+            lineas += ["Este informe viene de la corrida publicada en la base de "
+                       "datos, que solo contiene resultados agregados del nivel "
+                       "completo. Para obtener el informe de un colegio o de un "
+                       "grado hay que generarlo desde el equipo que procesa los "
+                       "archivos originales.", ""]
+        else:
+            lineas += [f"No se muestran resultados de este grupo porque tiene menos de "
+                       f"{cat.MIN_GROUP_N} estudiantes. Con grupos así de pequeños se "
+                       "podría reconocer a un estudiante concreto.",
+                       "",
+                       "Sus respuestas sí cuentan en los totales del colegio y del "
+                       "nivel. Para ver resultados, amplía la selección a todo el "
+                       "colegio o a todo el nivel.",
+                       ""]
     if b:
         lineas.append(f"## Cómo está el grupo · {b['n']} estudiantes")
         for etiqueta, pct in zip(b["etiquetas"], b["pct"]):
@@ -547,9 +568,25 @@ def _sin_datos() -> None:
         icon="📄")
 
 
+def hay_datos_crudos(analisis) -> bool:
+    """True si el análisis viene de los archivos y permite filtrar por grupo.
+
+    Cuando los resultados se leen de la corrida publicada no hay fila por
+    estudiante, así que no se puede recalcular nada para un colegio o un grado.
+    """
+    datos = getattr(analisis, "datos", None)
+    return datos is not None and not datos.empty
+
+
 def _selector_grupo(analisis, columna: str, etiqueta: str) -> tuple[str, list[str]]:
-    """Selectbox poblado solo con grupos que llegan a `MIN_GROUP_N`."""
+    """Selectbox poblado solo con grupos que llegan a `MIN_GROUP_N`.
+
+    Si no hay datos crudos, no se ofrece: un selector que no puede cambiar nada
+    es peor que ninguno.
+    """
     visibles, pequenos = grupos_visibles(analisis, columna)
+    if not hay_datos_crudos(analisis):
+        return TODOS, pequenos
     if not visibles:
         return TODOS, pequenos
     valor = st.sidebar.selectbox(etiqueta, [TODOS] + visibles,

@@ -521,6 +521,19 @@ def paquete_zip(analisis, informes: list | None = None) -> bytes:
 # ══════════════════════════════════════════════════════════════════════════
 # Pestañas de la vista
 # ══════════════════════════════════════════════════════════════════════════
+def _conteo(valor) -> float:
+    """Conteo como número para poder ordenar.
+
+    Los conteos que llegan de la corrida publicada pueden venir enmascarados
+    como «<10» cuando la celda está por debajo del mínimo publicable. Ese texto
+    se ordena como el valor más bajo posible, que es lo que significa.
+    """
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return -1.0
+
+
 def _tab_muestra(a, informe, nivel: str) -> None:
     m = getattr(a, "muestra", {}) or {}
     st.subheader("Muestra")
@@ -552,7 +565,8 @@ def _tab_muestra(a, informe, nivel: str) -> None:
         st.dataframe(pd.DataFrame(filas, columns=["Grado", "n"]),
                      hide_index=True, use_container_width=True)
         st.markdown("**Colegio**")
-        colegios = sorted((m.get("colegio") or {}).items(), key=lambda kv: -kv[1])
+        colegios = sorted((m.get("colegio") or {}).items(),
+                          key=lambda kv: -_conteo(kv[1]))
         st.dataframe(pd.DataFrame(colegios, columns=["Colegio", "n"]),
                      hide_index=True, use_container_width=True)
         st.caption(f"Los colegios con menos de {cat.MIN_GROUP_N} estudiantes entran en el "
@@ -834,7 +848,8 @@ def _tab_calidad(a, informe) -> None:
         with c1:
             st.markdown("**% de ítems faltantes por escala**")
             if faltantes:
-                tabla = pd.DataFrame(sorted(faltantes.items(), key=lambda kv: -kv[1]),
+                tabla = pd.DataFrame(sorted(faltantes.items(),
+                                            key=lambda kv: -_conteo(kv[1])),
                                      columns=["Escala", "% faltante"])
                 st.dataframe(tabla, hide_index=True, use_container_width=True)
             else:
