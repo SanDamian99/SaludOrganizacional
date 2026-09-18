@@ -4,8 +4,8 @@
 > porque `.xlsx` está en `.gitignore`). Este documento es la versión canónica y legible del
 > instrumento: es lo que gobierna el código de puntuación.
 >
-> **Estado:** el dataset todavía no llega. Este documento define **qué esperamos recibir** y
-> **cómo se puntúa**, para que la ingesta sea inmediata. Última revisión: 2026-09-17.
+> **Estado:** el dataset **llegó el 18-09-2026** en dos formularios de Google Forms (ver §8). Este
+> documento define cómo se puntúa y qué reglas de limpieza se aplican. Última revisión: 2026-09-18.
 
 ## 1. Qué mide el instrumento
 
@@ -256,8 +256,71 @@ en el mismo plantel.
 
 - [x] Instrumento revisado, ítems mapeados, subescalas y cortes verificados en fuente.
 - [x] Formato de dataset definido (§2).
-- [ ] Recibir el dataset.
-- [ ] Confirmar etiquetas del SDQ y orden de ítems con quien aplicó el instrumento.
-- [ ] Decidir el tratamiento del RCADS (T de EE. UU. vs brutas y percentiles).
-- [ ] Implementar puntuación y las dos vistas. Plan visual en
-      `docs/superpowers/specs/2026-09-17-plan-estudiantes.html`.
+- [x] Recibir el dataset (18-09-2026, dos formularios; ver §8).
+- [x] Etiquetas del SDQ confirmadas en el dato: «No es cierto / Algo cierto / Muy cierto».
+- [x] Orden de ítems confirmado: los encabezados traen el enunciado completo y coinciden uno a uno
+      con el instrumento (SDQ, ARI, RCADS, ERQ-CA, MSPSS, PSSM).
+- [x] Análisis preliminar reproducible: `scripts/analisis_estudiantes_preliminar.py`; resultados
+      agregados en `docs/instrumentos/fixtures/resultados_preliminares_estudiantes.json`.
+- [ ] Decidir el tratamiento del RCADS (T de EE. UU. vs brutas y percentiles). Las tablas T no
+      están disponibles en línea; habría que pedirlas a rcads.ucla.edu.
+- [ ] Preguntar a quien aplicó: qué pasó con el bloque ERQ-CA en La Balsa secundaria (§8.4) y cuál
+      es la fuente de la escala «Toma de decisiones» (§8.3).
+- [ ] Aprobación del plan corregido (`docs/superpowers/specs/2026-09-17-plan-estudiantes.html`) e
+      implementación por subagentes.
+
+## 8. Lo que llegó (18-09-2026) y cómo difiere de lo esperado
+
+Dos exportaciones de Google Forms, en CSV, con el enunciado completo de cada ítem como encabezado:
+
+| Formulario | Población | Filas | Válidas | Escalas |
+|---|---|---|---|---|
+| «¡Cuéntanos sobre tu bienestar emocional!» | Secundaria, 6.º a 10.º, 11-18 años | 979 | **943** | SDQ, ARI, RCADS-25, ERQ-CA, MSPSS, PSSM, **Toma de decisiones** |
+| «¡Cuéntanos sobre tus emociones!» | Primaria, 4.º y 5.º, 8-12 años | 283 | **282** | Igual **sin RCADS** |
+
+### 8.1 Identificación: llegó con nombre, sin ID
+Las columnas son `Marca temporal`, consentimiento («¿Quieres aportar…?»), `Mi nombre completo es:`,
+`Tengo:` (texto «13 años»), `Mi sexo es:` (Hombre/Mujer), `Estoy en grado`, `Mi colegio es:`.
+**No hay `ID_Estudiante` ni `ID_Cuidador`.** Regla de ingesta: el ID se deriva como hash SHA-1 del
+nombre normalizado (minúsculas, sin tildes, espacios colapsados) y **la columna de nombre se elimina
+antes de guardar nada**; el archivo crudo no entra al repo ni a Supabase.
+
+### 8.2 Enlace con cuidadores: no viable a nivel individual
+El archivo crudo de cuidadores trae el nombre del hijo (142). Cruce por nombre normalizado:
+**8 coincidencias exactas** (11 con similitud ≥ 0,90; 14 con ≥ 0,80). Los cuidadores son sobre todo
+de Conaldi, Diversificado, Santa Lucía y Diosa Chía; los estudiantes, de Laura Vicuña, José Joaquín
+Casas, La Balsa y San Josemaría. **Puente individual descartado; puente escolar débil.** Lo que
+queda es la comparación agregada autoinforme vs padres (§5) declarada como descriptiva.
+
+### 8.3 Escala adicional: «Toma de decisiones» (10 ítems)
+No estaba en el instrumento documentado. Ítems positivos de frecuencia (Nunca … Siempre, 1-5),
+p. ej. «Pienso en las consecuencias antes de actuar». Fuente desconocida: **preguntar al equipo**.
+Se puntúa como media 1-5 y se reporta como exploratoria. α = 0,85 (secundaria) y 0,77 (primaria).
+
+### 8.4 Artefacto en ERQ-CA (La Balsa secundaria)
+Los **137 de 137** estudiantes de La Balsa secundaria respondieron «Nada parecido a mí» en los
+10 ítems del ERQ-CA; en primaria del mismo colegio no ocurre. Es un fallo de aplicación, no un
+resultado. Regla: **ERQ con los 10 ítems = 1 se marca como faltante** (reevaluación y supresión son
+estrategias opuestas; «nada» en todo es implausible). Afecta 166 filas (17 % de secundaria). Con la
+regla, α reevaluación = 0,81 y supresión = 0,70; sin ella, la correlación reevaluación-supresión se
+infla a 0,70 (artefacto).
+
+### 8.5 Reglas de limpieza aplicadas (reproducibles en el script)
+1. Sin consentimiento → fuera (27, todas vacías).
+2. Filas de prueba: mismo nombre el mismo día en colegios distintos, y colegios con una sola
+   respuesta en toda la base (ráfaga de 5 envíos el 4-sep entre 10:15 y 10:45) → fuera (5).
+3. Duplicados por nombre → se conserva el **primer** envío (5; los pares comparten 98-100 % de
+   respuestas idénticas).
+4. Colegio: 14 etiquetas crudas (con variantes «I.EO»/«I.E.O» y sedes) → 6 códigos:
+   LauV, JJC, LaBalsa, SJMEB (sedes Principal y Samaria), CdP, DiosCh. Con n ≥ 10 en secundaria:
+   LauV 435, JJC 297, LaBalsa 137, SJMEB 63. CdP (8) y DiosCh (3) quedan enmascarados.
+5. Edad 18 (5 casos en 10.º) se conserva con nota; el SDQ autoinforme está validado hasta 17.
+6. Primaria (8-12) responde SDQ y MSPSS por debajo de la edad validada → se analiza **aparte** y
+   se rotula como exploratorio; sus bandas SDQ son orientativas.
+7. Faltantes: mínimos (5 filas en secundaria, máx. 10 ítems, casi todos en Toma de decisiones).
+   Subescala = faltante si falta más de un ítem; si falta uno, prorrateo.
+
+### 8.6 Fechas
+Secundaria: 15-may a 17-sep-2026, olas 20-25 jul (471) y 31-ago a 4-sep (302). Primaria: 15-may a
+17-sep, más repartida. Se conserva la marca temporal por si se analiza efecto de ola.
+
