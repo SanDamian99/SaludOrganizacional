@@ -129,3 +129,19 @@ def test_el_enlace_por_colegio_ignora_codigos_invalidos():
     finally:
         st.query_params = original
     assert cat.MIN_GROUP_N == 10
+
+
+def test_el_error_de_clave_invalida_se_explica_sin_jerga():
+    """Un despliegue con la clave mal puesta debe decir qué revisar.
+
+    Ocurrió en el primer despliegue: la app volcaba el JSON crudo de Supabase,
+    que además menciona `service_role` y confunde sobre qué clave poner.
+    """
+    fuente = open(os.path.join(RAIZ, "src", "ui", "estudiantes.py"),
+                  encoding="utf-8").read()
+    assert "Invalid API key" in fuente
+    assert "Settings → Secrets" in fuente
+    # y advierte de no pegar la clave de escritura
+    i = fuente.index("Invalid API key")
+    bloque = fuente[i:i + 1400]
+    assert "service_role" in bloque and "anon" in bloque

@@ -125,9 +125,23 @@ def render_estudiantes() -> None:
         analisis, informes, origen = cargar_analisis(base)
     except Exception as exc:                                   # noqa: BLE001
         st.title("🎒 Estudiantes 360")
-        st.error(f"No se pudieron procesar los formularios: {exc}")
-        st.caption("Revisa que las columnas de identificación y los bloques de ítems "
-                   "estén completos. El detalle queda en los registros de la aplicación.")
+        texto = str(exc)
+        if "Invalid API key" in texto or "'code': 401" in texto or "JWT" in texto:
+            # El fallo más probable en un despliegue: la clave de Supabase que
+            # se pegó en los secretos no es la del proyecto, o está caducada.
+            st.error("La clave de Supabase de este despliegue no es válida, así que "
+                     "no se pueden leer los resultados publicados.", icon="🔑")
+            st.markdown(
+                "Quien administre la aplicación debe revisar, en "
+                "*Settings → Secrets*, que `SUPABASE_URL` y `SUPABASE_KEY` sean los "
+                "del proyecto. `SUPABASE_KEY` es la clave **anon**, que se copia de "
+                "*Supabase → Settings → API*. La clave `service_role` no se pone "
+                "aquí: sirve para escribir y no debe salir del equipo que publica.")
+        else:
+            st.error(f"No se pudieron procesar los formularios: {texto}")
+            st.caption("Revisa que las columnas de identificación y los bloques de "
+                       "ítems estén completos. El detalle queda en los registros "
+                       "de la aplicación.")
         return
 
     if not analisis:
