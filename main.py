@@ -79,7 +79,14 @@ with st.sidebar:
     _permitidas = modo_app.paginas_permitidas()
     _opciones = [p for p in _todas if _permitidas is None or p in _permitidas]
     # El modo decide con qué página abre; después manda lo que elija la persona.
-    _inicial = modo_app.pagina_por_defecto()
+    #
+    # Se consulta con getattr y con alternativa: al desplegar, Streamlit vuelve a
+    # ejecutar este archivo pero conserva en memoria los módulos ya importados.
+    # Durante ese hueco `main.py` es nuevo y `src.core.modo` todavía es el viejo,
+    # así que pedirle una función recién añadida tumbaba la aplicación entera con
+    # un AttributeError. Ninguna página vale eso: si falta, se abre en la primera.
+    _pagina_inicial = getattr(modo_app, "pagina_por_defecto", None)
+    _inicial = _pagina_inicial() if callable(_pagina_inicial) else _opciones[0]
     _indice = _opciones.index(_inicial) if _inicial in _opciones else 0
     page = st.radio("Ir a:", _opciones, index=_indice)
 

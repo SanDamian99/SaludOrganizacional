@@ -156,7 +156,10 @@ def render_estudiantes() -> None:
         st.markdown("**Estudiantes 360**")
         if len(permitidas) > 1:
             # El modo decide con cuál abre; después manda lo que elija la persona.
-            inicial = modo_app.audiencia_por_defecto()
+            # Misma precaución que en main.py: un módulo rancio tras un
+            # despliegue no debe impedir que se vea la página.
+            _defecto = getattr(modo_app, "audiencia_por_defecto", None)
+            inicial = _defecto() if callable(_defecto) else permitidas[0]
             indice = permitidas.index(inicial) if inicial in permitidas else 0
             clave = st.radio("Vista", permitidas, index=indice,
                              format_func=lambda k: AUDIENCIAS[k],

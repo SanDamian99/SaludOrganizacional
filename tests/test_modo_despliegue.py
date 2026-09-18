@@ -190,5 +190,41 @@ def test_la_pagina_inicial_depende_del_modo(con_modo):
 
 def test_el_punto_de_entrada_usa_la_pagina_inicial_del_modo():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "pagina_por_defecto()" in fuente
+    assert "pagina_por_defecto" in fuente
     assert "index=_indice" in fuente
+
+
+def test_el_arranque_sobrevive_a_un_modulo_rancio():
+    """Un despliegue puede dejar `main.py` nuevo y `src.core.modo` viejo.
+
+    Pasó en producción: Streamlit volvió a ejecutar el script sin reiniciar el
+    proceso, el módulo cacheado no tenía la función recién añadida y la
+    aplicación entera caía con AttributeError. Ninguna página vale eso.
+    """
+    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
+    assert 'getattr(modo_app, "pagina_por_defecto"' in fuente, \
+        "la página inicial debe pedirse con alternativa"
+    assert "modo_app.pagina_por_defecto()" not in fuente, \
+        "no debe llamarse directamente: un módulo rancio tumba el arranque"
+
+    despachador = open(os.path.join(RAIZ, "src", "ui", "estudiantes.py"),
+                       encoding="utf-8").read()
+    assert 'getattr(modo_app, "audiencia_por_defecto"' in despachador
+    assert "modo_app.audiencia_por_defecto()" not in despachador
+
+
+def test_la_alternativa_devuelve_una_pagina_valida():
+    """Sin la función, se abre en la primera página permitida, no en un error."""
+    class ModuloRancio:
+        COMPLETO = "completo"
+        COMUNIDAD = "comunidad"
+
+        @staticmethod
+        def paginas_permitidas():
+            return None
+
+    opciones = ["Dashboard", "Estudiantes 360", "Chat con IA"]
+    pagina_inicial = getattr(ModuloRancio, "pagina_por_defecto", None)
+    inicial = pagina_inicial() if callable(pagina_inicial) else opciones[0]
+    assert inicial == "Dashboard"
+    assert opciones.index(inicial) == 0
