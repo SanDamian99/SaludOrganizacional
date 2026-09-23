@@ -19,4 +19,4 @@ pytest-mock>=3.12.0
 # Recomendado por Streamlit para recargar archivos sin sondeo; además, cambiar
 # este archivo obliga a Streamlit Cloud a reconstruir el entorno y reiniciar el
 # proceso, que es lo que hace falta cuando conserva módulos viejos en memoria.
-watchdog>=4.0.0
+watchdog>=4.0.1
