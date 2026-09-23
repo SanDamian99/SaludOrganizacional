@@ -123,24 +123,37 @@ def test_no_hay_datos_individuales_en_lo_reconstruido(reconstruido):
             "lo publicado no debe permitir reconstruir filas por estudiante"
 
 
-def test_sin_datos_crudos_no_se_ofrecen_filtros_por_grupo(reconstruido):
+def test_sin_datos_crudos_solo_se_filtra_por_lo_publicado(reconstruido, analisis_local):
+    """Sin fila por estudiante, un filtro solo puede devolver lo que viene calculado.
+
+    Un colegio publicado da exactamente las cifras que recalcula la máquina que
+    procesa; un cruce colegio × grado, que no se publica, no devuelve nada
+    inventado.
+    """
     from src.ui.views import estudiantes_comunidad as vc
     remoto, _ = reconstruido
+    local, _ = analisis_local
     a = remoto["secundaria"]
     assert not vc.hay_datos_crudos(a)
     # las cifras del nivel completo sí están
     assert vc.bandas_sdq_total(a)
     assert len(vc.tarjetas(a, "colegio", {})) > 0
-    # pero un filtro no devuelve nada inventado
-    assert vc.bandas_sdq_total(a, {"colegio": "LauV"}) == {}
-    assert vc.prevalencia(a, "sdq_alto", {"colegio": "LauV"}) == {}
+    # un colegio publicado: las mismas cifras que el recálculo local
+    f = {"colegio": "LauV"}
+    assert vc.bandas_sdq_total(a, f)["n"] == vc.bandas_sdq_total(local["secundaria"], f)["n"]
+    assert vc.prevalencia(a, "sdq_alto", f) == vc.prevalencia(local["secundaria"], "sdq_alto", f)
+    # un cruce no publicado no devuelve nada inventado
+    cruce = {"colegio": "LauV", "grado": "8"}
+    assert vc.bandas_sdq_total(a, cruce) == {}
+    assert vc.prevalencia(a, "sdq_alto", cruce) == {}
 
 
 def test_el_informe_filtrado_explica_la_causa_correcta(reconstruido):
     """No puede decir «grupo pequeño» de un colegio de cientos de estudiantes."""
     from src.ui.views import estudiantes_comunidad as vc
     remoto, _ = reconstruido
-    informe = vc.informe_markdown(remoto["secundaria"], "colegio", {"colegio": "LauV"})
+    informe = vc.informe_markdown(remoto["secundaria"], "colegio",
+                                  {"colegio": "LauV", "grado": "8"})
     assert "corrida publicada" in informe
     # la explicación va antes del pie de «grupos que se muestran», donde sí es
     # correcto mencionar el mínimo; lo que no puede es atribuirle la causa

@@ -67,6 +67,12 @@ class Analisis:
     items_pssm: pd.DataFrame = field(default_factory=pd.DataFrame)
     escalas: list = field(default_factory=list)
     avisos: list = field(default_factory=list)
+    # {"Colegio": {"LauV": Analisis}, "Grado": {"8": Analisis}}: los resultados
+    # que la vista comunidad necesita para un colegio o un grado, ya calculados
+    # sobre los grupos que llegan a MIN_GROUP_N. Existen para que el despliegue,
+    # que no tiene fila por estudiante, pueda filtrar igual que la máquina que
+    # procesa. Cada uno lleva `datos` vacío a propósito.
+    subgrupos: dict = field(default_factory=dict)
 
 
 CLAVES_PRINCIPALES = ["SDQ_Total", "SDQ_Emo", "SDQ_Con", "SDQ_Hip", "SDQ_Pares", "SDQ_Pro",
@@ -130,16 +136,51 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
 
     a.icc = {k: stats.icc_entre_grupos(d, k) for k in claves}
     a.solapamiento = stats.solapamiento(d)
-    for res in [k for k in ("RCADS_Dep", "SDQ_Total") if k in claves]:
-        for prot in [p for p in ("MSPSS_Fam", "PSSM_Total") if p in claves]:
-            c = stats.contraste_protector(d, res, prot)
-            if c:
-                a.contrastes.append(c)
+    a.contrastes = _contrastes(d, claves)
     a.items_pssm = stats.medias_items(d, "PSSM")
+    a.subgrupos = subanalizar(d, nivel, claves)
 
     if nivel == cat.NIVEL_PRIMARIA and cat.AVISO_PRIMARIA not in a.avisos:
         a.avisos.append(cat.AVISO_PRIMARIA)
     return a
+
+
+COLUMNAS_SUBGRUPO = ("Colegio", "Grado")
+
+
+def _contrastes(d: pd.DataFrame, claves: list[str]) -> list[dict]:
+    salida = []
+    for res in [k for k in ("RCADS_Dep", "SDQ_Total") if k in claves]:
+        for prot in [p for p in ("MSPSS_Fam", "PSSM_Total") if p in claves]:
+            c = stats.contraste_protector(d, res, prot)
+            if c:
+                salida.append(c)
+    return salida
+
+
+def subanalizar(d: pd.DataFrame, nivel: str, claves: list[str]) -> dict:
+    """Resultados de la vista comunidad para cada colegio y cada grado.
+
+    Solo las tablas que esa vista muestra (bandas, cortes, contrastes e ítems
+    de pertenencia) y solo para grupos con al menos `MIN_GROUP_N` respuestas.
+    No se cruzan colegio y grado: esas celdas casi nunca llegan al mínimo y,
+    publicadas, permitirían triangular.
+    """
+    salida: dict = {}
+    for columna in COLUMNAS_SUBGRUPO:
+        if columna not in d.columns:
+            continue
+        for grupo, sub in d.groupby(columna):
+            if len(sub) < cat.MIN_GROUP_N:
+                continue
+            s = Analisis(nivel=nivel, n=len(sub), datos=pd.DataFrame(),
+                         escalas=list(claves), muestra=dict(n=len(sub)))
+            s.bandas = scoring.distribucion_bandas(sub, "self")
+            s.cortes = scoring.sobre_cortes(sub)
+            s.items_pssm = stats.medias_items(sub, "PSSM")
+            s.contrastes = _contrastes(sub, claves)
+            salida.setdefault(columna, {})[str(grupo)] = s
+    return salida
 
 
 def cargar_y_analizar(rutas: list[str] | None = None, base: str | None = None,

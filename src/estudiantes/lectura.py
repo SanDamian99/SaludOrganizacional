@@ -157,28 +157,9 @@ def _reconstruir(nivel: str, filas: list[dict]) -> Analisis:
                        ["clave", "escala", "n_items", "n", "alpha", "ic_inf",
                         "ic_sup", "aceptable"])
 
-    # ── bandas
-    bandas = []
-    for f in por_tipo.get("banda", []):
-        fila = dict(clave=f["clave"], escala=f["escala"], n=f["n"],
-                    pct_alto_o_muy_alto=f["valor"],
-                    etiquetas=det(f, "etiquetas", cat.BANDAS_LABELS))
-        for i in range(4):
-            pct = det(f, f"pct_b{i}")
-            fila[f"pct_b{i}"] = pct
-            fila[f"n_b{i}"] = (round(f["n"] * pct / 100) if pct is not None else None)
-        bandas.append(fila)
-    a.bandas = _df(bandas, ["clave", "escala", "n"]
-                   + [c for i in range(4) for c in (f"n_b{i}", f"pct_b{i}")]
-                   + ["pct_alto_o_muy_alto", "etiquetas"])
-
-    # ── cortes
-    a.cortes = _df([dict(clave=f["clave"], indicador=det(f, "indicador"),
-                         n=f["n"], casos=det(f, "casos"), pct=f["valor"],
-                         ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
-                         fuente=det(f, "fuente"))
-                    for f in por_tipo.get("corte", [])],
-                   ["clave", "indicador", "n", "casos", "pct", "ic_inf", "ic_sup", "fuente"])
+    # ── bandas y cortes (compartidos con los subgrupos)
+    a.bandas = _tabla_bandas(por_tipo.get("banda", []))
+    a.cortes = _tabla_cortes(por_tipo.get("corte", []))
 
     # ── terciles y percentiles
     a.terciles = _df([dict(clave=f["clave"], escala=f["escala"], n=f["n"],
@@ -261,20 +242,85 @@ def _reconstruir(nivel: str, filas: list[dict]) -> Analisis:
     a.icc = {f["clave"]: f["valor"] for f in por_tipo.get("icc", [])}
     for f in por_tipo.get("solapamiento", []):
         a.solapamiento = dict(det(f, "solapamiento", {}) or {}, n=f["n"])
-    a.contrastes = [dict(resultado=f["clave"], resultado_etiqueta=f["escala"],
-                         protector=f["agrupacion"],
-                         protector_etiqueta=det(f, "protector_etiqueta"),
-                         umbral=det(f, "umbral"),
-                         pct_tercil_bajo=f["valor"],
-                         pct_tercil_alto=det(f, "pct_tercil_alto"),
-                         n_bajo=det(f, "n_bajo"), n_alto=det(f, "n_alto"),
-                         razon=det(f, "razon"))
-                    for f in por_tipo.get("contraste", [])]
-    a.items_pssm = _df(sorted([dict(item=f["clave"], M=f["valor"], DE=det(f, "DE"),
-                                    n=f["n"]) for f in por_tipo.get("item", [])],
-                              key=lambda d: d["M"] if d["M"] is not None else 99),
-                       ["item", "M", "DE", "n"])
+    a.contrastes = _lista_contrastes(por_tipo.get("contraste", []))
+    a.items_pssm = _tabla_items(por_tipo.get("item", []))
+    a.subgrupos = _subgrupos(nivel, filas)
     return a
+
+
+def _det(f, clave, defecto=None):
+    return (f.get("detalle") or {}).get(clave, defecto)
+
+
+def _tabla_bandas(filas: list[dict]) -> pd.DataFrame:
+    bandas = []
+    for f in filas:
+        fila = dict(clave=f["clave"], escala=f["escala"], n=f["n"],
+                    pct_alto_o_muy_alto=f["valor"],
+                    etiquetas=_det(f, "etiquetas", cat.BANDAS_LABELS))
+        for i in range(4):
+            pct = _det(f, f"pct_b{i}")
+            fila[f"pct_b{i}"] = pct
+            fila[f"n_b{i}"] = (round(f["n"] * pct / 100) if pct is not None else None)
+        bandas.append(fila)
+    return _df(bandas, ["clave", "escala", "n"]
+               + [c for i in range(4) for c in (f"n_b{i}", f"pct_b{i}")]
+               + ["pct_alto_o_muy_alto", "etiquetas"])
+
+
+def _tabla_cortes(filas: list[dict]) -> pd.DataFrame:
+    return _df([dict(clave=f["clave"], indicador=_det(f, "indicador"),
+                     n=f["n"], casos=_det(f, "casos"), pct=f["valor"],
+                     ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
+                     fuente=_det(f, "fuente")) for f in filas],
+               ["clave", "indicador", "n", "casos", "pct", "ic_inf", "ic_sup", "fuente"])
+
+
+def _lista_contrastes(filas: list[dict]) -> list[dict]:
+    """El protector viaja en `agrupacion` en el nivel y en `detalle` en los subgrupos."""
+    return [dict(resultado=f["clave"], resultado_etiqueta=f["escala"],
+                 protector=_det(f, "protector") or f["agrupacion"],
+                 protector_etiqueta=_det(f, "protector_etiqueta"),
+                 umbral=_det(f, "umbral"),
+                 pct_tercil_bajo=f["valor"],
+                 pct_tercil_alto=_det(f, "pct_tercil_alto"),
+                 n_bajo=_det(f, "n_bajo"), n_alto=_det(f, "n_alto"),
+                 razon=_det(f, "razon")) for f in filas]
+
+
+def _tabla_items(filas: list[dict]) -> pd.DataFrame:
+    return _df(sorted([dict(item=f["clave"], M=f["valor"], DE=_det(f, "DE"),
+                            n=f["n"]) for f in filas],
+                      key=lambda d: d["M"] if d["M"] is not None else 99),
+               ["item", "M", "DE", "n"])
+
+
+TIPOS_SUBGRUPO = ("banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo")
+
+
+def _subgrupos(nivel: str, filas: list[dict]) -> dict:
+    """Rearma {"Colegio": {"LauV": Analisis}, "Grado": {...}} desde las filas «_grupo».
+
+    Cada subgrupo es un `Analisis` con `datos` vacío y solo las tablas que la
+    vista comunidad usa, igual que el que produce `pipeline.subanalizar`.
+    """
+    por_clave: dict[tuple[str, str], dict[str, list[dict]]] = {}
+    for f in filas:
+        if f["tipo"] not in TIPOS_SUBGRUPO:
+            continue
+        cubo = por_clave.setdefault((f["agrupacion"], str(f["grupo"])), {})
+        cubo.setdefault(f["tipo"], []).append(f)
+    salida: dict = {}
+    for (columna, grupo), tipos in por_clave.items():
+        primera = next(iter(next(iter(tipos.values()))))
+        n = int(_det(primera, "n_grupo") or primera["n"])
+        s = Analisis(nivel=nivel, n=n, datos=pd.DataFrame(), muestra=dict(n=n))
+        s.bandas = _tabla_bandas(tipos.get("banda_grupo", []))
+        s.cortes = _tabla_cortes(tipos.get("corte_grupo", []))
+        s.contrastes = _lista_contrastes(tipos.get("contraste_grupo", []))
+        s.items_pssm = _tabla_items(tipos.get("item_grupo", []))
+        salida.setdefault(columna, {})[grupo] = s
+    return salida
 
 
 def cargar_desde_supabase() -> tuple[dict, list, dict | None]:

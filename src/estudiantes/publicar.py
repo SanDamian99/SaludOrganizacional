@@ -216,6 +216,15 @@ def aplanar(analisis: dict) -> list[dict]:
                                    escala=cat.PSSM.nombre, DE=f["DE"],
                                    orientado=True))
 
+        # resultados por colegio y por grado para la vista comunidad desplegada.
+        # Tipos propios («banda_grupo»…) para que el lector no los confunda con
+        # los del nivel completo. Se omite cualquier fila que no llegue al
+        # mínimo: un indicador con pocas respuestas válidas dentro de un colegio
+        # no se publica, aunque el colegio sí llegue.
+        for columna, grupos in (getattr(a, "subgrupos", None) or {}).items():
+            for grupo, s in grupos.items():
+                filas.extend(_aplanar_subgrupo(nivel, columna, grupo, s))
+
         # descripción de la muestra, en una sola fila cuyo N es el del nivel
         if a.muestra:
             # La muestra va anidada en un solo campo: sus claves (n, sexo, edad…)
@@ -236,6 +245,51 @@ def aplanar(analisis: dict) -> list[dict]:
                                escala="Solapamiento entre indicadores",
                                solapamiento={k: v for k, v in a.solapamiento.items()
                                              if k != "n"}))
+    return filas
+
+
+def _aplanar_subgrupo(nivel: str, columna: str, grupo: str, s) -> list[dict]:
+    """Filas de un colegio o un grado: solo lo que la vista comunidad muestra."""
+    if s is None or s.n < cat.MIN_GROUP_N:
+        return []
+    filas: list[dict] = []
+    comun = dict(agrupacion=columna, grupo=str(grupo), n_grupo=s.n)
+    if s.bandas is not None and not s.bandas.empty:
+        for _, f in s.bandas.iterrows():
+            if f["n"] < cat.MIN_GROUP_N:
+                continue
+            filas.append(_fila(nivel, "banda_grupo", f["clave"], f["n"],
+                               f["pct_alto_o_muy_alto"], escala=f["escala"],
+                               pct_b0=f["pct_b0"], pct_b1=f["pct_b1"],
+                               pct_b2=f["pct_b2"], pct_b3=f["pct_b3"],
+                               etiquetas=list(f["etiquetas"]),
+                               fuente=cat.FUENTE_BANDS_SELF, **comun))
+    if s.cortes is not None and not s.cortes.empty:
+        for _, f in s.cortes.iterrows():
+            if f["n"] < cat.MIN_GROUP_N:
+                continue
+            filas.append(_fila(nivel, "corte_grupo", f["clave"], f["n"], f["pct"],
+                               ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
+                               indicador=f["indicador"], casos=f["casos"],
+                               fuente=f["fuente"], **comun))
+    for c in (s.contrastes or []):
+        if c["n_bajo"] < cat.MIN_GROUP_N or c["n_alto"] < cat.MIN_GROUP_N:
+            continue
+        filas.append(_fila(nivel, "contraste_grupo", c["resultado"],
+                           c["n_bajo"] + c["n_alto"], c["pct_tercil_bajo"],
+                           escala=c["resultado_etiqueta"],
+                           protector=c["protector"],
+                           pct_tercil_alto=c["pct_tercil_alto"],
+                           n_bajo=c["n_bajo"], n_alto=c["n_alto"],
+                           umbral=c["umbral"], razon=c.get("razon"),
+                           protector_etiqueta=c["protector_etiqueta"], **comun))
+    if s.items_pssm is not None and not s.items_pssm.empty:
+        for _, f in s.items_pssm.iterrows():
+            if f["n"] < cat.MIN_GROUP_N:
+                continue
+            filas.append(_fila(nivel, "item_grupo", f["item"], f["n"], f["M"],
+                               escala=cat.PSSM.nombre, DE=f["DE"], orientado=True,
+                               **comun))
     return filas
 
 

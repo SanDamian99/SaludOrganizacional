@@ -232,6 +232,41 @@ def hay_filtro(filtros: dict) -> bool:
                for c in ("colegio", "grado"))
 
 
+def _filtros_activos(filtros: dict) -> dict[str, str]:
+    """{"Colegio": "LauV"} con solo las dimensiones realmente elegidas."""
+    return {c: (filtros or {}).get(c.lower()) for c in ("Colegio", "Grado")
+            if (filtros or {}).get(c.lower(), TODOS) not in (TODOS, None, "")}
+
+
+def subanalisis(analisis, filtros: dict | None):
+    """El `Analisis` ya calculado del colegio o del grado elegido, o None.
+
+    Es lo que usa el despliegue, que no tiene fila por estudiante: el pipeline
+    calcula por adelantado las tablas de cada grupo que llega al mínimo y el
+    publicador las sube. Solo existe para una dimensión a la vez; un grado
+    dentro de un colegio no se publica, así que aquí devuelve None y la vista
+    lo dice en vez de mostrar cifras que no son de ese grupo.
+    """
+    activos = _filtros_activos(filtros or {})
+    if len(activos) != 1 or analisis is None:
+        return None
+    (columna, grupo), = activos.items()
+    return ((getattr(analisis, "subgrupos", None) or {}).get(columna) or {}).get(str(grupo))
+
+
+def _resuelto(analisis, filtros: dict | None):
+    """(análisis sobre el que leer, filtros que aún hay que aplicar).
+
+    Con datos crudos se filtra recalculando. Sin ellos, se cambia al subgrupo
+    publicado y ya no queda filtro que aplicar; si no hay subgrupo, no hay
+    cifra: devuelve (None, {}).
+    """
+    if not hay_filtro(filtros or {}) or hay_datos_crudos(analisis):
+        return analisis, (filtros or {})
+    sub = subanalisis(analisis, filtros)
+    return (sub, {}) if sub is not None else (None, {})
+
+
 def etiqueta_filtro(analisis, filtros: dict) -> str:
     """Nombre del grupo seleccionado, sin identificar a nadie."""
     partes = []
@@ -252,6 +287,7 @@ def prevalencia(analisis, indicador: str, filtros: dict | None = None) -> dict:
     llega a `MIN_GROUP_N`. Aquí no se calcula nada a mano.
     """
     cfg = INDICADORES.get(indicador)
+    analisis, filtros = _resuelto(analisis, filtros)
     if cfg is None or analisis is None:
         return {}
     if not hay_filtro(filtros or {}):
@@ -287,6 +323,8 @@ def prevalencia_por(analisis, indicador: str, columna: str,
     cfg = INDICADORES.get(indicador)
     if cfg is None or analisis is None:
         return pd.DataFrame()
+    if not hay_datos_crudos(analisis):
+        return _prevalencia_por_publicada(analisis, indicador, columna, filtros or {})
     d = subconjunto(analisis, filtros or {})
     if columna not in d.columns:
         return pd.DataFrame()
@@ -300,9 +338,35 @@ def prevalencia_por(analisis, indicador: str, columna: str,
     return stats.prevalencia_por_grupo(d, mask, columna, orden)
 
 
+def _prevalencia_por_publicada(analisis, indicador: str, columna: str,
+                               filtros: dict) -> pd.DataFrame:
+    """La comparación entre grupos leída de los subgrupos publicados.
+
+    Mismas columnas que `stats.prevalencia_por_grupo`. Si hay un filtro en la
+    otra dimensión no se puede cruzar y se devuelve vacío; si el filtro está en
+    esta misma dimensión, se muestra solo ese grupo, como haría el recálculo.
+    """
+    activos = _filtros_activos(filtros)
+    if any(c != columna for c in activos):
+        return pd.DataFrame()
+    grupos = (getattr(analisis, "subgrupos", None) or {}).get(columna) or {}
+    visibles, _ = grupos_visibles(analisis, columna)
+    orden = [g for g in visibles if g in grupos] + [g for g in grupos if g not in visibles]
+    if columna in activos:
+        orden = [g for g in orden if g == str(activos[columna])]
+    filas = []
+    for g in orden:
+        p = prevalencia(grupos[g], indicador, {})
+        if p:
+            filas.append(dict(grupo=g, n=p["n"], casos=round(p["n"] * p["pct"] / 100),
+                              pct=p["pct"], ic_inf=p["ic_inf"], ic_sup=p["ic_sup"]))
+    return pd.DataFrame(filas, columns=["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"])
+
+
 def contraste(analisis, clave: str, filtros: dict | None = None) -> dict:
     """Contraste protector del grupo seleccionado, del `Analisis` o de `stats`."""
     cfg = CONTRASTES.get(clave)
+    analisis, filtros = _resuelto(analisis, filtros)
     if cfg is None or analisis is None:
         return {}
     if not hay_filtro(filtros or {}):
@@ -327,6 +391,9 @@ def items_pertenencia_bajos(analisis, k: int = 4, filtros: dict | None = None) -
     subconjunto con `stats.medias_items`, porque si no el gráfico mostraría las
     medias de todo el nivel bajo un título que nombra un colegio o un grado.
     """
+    analisis, filtros = _resuelto(analisis, filtros)
+    if analisis is None:
+        return []
     if hay_filtro(filtros or {}):
         d = subconjunto(analisis, filtros or {})
         if len(d) < cat.MIN_GROUP_N:
@@ -351,6 +418,9 @@ def bandas_sdq_total(analisis, filtros: dict | None = None) -> dict:
     `scoring.distribucion_bandas`; mostrar la del nivel completo bajo un título
     que nombra un colegio sería atribuirle cifras que no son suyas.
     """
+    analisis, filtros = _resuelto(analisis, filtros)
+    if analisis is None:
+        return {}
     if hay_filtro(filtros or {}):
         d = subconjunto(analisis, filtros or {})
         if len(d) < cat.MIN_GROUP_N:
@@ -440,11 +510,7 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
         # informe no puede confundirlas: decir «grupo pequeño» de un colegio de
         # 435 estudiantes sería falso.
         if hay_filtro(filtros) and not hay_datos_crudos(analisis):
-            lineas += ["Este informe viene de la corrida publicada en la base de "
-                       "datos, que solo contiene resultados agregados del nivel "
-                       "completo. Para obtener el informe de un colegio o de un "
-                       "grado hay que generarlo desde el equipo que procesa los "
-                       "archivos originales.", ""]
+            lineas += [SIN_SUBGRUPO_PUBLICADO, ""]
         else:
             lineas += [f"No se muestran resultados de este grupo porque tiene menos de "
                        f"{cat.MIN_GROUP_N} estudiantes. Con grupos así de pequeños se "
@@ -568,25 +634,41 @@ def _sin_datos() -> None:
         icon="📄")
 
 
+SIN_SUBGRUPO_PUBLICADO = (
+    "Estas cifras vienen de la corrida publicada, que trae resultados por colegio "
+    "y por grado, pero no de un grado dentro de un colegio ni de grupos con menos "
+    f"de {cat.MIN_GROUP_N} estudiantes. Para ese detalle hay que generar el informe "
+    "desde el equipo que procesa los archivos originales.")
+
+
 def hay_datos_crudos(analisis) -> bool:
-    """True si el análisis viene de los archivos y permite filtrar por grupo.
+    """True si el análisis viene de los archivos y permite cualquier filtro.
 
     Cuando los resultados se leen de la corrida publicada no hay fila por
-    estudiante, así que no se puede recalcular nada para un colegio o un grado.
+    estudiante: solo se puede cambiar a un colegio o a un grado cuyos resultados
+    vengan ya calculados (`subgrupos`), y a uno solo a la vez.
     """
     datos = getattr(analisis, "datos", None)
     return datos is not None and not datos.empty
 
 
-def _selector_grupo(analisis, columna: str, etiqueta: str) -> tuple[str, list[str]]:
+def _selector_grupo(analisis, columna: str, etiqueta: str,
+                    bloqueado: bool = False) -> tuple[str, list[str]]:
     """Selectbox poblado solo con grupos que llegan a `MIN_GROUP_N`.
 
-    Si no hay datos crudos, no se ofrece: un selector que no puede cambiar nada
-    es peor que ninguno.
+    Sin datos crudos se ofrecen únicamente los grupos publicados, y si la otra
+    dimensión ya está elegida (`bloqueado`) se explica en vez de ofrecer un
+    selector que no podría cambiar nada.
     """
     visibles, pequenos = grupos_visibles(analisis, columna)
     if not hay_datos_crudos(analisis):
-        return TODOS, pequenos
+        publicados = (getattr(analisis, "subgrupos", None) or {}).get(columna) or {}
+        visibles = [g for g in visibles if g in publicados]
+        if bloqueado and visibles:
+            st.sidebar.caption(f"{etiqueta}: con los resultados publicados se "
+                               "filtra por colegio o por grado, no por los dos "
+                               "a la vez.")
+            return TODOS, pequenos
     if not visibles:
         return TODOS, pequenos
     valor = st.sidebar.selectbox(etiqueta, [TODOS] + visibles,
@@ -626,7 +708,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
 
     colegio, peq_colegio = (_selector_grupo(a, "Colegio", "Colegio")
                             if ve_colegios(rol) else (TODOS, []))
-    grado, peq_grado = _selector_grupo(a, "Grado", "Grado")
+    grado, peq_grado = _selector_grupo(
+        a, "Grado", "Grado",
+        bloqueado=(not hay_datos_crudos(a) and colegio != TODOS))
     filtros = {"nivel": nivel, "colegio": colegio, "grado": grado}
 
     # ── 1. bandas del SDQ total
@@ -635,6 +719,8 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     if b:
         st.plotly_chart(figura_bandas(b), width="stretch",
                         key="est_com_bandas")
+    elif hay_filtro(filtros) and not hay_datos_crudos(a) and subanalisis(a, filtros) is None:
+        st.info(SIN_SUBGRUPO_PUBLICADO, icon="ℹ️")
     else:
         st.info("Este grupo no tiene suficientes respuestas para mostrar la "
                 "distribución por niveles.", icon="ℹ️")

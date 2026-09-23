@@ -118,7 +118,9 @@ def test_el_lote_real_solo_tiene_tipos_y_agrupaciones_previstas(lote_real):
     tipos = {f["tipo"] for f in filas}
     assert tipos <= {"descriptivo", "banda", "corte", "correlacion", "grupo",
                      "modelo", "tercil", "percentil", "icc", "contraste", "item",
-                     "muestra", "solapamiento", "ingesta"}
+                     "muestra", "solapamiento", "ingesta",
+                     # resultados por colegio y por grado para el despliegue
+                     "banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo"}
     for f in filas:
         assert f["nivel"] in ("secundaria", "primaria")
         assert isinstance(f["detalle"], dict)
@@ -129,7 +131,19 @@ def test_ninguna_fila_viene_de_datos_individuales(lote_real):
     analisis, filas = lote_real
     n_estudiantes = sum(a.n for a in analisis.values() if a is not None)
     # una fila por estudiante sería la señal de fuga; hay muchas menos filas
-    assert len(filas) < n_estudiantes
+    del_nivel = [f for f in filas if not f["tipo"].endswith("_grupo")]
+    assert len(del_nivel) < n_estudiantes
+    # y cada colegio o grado publicado lleva un número fijo y pequeño de filas
+    # (bandas, cortes, contrastes e ítems), independiente de cuántos estudiantes
+    # tenga: si dependiera del N, algo estaría saliendo fila a fila
+    por_grupo: dict = {}
+    for f in filas:
+        if f["tipo"].endswith("_grupo"):
+            por_grupo.setdefault((f["nivel"], f["agrupacion"], f["grupo"]), []).append(f)
+    assert por_grupo
+    tope = 6 + 16 + 4 + 18   # bandas + cortes + contrastes + ítems del PSSM
+    for clave, propias in por_grupo.items():
+        assert len(propias) <= tope, clave
     # y toda fila declara un N de grupo, no de individuo
     assert all(f["n"] >= cat.MIN_GROUP_N for f in filas)
 

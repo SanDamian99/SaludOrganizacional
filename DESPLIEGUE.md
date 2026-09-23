@@ -23,10 +23,14 @@ Los CSV originales **no se despliegan**: traen nombres de menores y están
 ignorados por git. Por eso el despliegue depende de que haya una corrida
 aprobada; si no la hay, la aplicación lo dice y no muestra cifras.
 
-La segunda fuente no puede filtrar por colegio ni por grado, porque no existe la
-fila por estudiante. No es una carencia: un despliegue no debería poder
-recalcular nada sobre individuos. La aplicación lo advierte en pantalla y no
-ofrece selectores que no puedan funcionar.
+La segunda fuente no tiene fila por estudiante, y no debería: un despliegue no
+puede recalcular nada sobre individuos. Para que aun así se pueda ver un colegio
+o un grado, el pipeline calcula por adelantado las tablas de la vista comunidad
+de cada grupo que llega a 10 respuestas y el publicador las sube (tipos
+`banda_grupo`, `corte_grupo`, `contraste_grupo`, `item_grupo`). Con esa fuente
+se filtra por colegio **o** por grado, uno a la vez; un grado dentro de un
+colegio no se publica y la pantalla lo explica. Esto existe desde la corrida 5;
+una corrida anterior se lee igual, solo que sin selectores.
 
 Para ver en local exactamente lo que mostrará el despliegue:
 
@@ -38,6 +42,38 @@ OBS360_FUENTE=supabase OBS360_MODO=investigador streamlit run main.py
 > exportar `SUPABASE_KEY` no tiene efecto: el secreto lo sobrescribe. Para
 > previsualizar con otra clave están `OBS360_SUPABASE_URL` y
 > `OBS360_SUPABASE_KEY`, que tienen precedencia.
+
+## Versiones del archivo de docentes
+
+Los xlsx de docentes están fuera de git, así que el despliegue no los tiene. En
+su lugar, la aplicación carga al arrancar la **versión activa** del almacén de
+Supabase: bucket `datasets` (privado) y tabla `obs360.conjuntos_versiones`, que
+registra cada subida con fecha, filas, hash, notas y quién la subió. Si no hay
+versión activa, ni credenciales, o la red falla, la aplicación cae a los
+archivos en disco como hasta ahora.
+
+Solo el despliegue privado (A) lleva en sus secretos las credenciales del
+usuario de carga:
+
+```toml
+OBS360_CARGA_EMAIL = "cargador@…"
+OBS360_CARGA_CLAVE = "…"
+```
+
+Sin ellas, *Cargar Datos* sigue funcionando pero la carga vive solo en la
+sesión y se pierde al reiniciar; la propia página lo dice.
+
+Para publicar una versión nueva: *Cargar Datos* → subir el archivo → *Procesar y
+Cargar* → elegir el conjunto (`docentes` o `cuidadores`), anotar qué cambió y
+*Guardar en Supabase y activar*. **Antes de guardar se retiran las columnas que
+identifican personas** (nombre, documento, cédula, teléfono, correo, marca
+temporal); la pantalla lista cuáles se quitaron. El archivo que queda en Storage
+no puede volver a asociarse a nadie.
+
+Para volver a una versión anterior: en la misma página, tabla *Versiones
+guardadas* → botón *Activar* en la fila deseada. Solo hay una activa por
+conjunto; la nueva se carga en el siguiente arranque (o al recargar la página,
+porque el guardado vacía el caché).
 
 ## Los dos despliegues
 
@@ -63,6 +99,8 @@ Secretos (*Advanced settings → Secrets*):
 OBS360_MODO = "investigador"
 SUPABASE_URL = "https://nkjyuviycatgrzqjnsoa.supabase.co"
 SUPABASE_KEY = "clave-anon"
+OBS360_CARGA_EMAIL = "usuario de carga (ver «Versiones del archivo de docentes»)"
+OBS360_CARGA_CLAVE = "su contraseña"
 ```
 
 Quien entre aterriza en la vista de investigación, con las ocho pestañas, las
@@ -98,14 +136,21 @@ publica.
 
 ## Pasos
 
-1. **Aprobar la corrida.** En el SQL Editor de Supabase:
+1. **Subir y aprobar la corrida.** Desde la máquina que tiene los formularios:
 
-   ```sql
-   UPDATE obs360.corridas SET publicada = true WHERE id = 4;
+   ```bash
+   python -m src.estudiantes.publicar --notas "qué cambió"
    ```
 
-   Sin esto, la aplicación desplegada no muestra ninguna cifra. La corrida 4 es
-   la vigente: 803 filas agregadas, secundaria 943 y primaria 282.
+   Queda con `publicada = false`. Se aprueba en el SQL Editor de Supabase:
+
+   ```sql
+   UPDATE obs360.corridas SET publicada = true WHERE id = <id nuevo>;
+   ```
+
+   Sin esto, la aplicación desplegada no muestra ninguna cifra. La corrida 4
+   (803 filas, secundaria 943 y primaria 282) es la aprobada; la siguiente
+   añade los resultados por colegio y por grado.
 
 2. **Subir la rama a GitHub.**
 
