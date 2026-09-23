@@ -560,6 +560,13 @@ def render_dashboard():
     label = st.session_state.get("current_dataset")
     if label:
         st.caption(f"Dataset activo: **{label}** · {len(df):,} registros")
+    # En el despliegue solo existe el CSV sintético; sin este aviso se lee como datos reales.
+    from src.data.loader import es_demo
+    if es_demo(label):
+        st.warning(
+            "Estás viendo datos de demostración generados al azar, no respuestas reales. "
+            "Carga el archivo real en «Cargar Datos»."
+        )
 
     wellbeing = indicators.is_wellbeing_dataset(df)
     df_view = _sidebar(df, wellbeing)

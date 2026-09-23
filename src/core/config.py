@@ -26,10 +26,13 @@ SAMPLE_DATA_PATH = "src/data/samples/sample_bienestar.csv"
 
 # Datasets precargados seleccionables (el primero que exista es el principal/por defecto).
 # Los archivos de datos no se versionan; se muestran solo los presentes en disco.
+# `demo` marca los datos sintéticos: en el despliegue es lo único que llega (los xlsx
+# reales están fuera de git) y una revisora los tomó por respuestas de docentes, así
+# que la app tiene que poder avisarlo sin depender del texto del label.
 PRELOADED_DATASETS = [
-    {"label": "Docentes (AUDIT)", "path": "Datos_Docentes_AUDIT 2.xlsx"},
-    {"label": "Bienestar laboral", "path": MASTER_DATA_PATH},
-    {"label": "Muestra de bienestar", "path": SAMPLE_DATA_PATH},
+    {"label": "Docentes (AUDIT)", "path": "Datos_Docentes_AUDIT 2.xlsx", "demo": False},
+    {"label": "Bienestar laboral", "path": MASTER_DATA_PATH, "demo": False},
+    {"label": "Demostración (datos sintéticos)", "path": SAMPLE_DATA_PATH, "demo": True},
 ]
 
 # --- Data Dictionary & Configuration ---
