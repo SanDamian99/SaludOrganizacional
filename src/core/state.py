@@ -20,19 +20,39 @@ def init_session_state():
     if "df" not in st.session_state:
         st.session_state.df = None
 
-        # Cargar el dataset precargado principal (el primero disponible).
+        # Primero la versión activa en Supabase Storage: es lo único que existe
+        # en el despliegue (los xlsx están fuera de git). Si no hay credenciales,
+        # ni versión, o la red falla, se cae al disco como siempre. Nada de esto
+        # puede tumbar la app: sin datos la app arranca vacía, pero arranca.
+        cargado = False
         try:
-            from src.data.loader import available_datasets, load_dataset
+            from src.data.loader import dataset_activo_en_storage
 
-            datasets = available_datasets()
-            if datasets:
-                df, report = load_dataset(datasets[0]["resolved"])
+            resultado = dataset_activo_en_storage("docentes")
+            if resultado:
+                df, report, etiqueta = resultado
                 st.session_state.df = df
                 st.session_state.last_ingestion_report = report
-                st.session_state.current_dataset = datasets[0]["label"]
-                st.session_state["_loaded_selector"] = datasets[0]["label"]
+                st.session_state.current_dataset = etiqueta
+                st.session_state["_loaded_selector"] = etiqueta
+                cargado = True
         except Exception as e:
-            logger.warning(f"Error loading default data: {e}")
+            logger.warning(f"No se pudo cargar la versión activa de Storage: {e}")
+
+        # Cargar el dataset precargado principal (el primero disponible en disco).
+        if not cargado:
+            try:
+                from src.data.loader import available_datasets, load_dataset
+
+                datasets = available_datasets()
+                if datasets:
+                    df, report = load_dataset(datasets[0]["resolved"])
+                    st.session_state.df = df
+                    st.session_state.last_ingestion_report = report
+                    st.session_state.current_dataset = datasets[0]["label"]
+                    st.session_state["_loaded_selector"] = datasets[0]["label"]
+            except Exception as e:
+                logger.warning(f"Error loading default data: {e}")
 
     # Analysis results (for context sharing)
     if "analysis_context" not in st.session_state:

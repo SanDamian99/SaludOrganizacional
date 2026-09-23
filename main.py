@@ -51,9 +51,25 @@ if not get_gemini_api_key():
     )
 
 # --- Selector de dataset precargado ---
+from src.data import loader as _loader
 from src.data.loader import available_datasets, load_dataset
 
 _datasets = available_datasets()
+
+# La versión activa en Supabase Storage va de primera: en el despliegue es la
+# única fuente real. Se pide con getattr por la misma razón que la página
+# inicial: un módulo rancio en memoria no debe tumbar el arranque.
+_version_activa = getattr(_loader, "version_activa_storage", None)
+_etiqueta_storage = getattr(_loader, "etiqueta_storage", None)
+if callable(_version_activa) and callable(_etiqueta_storage):
+    try:
+        _v = _version_activa("docentes")
+        if _v:
+            _datasets = [{"label": _etiqueta_storage(_v, "docentes"), "storage": "docentes",
+                          "demo": False}] + _datasets
+    except Exception as e:
+        st.sidebar.caption(f"Sin acceso al almacén de versiones: {e}")
+
 if _datasets:
     with st.sidebar:
         _labels = [d["label"] for d in _datasets]
@@ -62,7 +78,10 @@ if _datasets:
     if st.session_state.get("_loaded_selector") != _sel:
         _chosen = next(d for d in _datasets if d["label"] == _sel)
         try:
-            _df, _report = load_dataset(_chosen["resolved"])
+            if _chosen.get("storage"):
+                _df, _report, _ = _loader.dataset_activo_en_storage(_chosen["storage"])
+            else:
+                _df, _report = load_dataset(_chosen["resolved"])
             st.session_state.df = _df
             st.session_state.last_ingestion_report = _report
             st.session_state.current_dataset = _sel
