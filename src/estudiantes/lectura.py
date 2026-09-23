@@ -79,6 +79,18 @@ def _cliente():
     return create_client(url, key)
 
 
+def id_corrida_vigente() -> int | None:
+    """Id de la corrida publicada más reciente, o None. Consulta mínima: una fila.
+
+    Sirve como clave de caché en la aplicación: si aparece una corrida nueva la
+    clave cambia y se vuelve a leer todo, sin esperar a que el proceso reinicie.
+    """
+    cli = _cliente()
+    filas = (cli.postgrest.schema(ESQUEMA).table("corridas").select("id")
+             .order("creada_en", desc=True).limit(1).execute().data)
+    return int(filas[0]["id"]) if filas else None
+
+
 def _traer_filas(cli) -> tuple[dict | None, list[dict]]:
     """(corrida publicada, filas de resultados). RLS ya filtra por `publicada`."""
     tabla = cli.postgrest.schema(ESQUEMA)

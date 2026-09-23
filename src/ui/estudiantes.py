@@ -37,6 +37,20 @@ def _analizar(firma: tuple) -> tuple:
     return pipeline.cargar_y_analizar(rutas)
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _corrida_vigente() -> int | None:
+    """Id de la corrida publicada más reciente, refrescado cada cinco minutos.
+
+    Es la clave de la caché de abajo. Con una clave fija, la aplicación
+    desplegada seguía mostrando la corrida anterior después de aprobar una
+    nueva, hasta que alguien reiniciara el proceso.
+    """
+    try:
+        return lectura.id_corrida_vigente()
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
 @st.cache_resource(show_spinner="Leyendo los resultados publicados…")
 def _leer_publicado(_clave: str) -> tuple:
     return lectura.cargar_desde_supabase()
@@ -66,7 +80,7 @@ def cargar_analisis(base: str | None = None):
         return analisis, informes, "archivos"
 
     if lectura.disponible():
-        analisis, informes, corrida = _leer_publicado("v1")
+        analisis, informes, corrida = _leer_publicado(f"corrida-{_corrida_vigente()}")
         if analisis:
             return analisis, informes, "supabase"
     return None, None, None
