@@ -63,6 +63,21 @@ OBS360_CARGA_CLAVE = "…"
 Sin ellas, *Cargar Datos* sigue funcionando pero la carga vive solo en la
 sesión y se pierde al reiniciar; la propia página lo dice.
 
+**Preparar la exportación cruda del formulario.** Lo que sale de Google Forms
+trae nombres, las respuestas como texto y a quienes dijeron «No» al
+consentimiento. Antes de subirlo se pasa por:
+
+```bash
+python -m scripts.preparar_docentes "360 - Profesores (respuestas).xlsx" Docentes_codificado.xlsx
+```
+
+Descarta las filas sin consentimiento, quita el nombre, codifica los ítems con
+sus inversiones, suma los totales por escala, normaliza el colegio y marca en
+cada fila la versión del formulario (en marzo de 2026 cambió la escala de
+acuerdo de 6 a 5 opciones y desapareció el bloque de bienestar psicosocial). Si
+el formulario cambia el orden de las preguntas, el script se detiene en vez de
+codificar mal. El archivo resultante es el que se sube.
+
 Para publicar una versión nueva: *Cargar Datos* → subir el archivo → *Procesar y
 Cargar* → elegir el conjunto (`docentes` o `cuidadores`), anotar qué cambió y
 *Guardar en Supabase y activar*. **Antes de guardar se retiran las columnas que
