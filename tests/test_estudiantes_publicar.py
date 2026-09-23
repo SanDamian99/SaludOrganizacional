@@ -169,3 +169,20 @@ def test_el_lote_real_no_trae_banderas_numericas(lote_real):
             if clave in f["detalle"]:
                 assert isinstance(f["detalle"][clave], bool), \
                     f"{f['tipo']}/{f['clave']}: {clave} no es booleano"
+
+
+def test_las_credenciales_de_escritura_salen_del_archivo_local_si_no_estan_en_el_entorno(tmp_path, monkeypatch):
+    """Quien publica no debería tener que exportar claves a mano antes de cada corrida."""
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+    ruta = tmp_path / "secrets.toml"
+    ruta.write_text('SUPABASE_URL = "https://x.supabase.co"\nSUPABASE_SERVICE_KEY = "srv"\n'
+                    'SUPABASE_KEY = "anon"\n')
+    assert publicar.credenciales_escritura(str(ruta)) == ("https://x.supabase.co", "srv")
+    # el entorno manda cuando existe
+    monkeypatch.setenv("SUPABASE_URL", "https://y.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_KEY", "otra")
+    assert publicar.credenciales_escritura(str(ruta)) == ("https://y.supabase.co", "otra")
+    # sin archivo y sin entorno, nada
+    monkeypatch.delenv("SUPABASE_URL"); monkeypatch.delenv("SUPABASE_SERVICE_KEY")
+    assert publicar.credenciales_escritura(str(tmp_path / "no_existe.toml")) == (None, None)

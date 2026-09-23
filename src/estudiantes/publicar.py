@@ -379,16 +379,39 @@ def version_analisis(analisis: dict) -> str:
     return f"{date.today().isoformat()}-{huella}"
 
 
+RUTA_SECRETOS = os.path.join(".streamlit", "secrets.toml")
+
+
+def credenciales_escritura(ruta_secretos: str = RUTA_SECRETOS) -> tuple[str | None, str | None]:
+    """(url, clave service_role): del entorno o, si falta, del archivo local de secretos.
+
+    El publicador corre en la máquina de quien procesa, donde las claves viven
+    en `.streamlit/secrets.toml` (ignorado por git). Leerlo aquí evita tener
+    que exportarlas a mano antes de cada corrida. Se lee con `tomllib`, no con
+    Streamlit, para no arrancar nada de la aplicación.
+    """
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_KEY")
+    if (not url or not key) and os.path.exists(ruta_secretos):
+        import tomllib
+        with open(ruta_secretos, "rb") as fh:
+            secretos = tomllib.load(fh)
+        url = url or secretos.get("SUPABASE_URL")
+        key = key or secretos.get("SUPABASE_SERVICE_KEY")
+    return url, key
+
+
 def _cliente(url: str | None = None, key: str | None = None):
     """Cliente de Supabase con la clave de servicio. Escribir exige service_role."""
     from supabase import create_client
-    url = url or os.environ.get("SUPABASE_URL")
-    key = key or os.environ.get("SUPABASE_SERVICE_KEY")
+    url_sec, key_sec = credenciales_escritura()
+    url = url or url_sec
+    key = key or key_sec
     if not url or not key:
         raise RuntimeError(
             "Faltan credenciales. Se necesita SUPABASE_URL y SUPABASE_SERVICE_KEY "
             "(la clave service_role, no la anon: el esquema no da permiso de "
-            "escritura al rol anónimo a propósito).")
+            f"escritura al rol anónimo a propósito), en el entorno o en {RUTA_SECRETOS}.")
     return create_client(url, key)
 
 
