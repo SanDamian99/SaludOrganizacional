@@ -5,10 +5,11 @@ La lógica (qué columnas se pueden filtrar, cómo se limpian sus categorías y 
 aplica la selección) vive en funciones puras sin Streamlit para poder probarla con
 DataFrames pequeños. `render_filtering_sidebar` solo dibuja los controles encima.
 
-El criterio de "columna filtrable" es deliberadamente descriptivo y no depende del
-diccionario de datos: los archivos reales traen columnas que el diccionario no
-conoce (el colegio de los docentes llega como «Intitución», con esa ortografía) y la
-usuaria pidió poder elegir cualquier corte razonable, no solo los previstos.
+Los filtros son los nueve que acordó el equipo investigador (`FILTROS_DOCENTES`):
+colegio, edad, sexo, estado civil, nivel educativo, zona de vivienda, estrato, tipo
+de contratación y nivel del cargo. Se localizan por fragmentos del nombre porque el
+mismo dato llega con encabezados distintos según el archivo. Solo si un dataset no
+trae ninguno se cae a un criterio descriptivo para no dejar la barra vacía.
 """
 import re
 
@@ -104,118 +105,140 @@ def columna_colegio(df: pd.DataFrame) -> str | None:
     return None
 
 
+# Los filtros del dashboard de docentes, en el orden en que se muestran. Los
+# acordó el equipo investigador (sep 2026): ni más ni menos. Cada uno se busca
+# por un fragmento del nombre normalizado de la columna, porque el mismo dato
+# llega con encabezados distintos según el archivo («(SD)Sexo», «Sexo»).
+FILTROS_DOCENTES = [
+    ("Colegio", ("colegio", "intituc", "instituc"), "categoria"),
+    ("Edad", ("edad",), "rango"),
+    ("Sexo", ("sexo",), "categoria"),
+    ("Estado civil", ("estado civil",), "categoria"),
+    ("Nivel educativo", ("nivel educativo",), "categoria"),
+    ("Zona de vivienda", ("zona",), "categoria"),
+    ("Estrato", ("estrato",), "categoria"),
+    ("Tipo de contratación", ("tipo de contrat",), "categoria"),
+    ("Nivel del cargo", ("nivel de cargo",), "categoria"),
+]
+
+
+def filtros_disponibles(df: pd.DataFrame) -> list[tuple[str, str, str]]:
+    """[(etiqueta, columna real, tipo)] de FILTROS_DOCENTES presentes en `df`, en orden.
+
+    Una columna constante no sirve como filtro y se omite («Este es un colegio»
+    vale 0 en todas las filas). Si dos columnas encajan con el mismo fragmento,
+    gana la de nombre más corto: «Nivel de Cargo» antes que «Nivel de Cargo 2».
+    """
+    salida = []
+    usadas: set[str] = set()
+    for etiqueta, fragmentos, tipo in FILTROS_DOCENTES:
+        candidatas = [c for c in df.columns if c not in usadas
+                      and any(f in normalize_text(c) for f in fragmentos)
+                      and df[c].dropna().nunique() >= 2]
+        if not candidatas:
+            continue
+        col = sorted(candidatas, key=lambda c: len(str(c)))[0]
+        usadas.add(col)
+        salida.append((etiqueta, col, tipo))
+    return salida
+
+
 def columnas_filtrables(df: pd.DataFrame) -> list[str]:
+    """Columnas que el dashboard ofrece como filtro, en el orden acordado.
+
+    Se limita a la lista del equipo. Si un dataset no trae ninguna de esas
+    variables (otro instrumento), se cae al criterio descriptivo de
+    `_candidatas_genericas` para no dejar la barra vacía.
     """
-    Columnas candidatas a filtro, ordenadas por utilidad: el colegio primero, luego las
-    categóricas del diccionario en su orden y por último el resto alfabéticamente.
-    Excluye identificadores (nombre, correo, marcas de tiempo), texto libre y
-    numéricas continuas.
-    """
+    fijas = [col for _, col, _ in filtros_disponibles(df)]
+    return fijas if fijas else _candidatas_genericas(df)
+
+
+def _candidatas_genericas(df: pd.DataFrame) -> list[str]:
+    """Categóricas de texto con pocas categorías, excluyendo identificadores y texto libre."""
     df = normalizar_categorias(df, _columnas_texto(df))
-    candidatas = [
-        c for c in df.columns
-        if not is_protected_column(c) and _es_filtrable(df[c])
-    ]
-    if not candidatas:
-        return []
-
-    orden: list[str] = []
-    colegio = columna_colegio(df)
-    if colegio in candidatas:
-        orden.append(colegio)
-
-    # Las claves del diccionario a veces traen espacios finales que el archivo no tiene.
-    por_nombre = {normalize_text(c): c for c in candidatas}
-    for clave in _categoricas_diccionario():
-        col = por_nombre.get(normalize_text(clave))
-        if col and col not in orden:
-            orden.append(col)
-
-    # Fuera del diccionario, una columna numérica con pocos valores casi siempre es
-    # un ítem Likert (AP1, PSS3…), y ofrecer ciento cincuenta de esos como filtro
-    # sepulta los que sirven. Del resto entran solo las de texto.
-    resto = sorted((c for c in candidatas
-                    if c not in orden and not pd.api.types.is_numeric_dtype(df[c])),
-                   key=lambda c: normalize_text(c))
-    return orden + resto
+    candidatas = [c for c in df.columns if not is_protected_column(c) and _es_filtrable(df[c])
+                  and not pd.api.types.is_numeric_dtype(df[c])]
+    return sorted(candidatas, key=lambda c: normalize_text(c))
 
 
 def aplicar_filtros(df: pd.DataFrame, activos: dict) -> pd.DataFrame:
-    """
-    Conserva las filas cuyo valor está en la lista elegida para cada columna. Una lista
-    vacía no filtra. Se normaliza antes de comparar para que la selección hecha sobre
-    categorías limpias encuentre también los valores con espacios sobrantes.
-    """
-    df = normalizar_categorias(df, _columnas_texto(df))
+    """Aplica la selección: una lista de valores filtra por pertenencia; una tupla
+    (mínimo, máximo) filtra por rango cerrado. Las filas sin dato en la columna
+    filtrada quedan fuera, como en cualquier filtro."""
+    if not activos:
+        return df
+    df = normalizar_categorias(df, [c for c in activos if c in df.columns])
     for col, valores in activos.items():
-        if col in df.columns and valores:
-            df = df[df[col].isin(list(valores))]
+        if col not in df.columns:
+            continue
+        if isinstance(valores, tuple) and len(valores) == 2:
+            df = df[pd.to_numeric(df[col], errors="coerce").between(*valores)]
+        elif valores:
+            df = df[df[col].isin(valores)]
     return df
 
 
 def etiqueta_filtro(col: str) -> str:
+    """Nombre legible del filtro: el acordado por el equipo si la columna es una de
+    las suyas; si no, el encabezado sin prefijos de sección."""
+    n = normalize_text(col)
+    for etiqueta, fragmentos, _ in FILTROS_DOCENTES:
+        if any(f in n for f in fragmentos):
+            return etiqueta
+    return _etiqueta_generica(col)
+
+
+def _etiqueta_generica(col: str) -> str:
     """Nombre legible: sin prefijos de sección y con los encabezados torcidos corregidos."""
     limpio = _PREFIJOS_SECCION.sub("", str(col)).strip()
     return _ETIQUETAS_LEGIBLES.get(normalize_text(limpio), limpio)
 
 
-def _filtros_por_defecto(df: pd.DataFrame, opciones: list[str]) -> list[str]:
-    """Colegio (si existe) más las dos primeras del diccionario presentes; máximo tres."""
-    defecto = []
-    colegio = columna_colegio(df)
-    if colegio in opciones:
-        defecto.append(colegio)
-    por_nombre = {normalize_text(c): c for c in opciones}
-    for clave in _categoricas_diccionario():
-        col = por_nombre.get(normalize_text(clave))
-        if col and col not in defecto:
-            defecto.append(col)
-        if len(defecto) - (1 if colegio in defecto else 0) >= 2:
-            break
-    return defecto[:3]
-
-
 def _sanear_estado(key: str, opciones: list) -> None:
     """
-    Al cambiar de dataset en la barra lateral, el estado del multiselect puede guardar
-    columnas o valores que el nuevo archivo no tiene, y Streamlit tumba la página por
-    eso. Se recorta la selección a lo que sigue existiendo.
+    Al cambiar de dataset en la barra lateral, el estado de un multiselect puede guardar
+    valores que el nuevo archivo no tiene, y Streamlit tumba la página por eso. Se
+    recorta la selección a lo que sigue existiendo.
     """
     if key in st.session_state:
         st.session_state[key] = [v for v in st.session_state[key] if v in opciones]
 
 
 def render_filtering_sidebar(df: pd.DataFrame) -> pd.DataFrame:
-    """Dibuja los filtros en la barra lateral y devuelve el DataFrame filtrado y normalizado."""
-    st.sidebar.markdown("### 🔍 Filtros Avanzados")
+    """Dibuja los filtros acordados en la barra lateral y devuelve el DataFrame filtrado."""
+    st.sidebar.markdown("### 🔍 Filtros")
 
-    opciones = columnas_filtrables(df)
+    disponibles = filtros_disponibles(df)
     df_norm = normalizar_categorias(df, _columnas_texto(df))
 
-    activos: dict[str, list] = {}
-    with st.sidebar.expander("Seleccionar Filtros", expanded=True):
-        if not opciones:
-            st.caption("Este dataset no tiene columnas categóricas para filtrar.")
-        else:
-            _sanear_estado("filtros_columnas", opciones)
-            elegidas = st.multiselect(
-                "Filtrar por",
-                options=opciones,
-                default=_filtros_por_defecto(df, opciones),
-                format_func=etiqueta_filtro,
-                key="filtros_columnas",
-            )
-            for col in elegidas:
+    activos: dict = {}
+    with st.sidebar.expander("Filtrar docentes", expanded=True):
+        if not disponibles:
+            for col in _candidatas_genericas(df)[:6]:
+                disponibles.append((_etiqueta_generica(col), col, "categoria"))
+        if not disponibles:
+            st.caption("Este dataset no tiene variables para filtrar.")
+        for etiqueta, col, tipo in disponibles:
+            if tipo == "rango":
+                serie = pd.to_numeric(df_norm[col], errors="coerce").dropna()
+                if serie.empty:
+                    continue
+                minimo, maximo = int(serie.min()), int(serie.max())
+                if minimo == maximo:
+                    continue
+                rango = st.slider(etiqueta, minimo, maximo, (minimo, maximo),
+                                  key=f"filtro_{col}")
+                if rango != (minimo, maximo):
+                    activos[col] = rango
+            else:
                 valores = df_norm[col].dropna().unique().tolist()
                 valores = sorted(valores, key=lambda v: (str(type(v)), v))
                 _sanear_estado(f"filtro_{col}", valores)
-                seleccion = st.multiselect(
-                    etiqueta_filtro(col),
-                    options=valores,
-                    default=[],
-                    format_func=lambda v: str(v),
-                    key=f"filtro_{col}",
-                )
+                # Sin `default`: el valor vive en session_state (que `_sanear_estado`
+                # acaba de recortar) y pasar los dos hace que Streamlit avise.
+                seleccion = st.multiselect(etiqueta, options=valores,
+                                           format_func=lambda v: str(v), key=f"filtro_{col}")
                 if seleccion:
                     activos[col] = seleccion
 

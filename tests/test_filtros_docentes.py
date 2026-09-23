@@ -1,118 +1,97 @@
 """
-Filtros flexibles del dashboard de docentes.
+Filtros del dashboard de docentes.
 
-Se prueba la lógica pura (sin Streamlit): qué columnas se ofrecen como filtro, en qué
-orden, cómo se limpian las categorías con espacios sobrantes y cómo se aplica la
-selección. También la marca de dataset de demostración.
+El equipo investigador acordó nueve filtros y ninguno más: colegio, edad, sexo,
+estado civil, nivel educativo, zona de vivienda, estrato, tipo de contratación y
+nivel del cargo. Estas pruebas fijan esa lista, su orden, y que los ítems Likert,
+los identificadores y el texto libre nunca aparezcan como filtro.
 """
 import numpy as np
 import pandas as pd
-import pytest
 
-from src.ui.components import filtering as f
 from src.data.loader import es_demo
+from src.ui.components import filtering as f
 
 
-@pytest.fixture
-def docentes():
-    """Parecido al archivo real: colegio con siglas, constante inútil, nombre y texto libre."""
-    n = 40
-    rng = np.random.default_rng(7)
+def _docentes(n=40) -> pd.DataFrame:
+    rng = np.random.default_rng(1)
     return pd.DataFrame({
+        "ID": [f"D{i:03d}" for i in range(n)],
         "Nombre": [f"Persona {i}" for i in range(n)],
-        "Correo electrónico": [f"p{i}@x.co" for i in range(n)],
-        "Intitución": ["Bojacá", "Bojacá ", "CND", "SMR"] * (n // 4),
-        "Este es un colegio:": [0] * n,
-        "(SD)Sexo": rng.choice([1, 2], n).tolist(),
-        "(SD)Estado Civil": rng.choice([1, 2, 3, 4, 5], n).tolist(),
-        "(SD)Edad": rng.integers(22, 65, n).tolist(),
-        "(LB)Tipo de Contrato": rng.choice([1, 2, 3], n).tolist(),
-        "Comentario libre": [f"opinión distinta {i}" for i in range(n)],
-        "PSS1": rng.choice([1, 2, 3, 4, 5], n).tolist(),
+        "(SD)Edad": rng.integers(25, 60, n),
+        "(SD)Sexo": rng.choice(["Femenino", "Masculino"], n),
+        "(SD)Estado Civil": rng.choice(["Soltero", "Casado"], n),
+        "(SD)Nivel Educativo": rng.choice(["Profesional", "Posgrado"], n),
+        "(SD)Zona de vivienda": rng.choice(["Urbana", "Rural"], n),
+        "(SD)Estrato Socioeconómico": rng.integers(1, 5, n),
+        "Colegio": rng.choice(["Bojacá", "Bojacá ", "Fusca"], n),
+        "Este es un colegio": [0] * n,
+        "(LB)Tipo de Contrato": rng.choice(["En propiedad", "En provisionalidad"], n),
+        "Nivel de Cargo": rng.choice(["Operativo", "Directivo"], n),
+        "Nivel de Cargo  2": rng.choice(["Docente de aula", "Rector"], n),
+        "Comentario": [f"texto libre {i}" for i in range(n)],
+        "PSS3": rng.integers(0, 5, n),
+        "PSS_T": rng.integers(0, 41, n),
     })
 
 
-def test_colegio_va_primero(docentes):
-    cols = f.columnas_filtrables(docentes)
-    assert cols[0] == "Intitución"
-    assert f.columna_colegio(docentes) == "Intitución"
+def test_los_filtros_son_exactamente_los_nueve_acordados_y_en_orden():
+    etiquetas = [e for e, _, _ in f.filtros_disponibles(_docentes())]
+    assert etiquetas == ["Colegio", "Edad", "Sexo", "Estado civil", "Nivel educativo",
+                         "Zona de vivienda", "Estrato", "Tipo de contratación", "Nivel del cargo"]
 
 
-def test_despues_del_colegio_vienen_las_del_diccionario_en_orden(docentes):
-    cols = f.columnas_filtrables(docentes)
-    assert cols[1:4] == ["(SD)Sexo", "(SD)Estado Civil", "(LB)Tipo de Contrato"]
-    # Un ítem Likert numérico fuera del diccionario no se ofrece como filtro.
-    assert "PSS1" not in cols
+def test_cada_filtro_encuentra_su_columna_real():
+    cols = dict((e, c) for e, c, _ in f.filtros_disponibles(_docentes()))
+    assert cols["Colegio"] == "Colegio"                 # no «Este es un colegio», que es constante
+    assert cols["Nivel del cargo"] == "Nivel de Cargo"  # no «Nivel de Cargo  2»
+    assert cols["Tipo de contratación"] == "(LB)Tipo de Contrato"
 
 
-def test_excluye_identificadores_constantes_texto_libre_y_continuas(docentes):
-    cols = f.columnas_filtrables(docentes)
-    assert "Nombre" not in cols
-    assert "Correo electrónico" not in cols
-    assert "Este es un colegio:" not in cols
-    assert "Comentario libre" not in cols
-    assert "(SD)Edad" not in cols
+def test_la_edad_es_un_rango_y_lo_demas_categorias():
+    tipos = dict((e, t) for e, _, t in f.filtros_disponibles(_docentes()))
+    assert tipos["Edad"] == "rango"
+    assert all(t == "categoria" for e, t in tipos.items() if e != "Edad")
 
 
-def test_constante_con_nombre_de_colegio_no_es_el_colegio():
-    df = pd.DataFrame({"Este es un colegio:": [0] * 10, "x": range(10)})
-    assert f.columna_colegio(df) is None
+def test_nada_fuera_de_la_lista_entra_como_filtro():
+    cols = f.columnas_filtrables(_docentes())
+    for prohibida in ("Nombre", "ID", "Comentario", "PSS3", "PSS_T", "Nivel de Cargo  2"):
+        assert prohibida not in cols
 
 
-def test_espacios_finales_se_colapsan(docentes):
-    df = f.normalizar_categorias(docentes, ["Intitución"])
-    assert sorted(df["Intitución"].unique()) == ["Bojacá", "CND", "SMR"]
-    assert (df["Intitución"] == "Bojacá").sum() == 20
+def test_sin_variables_acordadas_se_cae_al_criterio_generico():
+    otro = pd.DataFrame({"Departamento": ["A", "B"] * 10, "Nota": range(20),
+                         "Correo": [f"x{i}@y.z" for i in range(20)]})
+    assert f.columnas_filtrables(otro) == ["Departamento"]
 
 
-def test_normalizar_conserva_nan_y_mayusculas():
-    df = pd.DataFrame({"c": ["  La  Balsa ", None, "cnd", np.nan]})
-    out = f.normalizar_categorias(df, ["c"])
-    assert out["c"].tolist()[0] == "La Balsa"
-    assert out["c"].tolist()[2] == "cnd"
-    assert out["c"].isna().sum() == 2
+def test_normalizar_colapsa_espacios_y_conserva_nan_y_mayusculas():
+    df = pd.DataFrame({"Colegio": ["Bojacá ", "Bojacá", "  Fusca", np.nan, "FUSCA"]})
+    n = f.normalizar_categorias(df, ["Colegio"])
+    assert n["Colegio"].tolist()[:3] == ["Bojacá", "Bojacá", "Fusca"]
+    assert pd.isna(n["Colegio"].iloc[3]) and n["Colegio"].iloc[4] == "FUSCA"
 
 
-def test_aplicar_filtros_con_dos_columnas(docentes):
-    out = f.aplicar_filtros(docentes, {"Intitución": ["Bojacá"], "(SD)Sexo": [1]})
-    assert len(out) > 0
-    assert set(out["Intitución"]) == {"Bojacá"}
-    assert set(out["(SD)Sexo"]) == {1}
-    # La selección sobre la categoría limpia también recoge las filas con espacio final.
-    assert len(f.aplicar_filtros(docentes, {"Intitución": ["Bojacá"]})) == 20
+def test_aplicar_filtros_por_categoria_y_por_rango():
+    df = _docentes()
+    r = f.aplicar_filtros(df, {"Colegio": ["Bojacá"], "(SD)Edad": (30, 40)})
+    assert set(r["Colegio"].str.strip()) <= {"Bojacá"}
+    assert r["(SD)Edad"].between(30, 40).all()
+    # el filtro de colegio recoge también «Bojacá » (con espacio), porque se normaliza
+    assert len(r) == len(df[(df["Colegio"].str.strip() == "Bojacá") & df["(SD)Edad"].between(30, 40)])
+    assert len(f.aplicar_filtros(df, {})) == len(df)
+    assert len(f.aplicar_filtros(df, {"Colegio": []})) == len(df)
 
 
-def test_aplicar_filtros_lista_vacia_no_filtra(docentes):
-    assert len(f.aplicar_filtros(docentes, {"Intitución": []})) == len(docentes)
-    assert len(f.aplicar_filtros(docentes, {})) == len(docentes)
-
-
-def test_etiqueta_filtro():
+def test_etiquetas_legibles():
+    assert f.etiqueta_filtro("(LB)Tipo de Contrato") == "Tipo de contratación"
     assert f.etiqueta_filtro("Intitución") == "Colegio"
-    assert f.etiqueta_filtro("(SD)Sexo") == "Sexo"
-    assert f.etiqueta_filtro("(LB)Tipo de Contrato") == "Tipo de Contrato"
-    assert f.etiqueta_filtro("(BM),(CT)Tengo la opción") == "Tengo la opción"
-    assert f.etiqueta_filtro("PSS1") == "PSS1"
+    assert f.etiqueta_filtro("(SD)Estrato Socioeconómico") == "Estrato"
+    assert f.etiqueta_filtro("(BM),(CT)Otra cosa") == "Otra cosa"
 
 
 def test_es_demo():
-    assert es_demo("Demostración (datos sintéticos)") is True
-    assert es_demo("Docentes (AUDIT)") is False
-    assert es_demo("archivo_subido.xlsx") is False
-    assert es_demo(None) is False
-
-
-def test_los_items_likert_numericos_no_se_ofrecen_como_filtro():
-    """Fuera del diccionario, solo las columnas de texto entran como filtro."""
-    import pandas as pd
-    from src.ui.components.filtering import columnas_filtrables
-    df = pd.DataFrame({
-        "Intitución": ["CND", "SMR"] * 10,
-        "(SD)Sexo": [0, 1] * 10,                 # numérica pero del diccionario: entra
-        "PSS3": [0, 1, 2, 3] * 5,               # ítem Likert: no entra
-        "Nivel de Cargo": ["Docente", "Directivo"] * 10,   # texto: entra
-    })
-    cols = columnas_filtrables(df)
-    assert cols[0] == "Intitución"
-    assert "(SD)Sexo" in cols and "Nivel de Cargo" in cols
-    assert "PSS3" not in cols
+    assert es_demo("Demostración (datos sintéticos)")
+    assert not es_demo("Docentes · versión 23/09/2026 (479 filas)")
+    assert not es_demo(None)
