@@ -27,7 +27,9 @@ AUDIENCIAS = {
 
 
 def _raiz_proyecto() -> str:
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    """Carpeta donde se buscan los formularios: la de datos fuente, no el repositorio."""
+    from src.core.rutas import carpeta_datos
+    return carpeta_datos("estudiantes")
 
 
 @st.cache_resource(show_spinner="Puntuando y analizando las respuestas…")

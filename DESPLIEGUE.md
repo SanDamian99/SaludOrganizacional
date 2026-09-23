@@ -192,9 +192,16 @@ espera.
 Si la instalación en el despliegue tarda demasiado o falla, se puede quitar: en
 los modos `comunidad` e `investigador` la aplicación nunca importa el chat.
 
+## Dónde viven los datos fuente
+
+Los archivos con respuestas individuales no están en el repositorio: viven en
+la carpeta hermana `../datos_fuente_360` (subcarpetas `estudiantes`, `docentes`,
+`cuidadores`), o en la que diga la variable `OBS360_DATOS_DIR`. El módulo
+`src/core/rutas.py` es el único que lo sabe; la aplicación local, el publicador
+de estudiantes y las pruebas le preguntan a él. En el despliegue esa carpeta no
+existe y la aplicación lee Supabase, que es lo previsto.
+
 ## Antes de dar por terminado
 
-- Sacar los CSV de la raíz del repositorio a una carpeta fuera del proyecto.
-  Están ignorados por git, pero su sitio no es este.
 - Revocar el token de acceso de Supabase de la sesión de trabajo.
 - Fusionar la rama a `main` y apuntar el despliegue ahí.

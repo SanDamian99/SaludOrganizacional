@@ -7,7 +7,9 @@ Salida: JSON + texto. Nunca imprime nombres; el ID es un hash del nombre normali
 import pandas as pd, numpy as np, hashlib, re, unicodedata, json, sys, itertools
 from scipy import stats
 pd.set_option('display.width',250); pd.set_option('display.max_columns',50); pd.set_option('display.max_rows',300)
-ROOT=sys.argv[2] if len(sys.argv)>2 else "/Users/joseamorocho/Documents/app_360_observatorio/SaludOrganizacional/"
+from src.core.rutas import carpeta_datos  # noqa: E402
+# Los formularios viven fuera del repositorio; ver src/core/rutas.py.
+ROOT=sys.argv[2] if len(sys.argv)>2 else carpeta_datos()+"/"
 A=ROOT+'_¡Cuéntanos sobre tu bienestar emocional! (respuestas) - Respuestas de formulario 1.csv'
 B=ROOT+'¡Cuéntanos sobre tus emociones! (respuestas) - Respuestas de formulario 1.csv'
 OUT=sys.argv[1] if len(sys.argv)>1 else '.'
@@ -318,7 +320,7 @@ R['adulto_confianza']={f:{'pct_1_2':round(100*(df.loc[df.form==f,'PSSM7']<=2).me
 R['mspss_fuentes']={f:{k:round(df.loc[df.form==f,k].mean(),2) for k in ['MSPSS_Fam','MSPSS_Amigos','MSPSS_Otro']} for f in ['secundaria','primaria']}
 
 # ---- comparación con cuidadores (SDQ padres) — descriptivo, colegios distintos
-cg=pd.read_csv(ROOT+'Datos_Cuidador_corregido.csv')
+cg=pd.read_csv(carpeta_datos('cuidadores')+'/Datos_Cuidador_corregido.csv')
 cg=cg[(cg['Edad del niño']>=11)&(cg['Edad del niño']<=17)]
 def cg_sub(items,rev): 
     X=cg[[f'SDQ{i}' for i in items]].copy()

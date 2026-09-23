@@ -10,6 +10,8 @@ import os
 import pandas as pd
 import pytest
 
+from src.core.rutas import carpeta_datos
+
 from src.estudiantes import catalog as cat
 from src.estudiantes import lectura, publicar
 
@@ -20,7 +22,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 @pytest.fixture(scope="module")
 def analisis_local():
     from src.estudiantes import pipeline
-    rutas = pipeline.localizar_formularios(RAIZ)
+    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if len(rutas) < 2:
         pytest.skip("Los formularios originales no están en el directorio de trabajo")
     return pipeline.cargar_y_analizar(rutas, n_boot=20)

@@ -26,7 +26,8 @@ EXTENSIONES = (".csv", ".xlsx", ".xls")
 def localizar_formularios(base: str | None = None) -> list[str]:
     """Rutas de los formularios presentes en `base`, en el orden de PATRONES."""
     from src.estudiantes.ingest import norm_txt
-    base = base or os.getcwd()
+    from src.core.rutas import carpeta_datos
+    base = base or carpeta_datos("estudiantes")
     if not os.path.isdir(base):
         return []
     archivos = [f for f in os.listdir(base) if f.lower().endswith(EXTENSIONES)]
@@ -190,7 +191,8 @@ def cargar_y_analizar(rutas: list[str] | None = None, base: str | None = None,
     if not rutas:
         raise FileNotFoundError(
             "No se encontraron los formularios de estudiantes. Se buscan archivos "
-            f"con los patrones {PATRONES} en {base or os.getcwd()}.")
+            f"con los patrones {PATRONES} en {base or 'la carpeta de datos fuente'} "
+            "(ver src/core/rutas.py y OBS360_DATOS_DIR).")
     bruto, informes = ingest.cargar_varios(rutas)
     puntuado = scoring.puntuar(bruto)
     resultados = {}

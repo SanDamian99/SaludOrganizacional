@@ -17,10 +17,16 @@ def _base_dir() -> str:
 
 
 def _resolve(path: str):
+    """Ruta existente del dataset: tal cual, en la carpeta de datos fuente (y su
+    subcarpeta «docentes») o en la raíz del repositorio."""
+    from src.core.rutas import carpeta_datos
     if os.path.exists(path):
         return path
-    alt = os.path.join(_base_dir(), path)
-    return alt if os.path.exists(alt) else None
+    for base in (carpeta_datos("docentes"), carpeta_datos(), _base_dir()):
+        alt = os.path.join(base, path)
+        if os.path.exists(alt):
+            return alt
+    return None
 
 
 def available_datasets() -> list:

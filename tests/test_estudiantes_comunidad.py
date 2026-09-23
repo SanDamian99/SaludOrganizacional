@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.core.rutas import carpeta_datos
+
 from src.estudiantes import catalog as cat
 from src.estudiantes import ingest, pipeline, scoring
 from src.ui.views import estudiantes_comunidad as vc
@@ -283,7 +285,7 @@ def test_enunciados_pssm_fieles_al_formulario():
     from src.ui.views.estudiantes_comunidad import ENUNCIADOS_PSSM
 
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rutas = pipeline.localizar_formularios(raiz)
+    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if not rutas:
         import pytest
         pytest.skip("Los formularios originales no están en el directorio de trabajo")
@@ -316,7 +318,7 @@ def test_bandas_e_items_respetan_el_filtro():
     from src.ui.views import estudiantes_comunidad as vc
 
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rutas = pipeline.localizar_formularios(raiz)
+    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if len(rutas) < 2:
         pytest.skip("Los formularios originales no están en el directorio de trabajo")
     res, _ = pipeline.cargar_y_analizar(rutas, n_boot=20)

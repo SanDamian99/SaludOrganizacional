@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.core.rutas import carpeta_datos
+
 from src.estudiantes import catalog as cat
 from src.estudiantes import ingest, pipeline, scoring, stats
 
@@ -312,7 +314,7 @@ def referencia():
 
 @pytest.fixture(scope="module")
 def analisis_real():
-    rutas = pipeline.localizar_formularios(RAIZ)
+    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if len(rutas) < 2:
         pytest.skip("Los CSV originales no están en el directorio de trabajo")
     res, informes = pipeline.cargar_y_analizar(rutas, n_boot=60)

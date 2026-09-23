@@ -465,7 +465,9 @@ def main(argv=None) -> int:
     p.add_argument("--publicar-ya", action="store_true",
                    help="marca la corrida como publicada (por defecto queda oculta "
                         "hasta que el equipo la apruebe)")
-    p.add_argument("--base", default=None, help="carpeta donde están los formularios")
+    p.add_argument("--base", default=None,
+                   help="carpeta donde están los formularios (por defecto, la de datos "
+                        "fuente: OBS360_DATOS_DIR o ../datos_fuente_360/estudiantes)")
     args = p.parse_args(argv)
 
     analisis, informes = pipeline.cargar_y_analizar(base=args.base)

@@ -9,6 +9,8 @@ import os
 
 import pytest
 
+from src.core.rutas import carpeta_datos
+
 from src.estudiantes import catalog as cat
 from src.estudiantes import pipeline, publicar
 
@@ -80,7 +82,7 @@ def test_mensajes_para_subir_respetan_los_roles_del_catalogo():
 # ══ Con los datos reales, si están ══════════════════════════════════════════
 @pytest.fixture(scope="module")
 def lote_real():
-    rutas = pipeline.localizar_formularios(RAIZ)
+    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if len(rutas) < 2:
         pytest.skip("Los formularios originales no están en el directorio de trabajo")
     analisis, _ = pipeline.cargar_y_analizar(rutas, n_boot=20)
@@ -107,7 +109,7 @@ def test_el_lote_real_no_trae_ni_un_nombre_ni_un_identificador(lote_real):
             ids.update(a.datos["ID"].astype(str).head(200))
     assert not [i for i in ids if i in texto]
     # y los nombres crudos tampoco
-    ruta = pipeline.localizar_formularios(RAIZ)[0]
+    ruta = pipeline.localizar_formularios(carpeta_datos('estudiantes'))[0]
     nombres = pd.read_csv(ruta)["Mi nombre completo es:"].dropna().astype(str).head(200)
     bajo = texto.lower()
     assert not [n for n in nombres if n.strip() and n.strip().lower() in bajo]
