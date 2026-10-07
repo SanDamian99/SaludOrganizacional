@@ -1,0 +1,139 @@
+"""La regla de cifras que no delatan dentro del pipeline, el publicador y la auditoría."""
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.estudiantes import catalog as cat
+from src.estudiantes import ingest, pipeline, publicar, scoring, supresion
+from tests.test_estudiantes_comunidad import _formulario
+
+NIVEL = cat.NIVEL_SECUNDARIA
+CRUCE = supresion.AGRUPACION_CRUCE
+
+
+def _datos(celdas: dict) -> pd.DataFrame:
+    """{(colegio, grado): (n, k)} → filas con RCADS18 ≥ 2 en k de ellas."""
+    filas = []
+    for (c, g), (n, k) in celdas.items():
+        for i in range(n):
+            filas.append(dict(Colegio=c, Grado=g, Sexo="Mujer" if i % 2 else "Hombre",
+                              Edad=13, nivel=NIVEL, RCADS18=3 if i < k else 0))
+    return pd.DataFrame(filas)
+
+
+CELDAS = {("A", "Sexto"): (20, 1), ("B", "Sexto"): (30, 6), ("C", "Sexto"): (15, 5),
+          ("A", "Séptimo"): (20, 5)}
+
+
+@pytest.fixture(scope="module")
+def chico():
+    return pipeline.analizar(_datos(CELDAS), NIVEL, n_boot=5)
+
+
+@pytest.fixture(scope="module")
+def sintetico():
+    bruto, _ = ingest.cargar(_formulario())
+    return pipeline.analizar(scoring.puntuar(bruto), NIVEL, n_boot=20)
+
+
+def _pct(tabla, clave="RCADS18"):
+    return tabla.loc[tabla["clave"] == clave, "pct"].iloc[0]
+
+
+def test_la_celda_con_un_caso_no_publica_porcentaje(chico):
+    assert pd.isna(_pct(chico.subgrupos[CRUCE]["A|Sexto"].cortes))
+    assert pd.isna(chico.subgrupos[CRUCE]["A|Sexto"].cortes["casos"].iloc[0])
+
+
+def test_el_grado_obliga_a_ocultar_otra_celda(chico):
+    sexto = [k for k in ("B|Sexto", "C|Sexto")
+             if pd.isna(_pct(chico.subgrupos[CRUCE][k].cortes))]
+    assert sexto, "una sola celda oculta en Sexto se deduciría por resta"
+
+
+def test_lo_que_queda_publicado_cumple_la_regla_y_la_auditoria_pasa(chico):
+    assert supresion.auditar(chico) == []
+    assert not pd.isna(_pct(chico.cortes))
+
+
+def test_la_auditoria_detecta_una_cifra_destapada(chico):
+    import copy
+    a = copy.deepcopy(chico)
+    t = a.subgrupos[CRUCE]["A|Sexto"].cortes
+    t.loc[t["clave"] == "RCADS18", "pct"] = 5.0
+    assert supresion.auditar(a)
+    assert publicar.verificar_restas({NIVEL: a})
+
+
+def test_el_publicador_no_publica_casos_y_deja_nulo_lo_suprimido(chico):
+    filas = publicar.aplanar({NIVEL: chico})
+    cortes = [f for f in filas if f["tipo"] in ("corte", "corte_grupo")]
+    assert cortes
+    assert all("casos" not in f["detalle"] for f in cortes)
+    celda = [f for f in cortes if f["grupo"] == "A|Sexto"]
+    assert celda and celda[0]["valor"] is None and celda[0]["ic_inf"] is None
+    assert publicar.verificar_restas({NIVEL: chico}) == []
+
+
+def test_verificar_rechaza_filas_con_casos():
+    fila = publicar._fila(NIVEL, "corte", "RCADS18", 20, 10.0, casos=2)
+    with pytest.raises(publicar.PublicacionInsegura):
+        publicar.verificar([fila])
+
+
+def test_en_el_formulario_sintetico_todo_lo_publicado_cumple(sintetico):
+    assert supresion.auditar(sintetico) == []
+    assert publicar.verificar_restas({NIVEL: sintetico}) == []
+    for f in publicar.aplanar({NIVEL: sintetico}):
+        if f["tipo"] in ("banda", "banda_grupo") and f["valor"] is not None:
+            pcts = [f["detalle"][f"pct_b{i}"] for i in range(4)]
+            ks = [round(p * f["n"] / 100) for p in pcts]
+            assert all(supresion.MIN_CASOS <= k <= f["n"] - supresion.MIN_CASOS for k in ks)
+        if f["tipo"] in ("banda", "banda_grupo") and f["valor"] is None:
+            assert not any(f"pct_b{i}" in f["detalle"] for i in range(4))
+
+
+# ── contrastes ─────────────────────────────────────────────────────────────
+def _contraste(k_bajo, n_bajo, k_alto, n_alto):
+    return dict(resultado="RCADS_Dep", resultado_etiqueta="Depresión",
+                protector="MSPSS_Fam", protector_etiqueta="Apoyo de la familia",
+                umbral="decil más alto (P90)",
+                pct_tercil_bajo=round(100 * k_bajo / n_bajo, 1), ic_bajo=(1.0, 2.0),
+                n_bajo=n_bajo, k_bajo=k_bajo,
+                pct_tercil_alto=round(100 * k_alto / n_alto, 1), ic_alto=(1.0, 2.0),
+                n_alto=n_alto, k_alto=k_alto, razon=2.0)
+
+
+def test_contraste_con_un_tercil_de_pocos_casos_se_suprime_entero():
+    lista = [_contraste(6, 30, 1, 30), _contraste(6, 30, 4, 30)]
+    supresion.suprimir_contrastes(lista)
+    malo, bueno = lista
+    assert malo["suprimido"] is True
+    for campo in ("pct_tercil_bajo", "pct_tercil_alto", "razon", "ic_bajo", "ic_alto",
+                  "k_bajo", "k_alto"):
+        assert malo[campo] is None
+    assert not bueno.get("suprimido")
+
+
+def test_el_publicador_no_sube_contrastes_suprimidos(chico):
+    import copy
+    a = copy.deepcopy(chico)
+    a.contrastes = [_contraste(6, 30, 1, 30)]
+    supresion.suprimir_contrastes(a.contrastes)
+    s = a.subgrupos["Colegio"]["B"]
+    s.contrastes = [_contraste(6, 30, 2, 30)]
+    supresion.suprimir_contrastes(s.contrastes)
+    filas = publicar.aplanar({NIVEL: a})
+    assert not [f for f in filas if f["tipo"] in ("contraste", "contraste_grupo")]
+
+
+def test_solapamiento_con_pocos_casos_no_se_publica():
+    from src.estudiantes import stats
+    n = 40
+    d = pd.DataFrame({"banda_SDQ_Total": [3] * 2 + [0] * (n - 2),
+                      "ARI_Total": [5] * 2 + [0] * (n - 2)})
+    assert stats.solapamiento(d) == {}
+    rng = np.random.default_rng(3)
+    d = pd.DataFrame({"banda_SDQ_Total": rng.integers(0, 4, 200),
+                      "ARI_Total": rng.integers(0, 8, 200)})
+    assert stats.solapamiento(d).get("pct_ambos") is not None

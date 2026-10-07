@@ -283,18 +283,28 @@ def contraste_protector(d: pd.DataFrame, resultado: str, protector: str,
     bajo, arriba = sub[protector] <= t1, sub[protector] >= t2
     if bajo.sum() < cat.MIN_GROUP_N or arriba.sum() < cat.MIN_GROUP_N:
         return {}
-    p_b, lo_b, hi_b = wilson(int(alto[bajo].sum()), int(bajo.sum()))
-    p_a, lo_a, hi_a = wilson(int(alto[arriba].sum()), int(arriba.sum()))
+    k_b, k_a = int(alto[bajo].sum()), int(alto[arriba].sum())
+    p_b, lo_b, hi_b = wilson(k_b, int(bajo.sum()))
+    p_a, lo_a, hi_a = wilson(k_a, int(arriba.sum()))
     return dict(resultado=resultado, resultado_etiqueta=cat.meta(resultado)["label"],
                 protector=protector, protector_etiqueta=cat.meta(protector)["label"],
                 umbral=desc_umbral,
                 pct_tercil_bajo=p_b, ic_bajo=(lo_b, hi_b), n_bajo=int(bajo.sum()),
                 pct_tercil_alto=p_a, ic_alto=(lo_a, hi_a), n_alto=int(arriba.sum()),
+                # casos de cada tercil: solo para supresion (cifras que no
+                # delatan); el publicador no los sube
+                k_bajo=k_b, k_alto=k_a,
                 razon=round(p_b / p_a, 1) if p_a > 0 else None)
 
 
 def solapamiento(d: pd.DataFrame) -> dict:
-    """Comorbilidad entre los indicadores con corte: cuánto se superponen."""
+    """Comorbilidad entre los indicadores con corte: cuánto se superponen.
+
+    Cifras que no delatan (supresion): las cuatro casillas SDQ alto × ARI alto
+    deben tener cada una al menos MIN_CASOS respuestas, o no se devuelve nada;
+    cada porcentaje condicionado se omite si su propia proporción no cumple.
+    """
+    from src.estudiantes.supresion import partes_publicables, proporcion_publicable
     out = {}
     if "banda_SDQ_Total" not in d.columns or "ARI_Total" not in d.columns:
         return out
@@ -304,20 +314,24 @@ def solapamiento(d: pd.DataFrame) -> dict:
     n = int(base.sum())
     if n == 0:
         return out
+    casillas = [int((a & b & base).sum()) for a in (sdq_alto, ~sdq_alto)
+                for b in (ari_alto, ~ari_alto)]
+    if not partes_publicables(casillas):
+        return out
     out["n"] = n
     out["pct_sdq_alto"] = wilson(int((sdq_alto & base).sum()), n)[0]
     out["pct_ari_alto"] = wilson(int((ari_alto & base).sum()), n)[0]
     out["pct_ambos"] = wilson(int((sdq_alto & ari_alto & base).sum()), n)[0]
     out["pct_alguno"] = wilson(int(((sdq_alto | ari_alto) & base).sum()), n)[0]
     sub = d[base]
-    if (sub["banda_SDQ_Total"] >= 2).sum() >= cat.MIN_GROUP_N:
-        out["pct_ari_alto_si_sdq_alto"] = wilson(
-            int((sub.loc[sub["banda_SDQ_Total"] >= 2, "ARI_Total"] > 2).sum()),
-            int((sub["banda_SDQ_Total"] >= 2).sum()))[0]
-    if (sub["banda_SDQ_Total"] == 0).sum() >= cat.MIN_GROUP_N:
-        out["pct_ari_alto_si_sdq_promedio"] = wilson(
-            int((sub.loc[sub["banda_SDQ_Total"] == 0, "ARI_Total"] > 2).sum()),
-            int((sub["banda_SDQ_Total"] == 0).sum()))[0]
+    for clave, filtro in (("pct_ari_alto_si_sdq_alto", sub["banda_SDQ_Total"] >= 2),
+                          ("pct_ari_alto_si_sdq_promedio", sub["banda_SDQ_Total"] == 0)):
+        n_c = int(filtro.sum())
+        if n_c < cat.MIN_GROUP_N:
+            continue
+        k_c = int((sub.loc[filtro, "ARI_Total"] > 2).sum())
+        if proporcion_publicable(k_c, n_c):
+            out[clave] = wilson(k_c, n_c)[0]
     return out
 
 

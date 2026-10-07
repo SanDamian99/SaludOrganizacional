@@ -350,3 +350,205 @@ def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS) -> set:
             sup |= pub
         else:
             sup |= mejor[1]
+
+
+# ══ Aplicación al objeto Analisis ═════════════════════════════════════════
+COLUMNAS_CORTE_NULAS = ("pct", "ic_inf", "ic_sup", "casos")
+COLUMNAS_BANDA_NULAS = tuple(f"{p}_b{i}" for p in ("pct", "n") for i in range(4)) \
+    + ("pct_alto_o_muy_alto",)
+CAMPOS_CONTRASTE_NULOS = ("pct_tercil_bajo", "pct_tercil_alto", "ic_bajo", "ic_alto",
+                          "razon", "k_bajo", "k_alto")
+
+
+def _vacia(t) -> bool:
+    return t is None or not isinstance(t, pd.DataFrame) or t.empty or "clave" not in t.columns
+
+
+def partes_por_familia(cortes, bandas) -> dict[str, tuple]:
+    """{clave: partes} de un grupo, desde sus tablas agregadas (con conteos).
+
+    Bandas del SDQ: (b0, b1, b2, b3); su corte «alto o muy alto» es b2 + b3 y
+    va con ellas. Cortes de otra escala: (n − k) y k; con varios umbrales
+    anidados de la misma escala, (n − k₁, k₁ − k₂, …, k_último).
+    """
+    familias: dict[str, tuple] = {}
+    if not _vacia(bandas):
+        for _, f in bandas.iterrows():
+            familias[str(f["clave"])] = tuple(int(f[f"n_b{i}"]) for i in range(4))
+    if not _vacia(cortes):
+        for clave, filas in cortes.groupby("clave", sort=False):
+            if str(clave) in familias:
+                continue
+            n = int(filas["n"].iloc[0])
+            ks = sorted((int(k) for k in filas["casos"]), reverse=True)
+            partes = [n - ks[0]] + [ks[i] - ks[i + 1] for i in range(len(ks) - 1)] + [ks[-1]]
+            if min(partes) < 0:
+                raise ValueError(f"Los cortes de {clave} no están anidados")
+            familias[str(clave)] = tuple(partes)
+    return familias
+
+
+def _anular(obj, clave: str) -> int:
+    """Deja en blanco las proporciones de `clave` en las tablas de `obj`. Filas tocadas."""
+    tocadas = 0
+    for nombre, columnas in (("cortes", COLUMNAS_CORTE_NULAS), ("bandas", COLUMNAS_BANDA_NULAS)):
+        t = getattr(obj, nombre, None)
+        if _vacia(t):
+            continue
+        filas = t["clave"].astype(str) == clave
+        if not filas.any():
+            continue
+        for c in columnas:
+            if c in t.columns:
+                t[c] = t[c].astype(float)
+                t.loc[filas, c] = np.nan
+        tocadas += int(filas.sum())
+    return tocadas
+
+
+def suprimir_contrastes(lista: list, minimo: int = MIN_CASOS) -> int:
+    """Marca `suprimido` y vacía las cifras de los contrastes que no cumplen. Cuántos."""
+    cuantos = 0
+    for c in lista or []:
+        if c.get("suprimido") or contraste_publicable(c, minimo):
+            continue
+        for campo in CAMPOS_CONTRASTE_NULOS:
+            c[campo] = None
+        c["suprimido"] = True
+        cuantos += 1
+    return cuantos
+
+
+def _objetos(a) -> dict:
+    """{nombre de agregado: objeto con tablas} del nivel y sus subgrupos."""
+    sub = getattr(a, "subgrupos", None) or {}
+    objs = {NIVEL: a}
+    for k, s in (sub.get(AGRUPACION_CRUCE) or {}).items():
+        objs[CELDA(k)] = s
+    for c, s in (sub.get("Colegio") or {}).items():
+        objs[COLEGIO(c)] = s
+    for g, s in (sub.get("Grado") or {}).items():
+        objs[GRADO(g)] = s
+    return objs
+
+
+def aplicar(a, minimo: int = MIN_CASOS) -> dict:
+    """Suprime, en el sitio, las proporciones de `a` y de sus subgrupos que delatan.
+
+    Trabaja solo con tablas agregadas: las partes de cada átomo salen de las
+    tablas de su celda o colegio, y las del resto R, del nivel menos todos
+    ellos. Devuelve {(tipo, agrupación): filas suprimidas}.
+    """
+    sub = getattr(a, "subgrupos", None) or {}
+    celdas = list(sub.get(AGRUPACION_CRUCE) or {})
+    jer = jerarquia(celdas, list(sub.get("Colegio") or {}), list(sub.get("Grado") or {}),
+                    con_resto=True)
+    objs = _objetos(a)
+    fam = {g: partes_por_familia(getattr(o, "cortes", None), getattr(o, "bandas", None))
+           for g, o in objs.items()}
+    con_celdas = {k.split(SEP, 1)[0] for k in celdas}
+    atomos = {atomo_celda(k): CELDA(k) for k in celdas}
+    atomos.update({atomo_colegio(c): COLEGIO(c) for c in (sub.get("Colegio") or {})
+                   if str(c) not in con_celdas})
+    resumen: dict = {}
+    for clave in sorted({c for f in fam.values() for c in f}):
+        largo = max(len(f[clave]) for f in fam.values() if clave in f)
+        cero = np.zeros(largo, dtype=np.int64)
+        partes = {a_: np.asarray(fam[g].get(clave, cero)) for a_, g in atomos.items()}
+        resto = np.asarray(fam[NIVEL].get(clave, cero)) - sum(partes.values(), cero)
+        if (resto < 0).any():
+            raise ValueError(f"{clave}: los subgrupos suman más que el nivel")
+        partes[RESTO] = resto
+        for g in suprimir(jer, {k: tuple(v) for k, v in partes.items()}, minimo):
+            if g in objs:
+                tocadas = _anular(objs[g], clave)
+                if tocadas:
+                    clave_res = (g[0], clave)
+                    resumen[clave_res] = resumen.get(clave_res, 0) + 1
+    for g, o in objs.items():
+        n = suprimir_contrastes(getattr(o, "contrastes", None), minimo)
+        if n:
+            resumen[(g[0], "contraste")] = resumen.get((g[0], "contraste"), 0) + n
+    return resumen
+
+
+# ══ Auditoría independiente, desde los datos enmascarados ═════════════════
+def _publicado(obj, clave: str) -> bool | None:
+    """True/False si la familia está publicada en `obj`; None si no aparece."""
+    estados = []
+    for nombre, col in (("cortes", "pct"), ("bandas", "pct_b0")):
+        t = getattr(obj, nombre, None)
+        if _vacia(t) or col not in t.columns:
+            continue
+        filas = t[t["clave"].astype(str) == clave]
+        estados += [not pd.isna(v) for v in filas[col]]
+    if not estados:
+        return None
+    if len(set(estados)) > 1:
+        return True          # parcialmente publicada: se audita como publicada
+    return estados[0]
+
+
+def auditar(a, minimo: int = MIN_CASOS) -> list[str]:
+    """Proporciones publicadas que delatan, recalculadas desde `a.datos` y `a.base`.
+
+    No usa los conteos de las tablas del pipeline: recalcula las partes de cada
+    átomo de la base con scoring y comprueba (1) que cada proporción publicada
+    cumple la regla, (2) que ninguna suma o resta de lo publicado deja un
+    conjunto que la incumpla (`fugas`) y (3) que cada contraste publicado cumple
+    en sus dos terciles. Los mensajes nombran grupo e indicador, nunca cifras.
+    """
+    from src.estudiantes import privacidad, scoring, stats
+    base = getattr(a, "base", None)
+    d = getattr(a, "datos", None)
+    if base is None or d is None or d.empty:
+        return []
+    jer = jerarquia(list(base.celdas), list(base.colegios), list(base.grados),
+                    con_resto=base.incluye_resto)
+    con_celdas = {k.split(SEP, 1)[0] for k in base.celdas}
+    indices = {atomo_celda(k): idx for k, idx in base.celdas.items()}
+    indices.update({atomo_colegio(c): idx for c, idx in base.colegios.items()
+                    if c not in con_celdas})
+    if base.incluye_resto:
+        indices[RESTO] = base.nivel.difference(privacidad.union(base.colegios.values()))
+    fam = {}
+    for at, idx in indices.items():
+        sub = d.loc[d.index.intersection(idx)]
+        fam[at] = (partes_por_familia(scoring.sobre_cortes(sub),
+                                      scoring.distribucion_bandas(sub, "self"))
+                   if len(sub) else {})
+    objs = _objetos(a)
+    problemas: list[str] = []
+    claves = sorted({c for f in fam.values() for c in f})
+    for clave in claves:
+        largo = max(len(f[clave]) for f in fam.values() if clave in f)
+        partes = {at: f.get(clave, (0,) * largo) for at, f in fam.items()}
+        pub = {g for g, o in objs.items() if _publicado(o, clave)}
+        for g in sorted(pub, key=str):
+            if g not in jer.grupos:
+                problemas.append(f"{clave}: {g[0]} {g[1]} publicado fuera de la base")
+                continue
+            if not partes_publicables(_suma(jer.grupos[g], partes, largo), minimo):
+                problemas.append(f"{clave}: {g[0]} {g[1] or ''} publica una proporción "
+                                 f"con menos de {minimo} casos o no casos")
+        for s in fugas(jer, partes, pub & set(jer.grupos), minimo):
+            problemas.append(f"{clave}: una resta entre cifras publicadas deja un conjunto "
+                             f"de {len(s)} grupo(s) con menos de {minimo} casos o no casos")
+    for g, o in objs.items():
+        if g == NIVEL:
+            filas = d.loc[d.index.intersection(base.nivel)]
+        elif g[0] == AGRUPACION_CRUCE:
+            filas = privacidad.filas(d, base, *g[1].split(SEP, 1))
+        elif g[0] == "Colegio":
+            filas = privacidad.filas(d, base, colegio=g[1])
+        else:
+            filas = privacidad.filas(d, base, grado=g[1])
+        for c in getattr(o, "contrastes", None) or []:
+            if c.get("suprimido"):
+                continue
+            r = stats.contraste_protector(filas, c["resultado"], c["protector"])
+            if r and not contraste_publicable(r, minimo):
+                problemas.append(f"contraste {c['resultado']}–{c['protector']}: {g[0]} "
+                                 f"{g[1] or ''} compara un tercil con menos de {minimo} "
+                                 "casos o no casos")
+    return problemas

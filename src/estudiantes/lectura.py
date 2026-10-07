@@ -285,11 +285,13 @@ def _tabla_bandas(filas: list[dict]) -> pd.DataFrame:
 
 
 def _tabla_cortes(filas: list[dict]) -> pd.DataFrame:
+    # Sin `casos`: el número de casos no se publica (supresion.py). Un `pct`
+    # vacío es una proporción suprimida por pocos casos.
     return _df([dict(clave=f["clave"], indicador=_det(f, "indicador"),
-                     n=f["n"], casos=_det(f, "casos"), pct=f["valor"],
+                     n=f["n"], pct=f["valor"],
                      ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
                      fuente=_det(f, "fuente")) for f in filas],
-               ["clave", "indicador", "n", "casos", "pct", "ic_inf", "ic_sup", "fuente"])
+               ["clave", "indicador", "n", "pct", "ic_inf", "ic_sup", "fuente"])
 
 
 def _lista_contrastes(filas: list[dict]) -> list[dict]:

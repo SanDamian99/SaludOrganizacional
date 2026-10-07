@@ -423,6 +423,11 @@ AVISO_TAMIZAJE = ("Estos resultados son un tamizaje de grupo, no un diagnóstico
                   "Ningún dato corresponde a un estudiante identificable y los grupos con menos "
                   f"de {MIN_GROUP_N} estudiantes no se muestran.")
 
+# Texto fijo donde una cifra se suprime por pocos casos (supresion.py, spec §5.4).
+CIFRAS_PEQUENAS = ("En este grupo las cifras son muy pequeñas para mostrarse sin riesgo de "
+                   "identificar a alguien; la ruta sigue aplicando.")
+CIFRA_SUPRIMIDA = "—"
+
 AVISO_PRIMARIA = ("Primaria (4.º y 5.º) respondió el SDQ y el MSPSS por debajo de la edad en que "
                   "esas escalas están validadas, y no respondió el RCADS. Sus resultados son "
                   "exploratorios y sus bandas, orientativas.")
