@@ -675,6 +675,7 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
         partes_meta.append(f"{b['n']} estudiantes")
     partes_meta += [f"Para: {cat.ROLES.get(rol, rol)}", fecha_larga(fecha)]
 
+    caja = _panel(analisis, rol, filtros, compacto=True)
     if b or fichas:
         filas_bandas = [("Este grupo" if con_municipio else "Municipio", b)]
         if con_municipio:
@@ -685,17 +686,17 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
             bandas = ('<div class="bloque"><h2>Cómo está el grupo</h2>'
                       + "".join(_barra_bandas(e, x) for e, x in filas_bandas)
                       + _leyenda_bandas(filas_bandas[0][1]["etiquetas"]) + "</div>")
-        contenido = (bandas + '<h2>Lo más importante y qué hacer</h2><div class="tiles">'
+        contenido = (bandas + caja + '<h2>Lo más importante y qué hacer</h2><div class="tiles">'
                      + "".join(_tile_pagina(analisis, t, filtros, con_municipio)
                                for t in fichas) + "</div>")
     elif con_municipio and not vc.hay_datos_crudos(analisis):
-        contenido = f"<p>{_e(vc.SIN_SUBGRUPO_PUBLICADO)}</p>"
+        contenido = caja + f"<p>{_e(vc.SIN_SUBGRUPO_PUBLICADO)}</p>"
     else:
-        contenido = (f"<p>Este grupo tiene menos de {cat.MIN_GROUP_N} estudiantes, así que "
+        contenido = caja + (f"<p>Este grupo tiene menos de {cat.MIN_GROUP_N} estudiantes, así que "
                      "no se muestran sus resultados: con grupos tan pequeños se podría "
                      "reconocer a un estudiante. Sus respuestas sí cuentan en los totales.</p>")
 
-    ruta = "".join(f"<li><b>{_e(n)}</b> — {_e(d)}</li>" for n, d in cat.RUTA_ATENCION)
+    ruta = "".join(f"<li><b>{_e(n)}</b> — {_e(d)}</li>" for n, d in _ruta(rol))
     avisos = [cat.AVISO_TAMIZAJE]
     if con_municipio:
         avisos.append(NOTA_COMPARACION)
@@ -709,7 +710,8 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
               + '<div class="pie">' + "".join(f"<p>{_e(t)}</p>" for t in avisos) + "</div>")
     return ("<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\">"
             f"<title>Resumen Estudiantes 360 · {_e(titulo)}</title>"
-            f"<style>{_CSS_PAGINA}</style></head><body>{cuerpo}</body></html>")
+            f"<style>{_CSS_PAGINA}{_css_senales('pagina')}</style></head><body>{cuerpo}"
+            "</body></html>")
 
 
 def a_pdf(html: str) -> bytes | None:

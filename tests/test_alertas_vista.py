@@ -285,3 +285,47 @@ def test_con_modulos_viejos_los_informes_no_se_caen(monkeypatch, analisis):
                  inf.informe_una_pagina_html(analisis, "colegio", {})):
         assert ac.TITULO_PANEL not in html
         assert cat.RUTA_ATENCION[0][0] in html
+
+
+# ══ Resumen de una página ═══════════════════════════════════════════════════
+def _f(colegio="Todos", grado="Todos"):
+    return {"nivel": cat.NIVEL_SECUNDARIA, "colegio": colegio, "grado": grado}
+
+
+def test_el_recuadro_va_antes_de_las_tarjetas(analisis):
+    html = inf.informe_una_pagina_html(analisis, "colegio", _f(colegio=COLEGIO))
+    assert html.index(ac.TITULO_PANEL) < html.index("Lo más importante y qué hacer")
+    assert ac.RUTA_PENDIENTE not in html
+
+
+def test_el_resumen_de_familia_no_trae_desesperanza(analisis):
+    html = inf.informe_una_pagina_html(analisis, "familia", _f())
+    assert ac.ALERTAS["malestar"].nombre in html
+    assert ac.ALERTAS["desesperanza"].nombre not in html
+
+
+def test_un_grupo_pequeno_tambien_lleva_el_recuadro(analisis):
+    html = inf.informe_una_pagina_html(analisis, "colegio", _f(grado="Noveno"))
+    assert ac.CIFRAS_PEQUENAS in html and ac.ESTADOS[S] in html
+
+
+def _peor_caso(a, nivel):
+    grados = cat.ORDEN_GRADOS_SEC if nivel == cat.NIVEL_SECUNDARIA else cat.ORDEN_GRADOS_PRI
+    filas = []
+    for k, x in ac.ALERTAS.items():
+        if nivel not in x.niveles:
+            continue
+        filas.append(_r(k, "total", "Todos", 17.0, R, n=900))
+        filas += [_r(k, "Colegio", c, 40.0, P) for _, c, _ in COLEGIOS]
+        filas += [_r(k, "Grado", g, 40.0, P, n=150) for g in grados]
+    return dataclasses.replace(a, nivel=nivel,
+                               alertas=pd.DataFrame(filas, columns=al.COLUMNAS_TABLA))
+
+
+@pytest.mark.parametrize("nivel", [cat.NIVEL_SECUNDARIA, cat.NIVEL_PRIMARIA])
+def test_el_peor_caso_cabe_en_una_pagina(analisis, nivel):
+    pytest.importorskip("weasyprint")
+    from weasyprint import HTML
+    html = inf.informe_una_pagina_html(_peor_caso(analisis, nivel), "municipio", _f())
+    assert f"y {len(COLEGIOS) - va.MAX_NOMBRES_PAGINA} más" in html
+    assert len(HTML(string=html).render().pages) == 1
