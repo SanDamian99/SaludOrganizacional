@@ -123,3 +123,21 @@ def test_verificar_restas_bloquea_una_alerta_destapada(config):
                 assert any("alerta" in p for p in publicar.verificar_restas({nivel: b}))
                 return
     pytest.skip("esta configuración no suprime ninguna alerta de subgrupo")
+
+
+# ══ Supabase ════════════════════════════════════════════════════════════════
+def test_la_migracion_de_alertas_y_el_esquema_dicen_lo_mismo():
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "supabase", "migraciones",
+                           "2026-10-07c-alertas-sin-casos.sql"), encoding="utf-8") as fh:
+        migracion = fh.read()
+    with open(os.path.join(raiz, "supabase", "estudiantes_schema.sql"), encoding="utf-8") as fh:
+        esquema = fh.read()
+    for texto in (migracion, esquema):
+        assert "resultados_sin_conteos" in texto
+        assert "detalle ?| ARRAY['casos', 'k_bajo', 'k_alto']" in texto
+        assert "resultados_alerta_estado_con_cifra" in texto
+        assert "NOT VALID" in texto
+    # la misma lista de campos que rechaza `verificar`
+    assert publicar.CAMPOS_CONTEO_PROHIBIDOS == ("casos", "k_bajo", "k_alto")
+    assert ac.SIN_ESTADO == "sin_estado"          # el literal del CHECK y de verificar

@@ -30,8 +30,9 @@
 -- incrementales sobre una base ya creada viven en `supabase/migraciones/`.
 -- Ya incluye la migración 2026-10-07 (corridas por módulo: el público solo lee
 -- la última corrida publicada de cada módulo; nivel 'cuidadores'; ningún
--- identificador E/C/N; mensajes por módulo). Volver a ejecutarlo NO reabre las
--- corridas viejas.
+-- identificador E/C/N; mensajes por módulo) y la 2026-10-07c (ningún conteo de
+-- casos; alertas con estado solo donde hay cifra). Volver a ejecutarlo NO reabre
+-- las corridas viejas.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- ── 0. Esquema propio, para no mezclarse con lo que ya existe ──────────────
@@ -107,6 +108,17 @@ ALTER TABLE obs360.resultados DROP CONSTRAINT IF EXISTS resultados_sin_id_estudi
 ALTER TABLE obs360.resultados ADD CONSTRAINT resultados_sin_id_estudiante CHECK (
     (grupo IS NULL OR grupo !~* '^[ECN][0-9a-f]{8}$')
     AND clave !~* '^[ECN][0-9a-f]{8}$');
+
+-- Migración 2026-10-07c: ningún conteo de casos y alertas con estado solo donde
+-- hay cifra. NOT VALID: no revisa las filas de corridas viejas, sí las nuevas.
+ALTER TABLE obs360.resultados DROP CONSTRAINT IF EXISTS resultados_sin_conteos;
+ALTER TABLE obs360.resultados ADD CONSTRAINT resultados_sin_conteos CHECK (
+    NOT (detalle ?| ARRAY['casos', 'k_bajo', 'k_alto'])) NOT VALID;
+ALTER TABLE obs360.resultados DROP CONSTRAINT IF EXISTS resultados_alerta_estado_con_cifra;
+ALTER TABLE obs360.resultados ADD CONSTRAINT resultados_alerta_estado_con_cifra CHECK (
+    tipo NOT LIKE 'alerta%'
+    OR valor IS NOT NULL
+    OR coalesce(detalle->>'estado', 'sin_estado') = 'sin_estado') NOT VALID;
 
 COMMENT ON TABLE obs360.resultados IS
   'Resultados agregados listos para mostrar. Una fila = una cifra con su '
