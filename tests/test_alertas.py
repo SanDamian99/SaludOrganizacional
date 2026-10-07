@@ -605,3 +605,15 @@ def test_el_estado_de_la_tabla_se_reproduce_con_lo_publicado(semilla):
     for f in t[t["agrupacion"] != al.TOTAL].to_dict("records"):
         nivel = t[(t["alerta"] == f["alerta"]) & (t["agrupacion"] == al.TOTAL)].iloc[0]
         assert f["estado"] == al.estado(f["pct"], f["n"], nivel["pct"], nivel["n"])
+
+
+def test_con_una_supresion_vieja_la_tabla_sale_vacia(monkeypatch):
+    """Módulo `supresion` anterior a la fase 3 en memoria: no suprimió las alertas."""
+    a = pipeline.analizar(_datos_config(cat.NIVEL_SECUNDARIA, TODO_EN_CELDAS, 1),
+                          cat.NIVEL_SECUNDARIA, n_boot=5)
+    assert len(al.tabla(a))
+    viejo = SimpleNamespace(**{k: v for k, v in vars(supresion).items()
+                               if k != "TABLAS_ALERTA"})
+    monkeypatch.setattr(al, "supresion", viejo)
+    t = al.tabla(a)
+    assert t.empty and list(t.columns) == al.COLUMNAS_TABLA

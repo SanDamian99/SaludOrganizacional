@@ -266,7 +266,13 @@ def tabla(a) -> pd.DataFrame:
 
     Se llama después de `supresion.aplicar`. El estado sale de `estado`, que
     solo mira cifras publicadas.
+
+    Si el módulo `supresion` en memoria es anterior a las alertas (no tiene
+    `TABLAS_ALERTA`, la marca de que las suprime), sus cifras no pasaron por la
+    supresión: no sale nada.
     """
+    if not hasattr(supresion, "TABLAS_ALERTA"):
+        return pd.DataFrame(columns=COLUMNAS_TABLA)
     propia = getattr(a, "cortes_alerta", None)
     if not isinstance(propia, pd.DataFrame) or propia.empty:
         return pd.DataFrame(columns=COLUMNAS_TABLA)
