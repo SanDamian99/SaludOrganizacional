@@ -8,6 +8,11 @@ desplegar, Streamlit vuelve a ejecutar `main.py` pero puede conservar en memoria
 la versión vieja de los módulos ya importados. Un módulo que no existía antes se
 importa siempre fresco, así que el menú nuevo nunca convive con un `modo` viejo.
 
+Regla de despliegue: tras el primer despliegue este módulo también puede quedar
+rancio en memoria. Todo símbolo nuevo va en un módulo nuevo, o se lee con
+`getattr` y un valor de respaldo; y después de fusionar siempre hay que hacer
+Reboot app.
+
 Las páginas que aún no están construidas figuran en `MENU`, para fijar el orden,
 pero no en `DISPONIBLES`: no aparecen hasta que su fase las añada.
 """
