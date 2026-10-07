@@ -1,5 +1,7 @@
 """Alertas de grupo de Estudiantes 360 (spec 6-oct-2026, §5.4): catálogo, señales y cifras."""
+import inspect
 import re
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -215,3 +217,110 @@ def test_un_formulario_marcado_como_el_catalogo_coincide_y_se_carga():
         ac.items_marcados_esperados(cat.NIVEL_PRIMARIA)
     d, inf = ingest.cargar(raw)                     # el «*» no rompe la carga
     assert len(inf.items_marcados) == 6 and "SDQ5" in d.columns
+
+
+# ══ Tabla de cada grupo, estado y tablas locales ═══════════════════════════
+def test_estado_prioridad_contra_el_resto():
+    assert al.estado(75.0, 40, 30.6, 160) == ac.PRIORIDAD      # 30/40 frente a 19/120
+    assert al.estado(10.0, 40, 30.6, 160) == ac.PRESENTE
+
+
+def test_sin_porcentaje_no_hay_estado():
+    assert al.estado(None, 40, 30.0, 160) == ac.SIN_ESTADO
+    assert al.estado(float("nan"), 40, 30.0, 160) == ac.SIN_ESTADO
+    assert al.estado_total(None) == ac.SIN_ESTADO
+
+
+def test_sin_resto_con_que_comparar_es_referencia():
+    assert al.estado(30.0, 155, 30.0, 160) == ac.REFERENCIA      # resto de 5
+    assert al.estado(30.0, 40, None, 160) == ac.REFERENCIA       # nivel suprimido
+    assert al.estado_total(17.0) == ac.REFERENCIA
+
+
+def test_el_estado_solo_recibe_cifras_publicadas():
+    """El estado es función del % y el n publicados del grupo y del nivel: nada más."""
+    assert list(inspect.signature(al.estado).parameters) == ["pct", "n", "pct_nivel", "n_nivel"]
+    assert list(inspect.signature(al.estado_total).parameters) == ["pct"]
+
+
+def test_cortes_alerta_tiene_la_forma_de_los_cortes():
+    d = pd.DataFrame({"ALERTA_malestar": [1.0] * 6 + [0.0] * 14 + [np.nan] * 2,
+                      "ALERTA_desesperanza": [1.0] * 4 + [0.0] * 18})
+    t = al.cortes_alerta(d, cat.NIVEL_SECUNDARIA).set_index("clave")
+    assert list(al.cortes_alerta(d, cat.NIVEL_SECUNDARIA).columns) == al.COLUMNAS_CORTES
+    assert (t.loc["malestar", "n"], t.loc["malestar", "casos"]) == (20, 6)
+    assert t.loc["malestar", "pct"] == 30.0 and t.loc["malestar", "anidada_en"] == ""
+    assert t.loc["desesperanza", "anidada_en"] == "RCADS18"
+    assert list(al.cortes_alerta(d, cat.NIVEL_PRIMARIA)["clave"]) == ["malestar"]
+
+
+def _objeto(filas):
+    return SimpleNamespace(cortes_alerta=pd.DataFrame(filas, columns=al.COLUMNAS_CORTES))
+
+
+def _c(clave, n, k, pct):
+    nulo = pct is None
+    return dict(clave=clave, indicador="", anidada_en="", n=n, casos=None if nulo else k,
+                pct=pct, ic_inf=None if nulo else pct - 5, ic_sup=None if nulo else pct + 5)
+
+
+def test_la_tabla_plana_sale_de_las_tablas_suprimidas():
+    a = _objeto([_c("malestar", 160, 49, 30.6)])
+    a.nivel = cat.NIVEL_SECUNDARIA
+    a.subgrupos = {
+        "Colegio": {"A": _objeto([_c("malestar", 40, 30, 75.0)]),
+                    "B": _objeto([_c("malestar", 40, None, None)])},     # suprimida
+        "Grado": {"Sexto": _objeto([_c("malestar", 8, 2, 25.0)])},        # n < 10: fuera
+        al.CRUCE: {}}
+    t = al.tabla(a)
+    assert list(t.columns) == al.COLUMNAS_TABLA and "casos" not in t.columns
+    assert list(zip(t["agrupacion"], t["grupo"], t["estado"])) == [
+        (al.TOTAL, al.TODOS, ac.REFERENCIA), ("Colegio", "A", ac.PRIORIDAD),
+        ("Colegio", "B", ac.SIN_ESTADO)]
+    assert t["pct"].isna().tolist() == [False, False, True]
+
+
+def test_sin_tabla_de_alertas_la_tabla_plana_queda_vacia():
+    t = al.tabla(SimpleNamespace(nivel=cat.NIVEL_SECUNDARIA))
+    assert t.empty and list(t.columns) == al.COLUMNAS_TABLA
+
+
+def test_ordenar_es_estable_ante_filas_barajadas():
+    filas = [dict(alerta=a, agrupacion=ag, grupo=g, n=40, pct=None, ic_inf=None, ic_sup=None,
+                  estado=ac.SIN_ESTADO)
+             for a in ("desesperanza", "malestar")
+             for ag, g in ((al.CRUCE, "A|Octavo"), ("Grado", "Octavo"), (al.CRUCE, "A|Sexto"),
+                           ("Colegio", "B"), ("Grado", "Sexto"), (al.TOTAL, al.TODOS),
+                           ("Colegio", "A"))]
+    t = al.ordenar(pd.DataFrame(filas), cat.NIVEL_SECUNDARIA)
+    assert list(t["alerta"][:7]) == ["malestar"] * 7
+    assert list(zip(t["agrupacion"], t["grupo"]))[:7] == [
+        (al.TOTAL, al.TODOS), ("Colegio", "A"), ("Colegio", "B"), ("Grado", "Sexto"),
+        ("Grado", "Octavo"), (al.CRUCE, "A|Sexto"), (al.CRUCE, "A|Octavo")]
+    barajada = t.sample(frac=1, random_state=3)
+    pd.testing.assert_frame_equal(al.ordenar(barajada, cat.NIVEL_SECUNDARIA), t)
+
+
+# ── sensibilidad e ítems: solo el nivel, solo local ───────────────────────
+def test_sensibilidad_se_muestra_entera_o_no_se_muestra():
+    d = pd.DataFrame({"ALERTA_malestar_2": [1.0] * 20 + [0.0] * 80,
+                      "ALERTA_malestar": [1.0] * 10 + [0.0] * 90,
+                      "ALERTA_malestar_4": [1.0] * 9 + [0.0] * 91})
+    s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA).set_index("variante")
+    assert s["pct"].isna().all()                  # 3 − 4 deja 1 estudiante: nada
+    d["ALERTA_malestar_4"] = [1.0] * 5 + [0.0] * 95
+    s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA).set_index("variante")
+    assert s.loc["malestar_3", "pct"] == 10.0 and s.loc["malestar_4", "pct"] == 5.0
+    assert (s["n"] == 100).all() and "casos" not in s.columns
+
+
+def test_distribucion_de_items_oculta_el_item_con_una_respuesta_rara():
+    d = pd.DataFrame({"ALERTA_malestar": 0.0,
+                      "SDQ5": [0] * 90 + [1] * 8 + [2] * 2,
+                      "SDQ6": [0] * 60 + [1] * 30 + [2] * 10})
+    t = al.distribucion_items(d, cat.NIVEL_SECUNDARIA)
+    assert t[t["item"] == "SDQ5"]["pct"].isna().all()
+    sdq6 = t[t["item"] == "SDQ6"]
+    assert sdq6["pct"].tolist() == [60.0, 30.0, 10.0]
+    assert sdq6["respuesta"].tolist() == ["No es cierto", "Algo cierto", "Muy cierto"]
+    assert list(t.columns) == al.COLUMNAS_ITEMS

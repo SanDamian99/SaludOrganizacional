@@ -170,3 +170,186 @@ def items_marcados_por_escala(columnas) -> dict[str, set[int]]:
         if marcados:
             salida[escala] = marcados
     return salida
+
+
+# ── Tabla por grupo de cada objeto (entra en la supresión) ──────────────────
+def cortes_alerta(d: pd.DataFrame, nivel: str) -> pd.DataFrame:
+    """Prevalencia de cada alerta en las filas `d`, con IC de Wilson.
+
+    Misma forma que `scoring.sobre_cortes`; la supresión deja en blanco pct, IC
+    y casos donde la cifra delataría. `casos` no sale nunca de `Analisis`.
+    """
+    filas = []
+    for clave in claves_del_nivel(d, nivel):
+        v = d[COLUMNAS[clave]].dropna()
+        k, n = int(v.sum()), int(len(v))
+        pct, ic_inf, ic_sup = wilson(k, n)
+        filas.append(dict(clave=clave, indicador=ac.ALERTAS[clave].nombre,
+                          anidada_en=ANIDADA.get(clave, ""), n=n, casos=k,
+                          pct=pct, ic_inf=ic_inf, ic_sup=ic_sup))
+    return pd.DataFrame(filas, columns=COLUMNAS_CORTES)
+
+
+# ── Estado, solo con cifras publicadas ───────────────────────────────────────
+def _vacio(v) -> bool:
+    return v is None or (isinstance(v, float) and np.isnan(v)) or pd.isna(v)
+
+
+def estado(pct, n, pct_nivel, n_nivel) -> str:
+    """Estado de un grupo a partir de cifras PUBLICADAS: (%, n) del grupo y del nivel.
+
+    · Sin porcentaje del grupo: «sin estado» (cifras pequeñas).
+    · Sin porcentaje del nivel, o con un resto (nivel − grupo) de menos de
+      MIN_GROUP_N respuestas: «referencia» (se lee «Para tener presente», sin
+      comparación).
+    · Si no, «Prioridad» cuando el límite inferior del IC de Wilson del grupo
+      queda por encima del límite superior del resto, que se deduce de esas
+      mismas cifras; si no, «Para tener presente».
+    """
+    if _vacio(pct) or _vacio(n):
+        return ac.SIN_ESTADO
+    if _vacio(pct_nivel) or _vacio(n_nivel):
+        return ac.REFERENCIA
+    n, n_nivel = int(n), int(n_nivel)
+    n_resto = n_nivel - n
+    if n <= 0 or n_resto < cat.MIN_GROUP_N:
+        return ac.REFERENCIA
+    k = float(pct) * n / 100
+    k_resto = min(max(float(pct_nivel) * n_nivel / 100 - k, 0.0), float(n_resto))
+    _, inferior, _ = wilson(k, n)
+    _, _, superior_resto = wilson(k_resto, n_resto)
+    return ac.PRIORIDAD if inferior > superior_resto else ac.PRESENTE
+
+
+def estado_total(pct) -> str:
+    """El nivel es la referencia de las comparaciones."""
+    return ac.SIN_ESTADO if _vacio(pct) else ac.REFERENCIA
+
+
+# ── Tabla plana: lo que leen las vistas y lo que se publica ─────────────────
+def _orden_grupo(agrupacion: str, grupo: str, nivel: str) -> tuple:
+    grados = cat.ORDEN_GRADOS_SEC if nivel == cat.NIVEL_SECUNDARIA else cat.ORDEN_GRADOS_PRI
+
+    def pos(g):
+        return (grados.index(g) if g in grados else 99, str(g))
+    if agrupacion == TOTAL:
+        return (0, (0, ""), (0, ""))
+    if agrupacion == "Colegio":
+        return (1, (0, str(grupo)), (0, ""))
+    if agrupacion == "Grado":
+        return (2, pos(grupo), (0, ""))
+    colegio, grado = privacidad.partir_celda(grupo)
+    return (3, (0, colegio), pos(grado))
+
+
+def ordenar(tabla: pd.DataFrame, nivel: str) -> pd.DataFrame:
+    """Orden canónico: alerta del catálogo, nivel, colegios, grados y celdas."""
+    if tabla is None or len(tabla) == 0:
+        return pd.DataFrame(columns=COLUMNAS_TABLA)
+    orden_alerta = {k: i for i, k in enumerate(ac.ALERTAS)}
+    claves = [(orden_alerta.get(a, 99), _orden_grupo(ag, str(g), nivel))
+              for a, ag, g in zip(tabla["alerta"], tabla["agrupacion"], tabla["grupo"])]
+    posiciones = sorted(range(len(tabla)), key=lambda i: claves[i])
+    return tabla.iloc[posiciones].reset_index(drop=True)[COLUMNAS_TABLA]
+
+
+def _num(v):
+    return None if _vacio(v) else float(v)
+
+
+def tabla(a) -> pd.DataFrame:
+    """Una fila por alerta y grupo, desde las tablas YA suprimidas. Sin casos, nunca.
+
+    Se llama después de `supresion.aplicar`. El estado sale de `estado`, que
+    solo mira cifras publicadas.
+    """
+    propia = getattr(a, "cortes_alerta", None)
+    if not isinstance(propia, pd.DataFrame) or propia.empty:
+        return pd.DataFrame(columns=COLUMNAS_TABLA)
+    nivel = getattr(a, "nivel", None)
+    ref: dict[str, tuple] = {}
+    filas: list[dict] = []
+    for f in propia.to_dict("records"):
+        if int(f["n"]) < cat.MIN_GROUP_N:
+            continue
+        ref[f["clave"]] = (_num(f["pct"]), int(f["n"]))
+        filas.append(dict(alerta=f["clave"], agrupacion=TOTAL, grupo=TODOS, n=int(f["n"]),
+                          pct=_num(f["pct"]), ic_inf=_num(f["ic_inf"]),
+                          ic_sup=_num(f["ic_sup"]), estado=estado_total(f["pct"])))
+    for agrupacion in AGRUPACIONES:
+        for grupo, s in ((getattr(a, "subgrupos", None) or {}).get(agrupacion) or {}).items():
+            t = getattr(s, "cortes_alerta", None)
+            if not isinstance(t, pd.DataFrame) or t.empty:
+                continue
+            for f in t.to_dict("records"):
+                if int(f["n"]) < cat.MIN_GROUP_N or f["clave"] not in ref:
+                    continue
+                pct_nivel, n_nivel = ref[f["clave"]]
+                filas.append(dict(alerta=f["clave"], agrupacion=agrupacion, grupo=str(grupo),
+                                  n=int(f["n"]), pct=_num(f["pct"]),
+                                  ic_inf=_num(f["ic_inf"]), ic_sup=_num(f["ic_sup"]),
+                                  estado=estado(f["pct"], f["n"], pct_nivel, n_nivel)))
+    return ordenar(pd.DataFrame(filas, columns=COLUMNAS_TABLA), nivel)
+
+
+# ── Sensibilidad y distribución de ítems (solo el nivel, solo local) ────────
+def sensibilidad(dn: pd.DataFrame, nivel: str) -> pd.DataFrame:
+    """Prevalencia del nivel con cada variante de umbral o de regla. Solo local.
+
+    Todas las variantes de una alerta usan las mismas filas (las que tienen
+    todas sus variantes). Las variantes están anidadas (2 ⊇ 3 ⊇ 4; amplia ⊇
+    estricta), así que se muestran todas o ninguna: el reparto anidado
+    (n − k_a, k_a − k_b, …) tiene que cumplir `supresion.partes_publicables`.
+    """
+    if dn is None or dn.empty:
+        return pd.DataFrame(columns=COLUMNAS_SENSIBILIDAD)
+    filas: list[dict] = []
+    for alerta in claves_del_nivel(dn, nivel):
+        variantes = [(v, col, etq, vig) for v, (a, col, etq, vig) in VARIANTES.items()
+                     if a == alerta and col in dn.columns]
+        X = dn[[col for _, col, _, _ in variantes]].dropna()
+        n = len(X)
+        if n < cat.MIN_GROUP_N:
+            continue
+        ks = {v: int(X[col].sum()) for v, col, _, _ in variantes}
+        anidados = sorted(ks.values(), reverse=True)
+        partes = ([n - anidados[0]] + [anidados[i] - anidados[i + 1]
+                                       for i in range(len(anidados) - 1)] + [anidados[-1]])
+        ver = supresion.partes_publicables(partes)
+        for v, _, etiqueta, vig in variantes:
+            pct, ic_inf, ic_sup = wilson(ks[v], n) if ver else (None, None, None)
+            filas.append(dict(alerta=alerta, variante=v, etiqueta=etiqueta, vigente=vig,
+                              n=n, pct=pct, ic_inf=ic_inf, ic_sup=ic_sup))
+    return pd.DataFrame(filas, columns=COLUMNAS_SENSIBILIDAD)
+
+
+def distribucion_items(dn: pd.DataFrame, nivel: str) -> pd.DataFrame:
+    """% de cada respuesta en los ítems de las alertas, en el nivel. Solo local.
+
+    El reparto de respuestas de un ítem se muestra entero o no se muestra
+    (`supresion.partes_publicables`): con una respuesta oculta, se deduciría
+    restando las demás de n.
+    """
+    if dn is None or dn.empty:
+        return pd.DataFrame(columns=COLUMNAS_ITEMS)
+    filas: list[dict] = []
+    for alerta in claves_del_nivel(dn, nivel):
+        a = ac.ALERTAS[alerta]
+        items = a.items if alerta == ac.MALESTAR else ac.ITEMS_REGLA_AMPLIA
+        etiquetas = ETIQUETAS_RESPUESTA[a.escala]
+        for i in items:
+            col = f"{a.escala}{i}"
+            if col not in dn.columns:
+                continue
+            v = dn[col].dropna()
+            n = len(v)
+            if n < cat.MIN_GROUP_N:
+                continue
+            conteos = [int((v == codigo).sum()) for codigo in range(len(etiquetas))]
+            ver = supresion.partes_publicables(conteos)
+            for etiqueta, c in zip(etiquetas, conteos):
+                filas.append(dict(alerta=alerta, item=col,
+                                  enunciado=ac.ENUNCIADOS_ITEMS.get(col, col),
+                                  respuesta=etiqueta, n=n,
+                                  pct=round(100 * c / n, 1) if ver else None))
+    return pd.DataFrame(filas, columns=COLUMNAS_ITEMS)
