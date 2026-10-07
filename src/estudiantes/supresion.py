@@ -473,12 +473,16 @@ def partes_por_familia(cortes, bandas) -> dict[str, tuple]:
     anidados de la misma escala, (n − k₁, k₁ − k₂, …, k_último).
     """
     familias: dict[str, tuple] = {}
-    if not _vacia(bandas):
+    vistas: set[str] = set()
+    if not _vacia(bandas) and all(f"n_b{i}" in bandas.columns for i in range(4)):
         for _, f in bandas.iterrows():
-            familias[str(f["clave"])] = tuple(int(f[f"n_b{i}"]) for i in range(4))
-    if not _vacia(cortes):
+            vistas.add(str(f["clave"]))
+            cuentas = [f[f"n_b{i}"] for i in range(4)]
+            if not any(pd.isna(c) for c in cuentas):      # ya suprimida: sin conteos
+                familias[str(f["clave"])] = tuple(int(c) for c in cuentas)
+    if not _vacia(cortes) and "casos" in cortes.columns:
         for clave, filas in cortes.groupby("clave", sort=False):
-            if str(clave) in familias:
+            if str(clave) in vistas or filas["casos"].isna().any():
                 continue
             n = int(filas["n"].iloc[0])
             ks = sorted((int(k) for k in filas["casos"]), reverse=True)
@@ -540,6 +544,8 @@ def aplicar(a, minimo: int = MIN_CASOS) -> dict:
     tablas de su celda o colegio, y las del resto R, del nivel menos todos
     ellos. Devuelve {(tipo, agrupación): filas suprimidas}.
     """
+    if getattr(a, "supresion_aplicada", False):
+        return {}                 # idempotente: los conteos ya no están
     sub = getattr(a, "subgrupos", None) or {}
     celdas = list(sub.get(AGRUPACION_CRUCE) or {})
     jer = jerarquia(celdas, list(sub.get("Colegio") or {}), list(sub.get("Grado") or {}),
@@ -573,6 +579,7 @@ def aplicar(a, minimo: int = MIN_CASOS) -> dict:
         n = _omitir_items(o, minimo)
         if n:
             resumen[(g[0], "item")] = resumen.get((g[0], "item"), 0) + n
+    a.supresion_aplicada = True
     return resumen
 
 

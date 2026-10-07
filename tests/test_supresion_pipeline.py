@@ -250,3 +250,18 @@ def test_la_auditoria_ve_una_media_de_item_que_acota_los_casos():
     oculta.items_pssm = pd.concat([oculta.items_pssm, pd.DataFrame(
         [dict(item="PSSM7", M=3.85, DE=0.67, n=20)])], ignore_index=True)
     assert [p for p in supresion.auditar(malo) if "PSSM7" in p]
+
+
+def test_aplicar_dos_veces_no_cambia_nada(chico):
+    import copy
+    a = copy.deepcopy(chico)
+    assert supresion.aplicar(a) == {}
+    pd.testing.assert_frame_equal(a.cortes, chico.cortes)
+    for col, grupos in chico.subgrupos.items():
+        for g, s in grupos.items():
+            pd.testing.assert_frame_equal(a.subgrupos[col][g].cortes, s.cortes)
+
+
+def test_partes_por_familia_ignora_las_ya_suprimidas(chico):
+    oculta = chico.subgrupos[CRUCE]["A|Sexto"]
+    assert "RCADS18" not in supresion.partes_por_familia(oculta.cortes, oculta.bandas)
