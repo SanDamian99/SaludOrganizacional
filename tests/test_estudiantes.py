@@ -411,3 +411,24 @@ def test_no_hay_columnas_identificables_en_el_analisis(analisis_real):
     for a in res.values():
         assert not any("nombre" in c.lower() for c in a.datos.columns
                        if c != "Colegio_nombre")
+
+
+def test_localizar_se_queda_con_el_archivo_mas_reciente(tmp_path):
+    import time
+    viejo = tmp_path / "¡Cuéntanos sobre tus emociones! (respuestas) - Respuestas de formulario 1.csv"
+    nuevo = tmp_path / "¡Cuéntanos sobre tus emociones! (respuestas).xlsx"
+    viejo.write_text("x")
+    time.sleep(0.01)
+    nuevo.write_text("x")
+    rutas = pipeline.localizar_formularios(str(tmp_path))
+    assert rutas == [str(nuevo)]
+
+
+def test_la_ingesta_guarda_conteos_crudos_e_items_marcados():
+    raw = _formulario_sintetico(30)
+    col = next(c for c in raw.columns if c.startswith("SDQ"))
+    raw = raw.rename(columns={col: "*" + col})
+    d, inf = ingest.cargar(raw)
+    assert sum(inf.crudo_colegio_grado.values()) == len(raw)
+    assert all("|" in k for k in inf.crudo_colegio_grado)
+    assert len(inf.items_marcados) == 1 and inf.items_marcados[0].startswith("sdq")

@@ -28,6 +28,7 @@ from src.core.colegios import nombre as nombre_colegio          # noqa: F401
 from src.core.colegios import normalizar as normalizar_colegio  # noqa: F401
 from src.core.texto import norm_txt                              # noqa: F401
 from src.estudiantes import catalog as cat
+from src.estudiantes.privacidad import clave_celda
 
 # ── Normalización de texto ──────────────────────────────────────────────────
 def _hash_id(nombre_normalizado: str) -> str:
@@ -76,6 +77,8 @@ class InformeIngesta:
     faltantes_por_escala: dict = field(default_factory=dict)
     edades_fuera_de_rango: dict = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)
+    crudo_colegio_grado: dict = field(default_factory=dict)  # «LauV|Sexto» → filas del archivo
+    items_marcados: list[str] = field(default_factory=list)  # encabezados con «*», normalizados
 
     def como_dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items()}
@@ -163,6 +166,11 @@ def cargar(ruta_o_df, nivel: str | None = None) -> tuple[pd.DataFrame, InformeIn
     d["Colegio"] = [x[0] for x in norm_col]
     d["Colegio_nombre"] = [x[1] for x in norm_col]
     d["Sede"] = [x[2] for x in norm_col]
+
+    # Conteos ANTES de limpiar: son los que cuentan los investigadores en la hoja
+    inf.crudo_colegio_grado = {clave_celda(c, g): int(n) for (c, g), n in
+                               d.groupby(["Colegio", "Grado"]).size().items()}
+    inf.items_marcados = [norm_txt(c) for c in raw.columns if str(c).strip().startswith("*")]
 
     # ID por hash; el nombre nunca sale de esta función
     if idx_ident["nombre"] is not None:

@@ -24,7 +24,7 @@ EXTENSIONES = (".csv", ".xlsx", ".xls")
 
 
 def localizar_formularios(base: str | None = None) -> list[str]:
-    """Rutas de los formularios presentes en `base`, en el orden de PATRONES."""
+    """Un archivo por formulario: si hay varios (CSV viejo y xlsx nuevo), el más reciente."""
     from src.estudiantes.ingest import norm_txt
     from src.core.rutas import carpeta_datos
     base = base or carpeta_datos("estudiantes")
@@ -33,11 +33,9 @@ def localizar_formularios(base: str | None = None) -> list[str]:
     archivos = [f for f in os.listdir(base) if f.lower().endswith(EXTENSIONES)]
     rutas: list[str] = []
     for p in PATRONES:
-        for f in sorted(archivos):
-            if p in norm_txt(f):
-                ruta = os.path.join(base, f)
-                if ruta not in rutas:
-                    rutas.append(ruta)
+        candidatos = [os.path.join(base, f) for f in archivos if p in norm_txt(f)]
+        if candidatos:
+            rutas.append(max(candidatos, key=os.path.getmtime))
     return rutas
 
 
