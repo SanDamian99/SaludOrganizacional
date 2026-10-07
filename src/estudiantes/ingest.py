@@ -19,73 +19,20 @@ docs/instrumentos/fixtures/resultados_preliminares_estudiantes.json
 from __future__ import annotations
 
 import hashlib
-import re
-import unicodedata
 from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 
+from src.core.colegios import nombre as nombre_colegio          # noqa: F401
+from src.core.colegios import normalizar as normalizar_colegio  # noqa: F401
+from src.core.texto import norm_txt                              # noqa: F401
 from src.estudiantes import catalog as cat
+from src.estudiantes.privacidad import clave_celda
 
 # ── Normalización de texto ──────────────────────────────────────────────────
-def norm_txt(s) -> str:
-    """Minúsculas, sin tildes, sin puntuación, espacios colapsados."""
-    if s is None or (isinstance(s, float) and np.isnan(s)):
-        return ""
-    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
-    s = s.replace("\xa0", " ").lower()
-    return " ".join(re.sub(r"[^a-z0-9 ]", " ", s).split())
-
-
 def _hash_id(nombre_normalizado: str) -> str:
     return "E" + hashlib.sha1(nombre_normalizado.encode()).hexdigest()[:8]
-
-
-# ── Colegios: 14 etiquetas crudas → 6 códigos + sede ────────────────────────
-_COLEGIOS = [
-    (("laura", "vicuna"), "LauV", "Laura Vicuña"),
-    (("joaquin",), "JJC", "José Joaquín Casas"),
-    (("balsa",), "LaBalsa", "La Balsa"),
-    (("josemaria",), "SJMEB", "San Josemaría Escrivá de Balaguer"),
-    (("escriva",), "SJMEB", "San Josemaría Escrivá de Balaguer"),
-    (("cerca",), "CdP", "Cerca de Piedra"),
-    (("diosa",), "DiosCh", "Diosa Chía"),
-    (("bojaca",), "Bojacá", "Bojacá"),
-    (("fagua",), "Fagua", "Fagua"),
-    (("fonquet",), "Fonquetá", "Fonquetá"),
-    (("fusca",), "Fusca", "Fusca"),
-    (("tiquiza",), "Tiquiza", "Tiquiza"),
-]
-_SEDES = ["samaria", "principal", "preescolar", "calahorra", "polideportivo", "tiquiza",
-          "mercedes", "santa lucia"]
-
-
-def nombre_colegio(codigo: str) -> str:
-    """Nombre legible de un código de colegio; el propio código si no se conoce."""
-    for _, cod, nombre in _COLEGIOS:
-        if cod == codigo:
-            return nombre
-    return str(codigo)
-
-
-def normalizar_colegio(raw) -> tuple[str, str, str]:
-    """(código, nombre legible, sede). ('OTRO', texto crudo, '') si no se reconoce."""
-    s = norm_txt(raw)
-    if not s:
-        return "SIN_DATO", "Sin dato", ""
-    sede = ""
-    for k in _SEDES:
-        if k in s:
-            sede = {"samaria": "Samaria", "principal": "Principal", "preescolar": "Preescolar",
-                    "calahorra": "Mercedes de Calahorra", "mercedes": "Mercedes de Calahorra",
-                    "polideportivo": "Polideportivo", "tiquiza": "Tiquiza",
-                    "santa lucia": "Santa Lucía"}[k]
-            break
-    for claves, codigo, nombre in _COLEGIOS:
-        if any(c in s for c in claves):
-            return codigo, nombre, sede
-    return "OTRO", str(raw).strip(), sede
 
 
 # ── Detección de bloques de ítems en los encabezados crudos ─────────────────
@@ -130,6 +77,8 @@ class InformeIngesta:
     faltantes_por_escala: dict = field(default_factory=dict)
     edades_fuera_de_rango: dict = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)
+    crudo_colegio_grado: dict = field(default_factory=dict)  # «LauV|Sexto» → filas del archivo
+    items_marcados: list[str] = field(default_factory=list)  # encabezados con «*», normalizados
 
     def como_dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items()}
@@ -217,6 +166,11 @@ def cargar(ruta_o_df, nivel: str | None = None) -> tuple[pd.DataFrame, InformeIn
     d["Colegio"] = [x[0] for x in norm_col]
     d["Colegio_nombre"] = [x[1] for x in norm_col]
     d["Sede"] = [x[2] for x in norm_col]
+
+    # Conteos ANTES de limpiar: son los que cuentan los investigadores en la hoja
+    inf.crudo_colegio_grado = {clave_celda(c, g): int(n) for (c, g), n in
+                               d.groupby(["Colegio", "Grado"]).size().items()}
+    inf.items_marcados = [norm_txt(c) for c in raw.columns if str(c).strip().startswith("*")]
 
     # ID por hash; el nombre nunca sale de esta función
     if idx_ident["nombre"] is not None:

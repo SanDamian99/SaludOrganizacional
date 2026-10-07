@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS conjuntos_versiones_activa
 ALTER TABLE obs360.conjuntos_versiones ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION obs360.es_cargador() RETURNS boolean
-LANGUAGE sql STABLE AS $$
+LANGUAGE sql STABLE SET search_path = obs360, pg_temp AS $$
     SELECT coalesce((auth.jwt() -> 'app_metadata' ->> 'obs360_rol') = 'cargador', false)
 $$;
 
