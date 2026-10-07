@@ -450,6 +450,26 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
     return _documento(f"Informe Estudiantes 360 · {nombre}", cuerpo)
 
 
+def _tamano_nivel(a) -> tuple[int, int]:
+    """(respuestas en las cifras del nivel, respuestas válidas): de `muestra["base"]`.
+
+    Sin ese resumen (corrida antigua) las dos son `a.n`.
+    """
+    base = vc._resumen_base(a)
+    n_total = vc._conteo(base.get("n_total"))
+    n_nivel = vc._conteo(base.get("n_nivel"))
+    n_total = n_total if isinstance(n_total, int) else int(a.n)
+    n_nivel = n_nivel if isinstance(n_nivel, int) else n_total
+    return n_nivel, n_total
+
+
+def _texto_tamano(n_nivel: int, n_total: int) -> str:
+    """«350 de 352 respuestas» si no entran todas; «352 estudiantes» si sí."""
+    if n_nivel != n_total:
+        return f"{n_nivel} de {n_total} respuestas"
+    return f"{n_total} estudiantes"
+
+
 def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
     """Informe imprimible para la Secretaría: total del municipio y comparación entre colegios."""
     niveles = [n for n in _niveles(analisis) if _nivel_valido(analisis[n])]
@@ -457,11 +477,13 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
         raise ValueError("No hay resultados de estudiantes con base suficiente.")
     secciones = []
     notas_base: list[str] = []
-    total = 0
+    total, en_cifras = 0, 0
     colegios = set()
     for nivel in niveles:
         a = analisis[nivel]
-        total += a.n
+        n_nivel, n_total = _tamano_nivel(a)
+        total += n_total
+        en_cifras += n_nivel
         colegios.update(colegios_del_nivel(a))
         fichas = vc.tarjetas(a, "municipio", {})
         tarjetas_html = [_tarjeta_html(t, _cuerpo_tarjeta(a, t, {}, "Municipio",
@@ -473,7 +495,8 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
             notas_base.append(base)
         secciones.append(
             f'<section class="nivel"><h2 class="titulo-nivel">'
-            f'{_e(vc.NIVELES_LABEL.get(nivel, nivel))} · {a.n} estudiantes</h2>'
+            f'{_e(vc.NIVELES_LABEL.get(nivel, nivel))} · '
+            f'{_texto_tamano(n_nivel, n_total)}</h2>'
             + _bloque_bandas([("Municipio", vc.bandas_sdq_total(a, {}))])
             + '<h2>Resultados y qué hacer</h2><div class="tarjetas">'
             + "".join(tarjetas_html) + "</div>"
@@ -482,7 +505,7 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
             + _tabla_comparativa(a, "Grado", list(COLUMNAS_TABLA), {}, "Por grado",
                                  lambda g: g)
             + "</section>")
-    meta = (f"{total} estudiantes · {len(colegios)} colegios con resultados · "
+    meta = (f"{_texto_tamano(en_cifras, total)} · {len(colegios)} colegios con resultados · "
             f"{fecha_larga(fecha)}")
     cuerpo = (_encabezado("Observatorio 360 · Estudiantes · Informe para la Secretaría",
                           "Chía · total del municipio", meta)
