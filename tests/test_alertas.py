@@ -1,5 +1,6 @@
 """Alertas de grupo de Estudiantes 360 (spec 6-oct-2026, §5.4): catálogo, señales y cifras."""
 import inspect
+import random
 import re
 from types import SimpleNamespace
 
@@ -10,8 +11,10 @@ import pytest
 from src.estudiantes import alertas as al
 from src.estudiantes import alertas_catalogo as ac
 from src.estudiantes import catalog as cat
-from src.estudiantes import ingest, privacidad, supresion
+from src.estudiantes import ingest, pipeline, privacidad, supresion
 from tests.test_estudiantes import _formulario_sintetico
+from tests.test_estudiantes_comunidad import CON_RESTO, PRIMARIA
+from tests.test_supresion_propiedades import _fuerza_bruta
 
 
 # ══ Catálogo ════════════════════════════════════════════════════════════════
@@ -324,3 +327,150 @@ def test_distribucion_de_items_oculta_el_item_con_una_respuesta_rara():
     assert sdq6["pct"].tolist() == [60.0, 30.0, 10.0]
     assert sdq6["respuesta"].tolist() == ["No es cierto", "Algo cierto", "Muy cierto"]
     assert list(t.columns) == al.COLUMNAS_ITEMS
+
+
+# ══ Cifras de las alertas: la supresión general ═════════════════════════════
+# Las tres configuraciones reales de resta: todo en celdas; colegio publicado
+# entero sin celdas y respuestas fuera del nivel (primaria, oct-2026); resto R
+# dentro del nivel (CON_RESTO).
+TODO_EN_CELDAS = {("A", "Sexto"): 20, ("B", "Sexto"): 30, ("C", "Sexto"): 15,
+                  ("A", "Séptimo"): 20}
+CONFIGURACIONES = [(cat.NIVEL_SECUNDARIA, TODO_EN_CELDAS), (cat.NIVEL_PRIMARIA, PRIMARIA),
+                   (cat.NIVEL_SECUNDARIA, CON_RESTO)]
+ITEMS_MALESTAR = ac.ALERTAS[ac.MALESTAR].items
+
+
+def _datos_config(nivel, conteos: dict, semilla: int) -> pd.DataFrame:
+    """Filas con ítems ya codificados. Probabilidades bajas: muchas celdas con 0 a 2 casos."""
+    rng = random.Random(semilla)
+    p_mal, p_des, p_18 = rng.choice([.03, .08, .2]), rng.choice([.03, .1]), rng.choice([.05, .2])
+    filas = []
+    for (c, g), n in conteos.items():
+        for i in range(n):
+            f = dict(Colegio=c, Grado=g, Sexo="Mujer" if i % 2 else "Hombre", Edad=13,
+                     nivel=nivel)
+            malestar = rng.random() < p_mal
+            for item in ITEMS_MALESTAR:
+                f[f"SDQ{item}"] = ac.MUY_CIERTO if malestar and item in (5, 6, 8) else 0
+            if nivel == cat.NIVEL_SECUNDARIA:
+                u = rng.random()
+                muerte = (ac.SIEMPRE if u < p_des else ac.CON_FRECUENCIA if u < p_des + p_18
+                          else 0)
+                f.update(RCADS1=0, RCADS4=0, RCADS16=0, RCADS18=muerte)
+            filas.append(f)
+    return pd.DataFrame(filas)
+
+
+def _nombre(agrupacion: str, grupo: str):
+    return supresion.NIVEL if agrupacion == al.TOTAL else (agrupacion, str(grupo))
+
+
+def _partes_reales(a, alerta: str):
+    """{átomo: partes} desde los datos enmascarados, sin pasar por la supresión."""
+    familia = al.ANIDADA.get(alerta, "")
+    partes = {}
+    for at, idx in supresion.indices_atomos(a.base).items():
+        sub = a.datos.loc[a.datos.index.intersection(idx)]
+        s = sub[al.COLUMNAS[alerta]].dropna() if al.COLUMNAS[alerta] in sub else pd.Series(dtype=float)
+        k, n = int(s.sum()), len(s)
+        if familia:
+            k18 = int((sub[familia].dropna() >= ac.CON_FRECUENCIA).sum())
+            partes[at] = (n - k18, k18 - k, k)
+        else:
+            partes[at] = (n - k, k)
+    return partes
+
+
+@pytest.mark.parametrize("nivel,conteos", CONFIGURACIONES)
+def test_lo_publicado_de_las_alertas_resiste_restas(nivel, conteos):
+    """Fuerza bruta: ningún conjunto de átomos deducible de lo publicado incumple la regla."""
+    for semilla in range(12):
+        a = pipeline.analizar(_datos_config(nivel, conteos, semilla), nivel, n_boot=5)
+        assert supresion.auditar(a) == [], semilla
+        jer = supresion.jerarquia(list(a.base.celdas), list(a.base.colegios),
+                                  list(a.base.grados), con_resto=a.base.incluye_resto)
+        for alerta in al.claves_del_nivel(a.datos, nivel):
+            t = a.alertas[a.alertas["alerta"] == alerta]
+            pub = {_nombre(f["agrupacion"], f["grupo"]) for f in t.to_dict("records")
+                   if f["pct"] is not None and not pd.isna(f["pct"])}
+            partes = _partes_reales(a, alerta)
+            assert _fuerza_bruta(jer, partes, pub) == set(), (semilla, alerta)
+            for f in t.to_dict("records"):
+                if pd.isna(f["pct"]):
+                    assert f["estado"] == ac.SIN_ESTADO and pd.isna(f["ic_inf"])
+
+
+def test_los_grados_y_las_celdas_llevan_porcentaje_cuando_se_puede():
+    conteos = {("A", "Sexto"): 40, ("A", "Séptimo"): 40, ("B", "Sexto"): 40,
+               ("B", "Séptimo"): 40}
+    filas = []
+    for (c, g), n in conteos.items():
+        k = 30 if (c, g) == ("A", "Sexto") else 6
+        for i in range(n):
+            f = dict(Colegio=c, Grado=g, Sexo="Mujer", Edad=13, nivel=cat.NIVEL_SECUNDARIA)
+            f.update({f"SDQ{j}": ac.MUY_CIERTO if i < k and j in (5, 6, 8) else 0
+                      for j in ITEMS_MALESTAR})
+            filas.append(f)
+    a = pipeline.analizar(pd.DataFrame(filas), cat.NIVEL_SECUNDARIA, n_boot=5)
+    t = a.alertas.set_index(["agrupacion", "grupo"])
+    for clave in (("Grado", "Sexto"), ("Grado", "Séptimo"), (al.CRUCE, "A|Sexto"),
+                  ("Colegio", "A")):
+        assert not pd.isna(t.loc[clave, "pct"]), clave
+    assert t.loc[(al.CRUCE, "A|Sexto"), "estado"] == ac.PRIORIDAD
+    assert t.loc[("Grado", "Séptimo"), "estado"] == ac.PRESENTE
+    assert t.loc[(al.TOTAL, al.TODOS), "estado"] == ac.REFERENCIA
+    assert list(a.alertas.columns) == al.COLUMNAS_TABLA and "casos" not in a.alertas
+
+
+def test_la_desesperanza_nunca_se_publica_donde_el_item_18_esta_suprimido():
+    for semilla in range(12):
+        a = pipeline.analizar(_datos_config(cat.NIVEL_SECUNDARIA, CON_RESTO, semilla),
+                              cat.NIVEL_SECUNDARIA, n_boot=5)
+        for g, o in supresion._objetos(a).items():
+            if supresion._publicado_alerta(o, ac.DESESPERANZA):
+                assert supresion._publicado(o, al.ANIDADA[ac.DESESPERANZA]), (semilla, g)
+
+
+def test_si_las_bases_no_coinciden_la_desesperanza_no_se_publica():
+    d = _datos_config(cat.NIVEL_SECUNDARIA, TODO_EN_CELDAS, 1)
+    d.loc[d.index[:3], "RCADS16"] = np.nan       # 18 respondido, 16 no: bases distintas
+    a = pipeline.analizar(d, cat.NIVEL_SECUNDARIA, n_boot=5)
+    des = a.alertas[a.alertas["alerta"] == ac.DESESPERANZA]
+    assert len(des) and des["pct"].isna().all()
+    assert (des["estado"] == ac.SIN_ESTADO).all()
+    assert supresion.auditar(a) == []
+
+
+def test_la_auditoria_detecta_una_alerta_destapada():
+    import copy
+    for semilla in range(12):
+        a = pipeline.analizar(_datos_config(cat.NIVEL_SECUNDARIA, TODO_EN_CELDAS, semilla),
+                              cat.NIVEL_SECUNDARIA, n_boot=5)
+        celda = a.subgrupos[al.CRUCE]["A|Sexto"]
+        t = celda.cortes_alerta
+        fila = t["clave"] == ac.MALESTAR
+        if fila.any() and t.loc[fila, "pct"].isna().all():
+            b = copy.deepcopy(a)
+            b.subgrupos[al.CRUCE]["A|Sexto"].cortes_alerta.loc[fila, "pct"] = 5.0
+            assert any(p.startswith("alerta malestar") for p in supresion.auditar(b))
+            return
+    pytest.fail("ninguna semilla dejó la celda suprimida")
+
+
+def test_suprimir_nunca_destapa_lo_que_ya_venia_oculto():
+    jer = supresion.jerarquia(["A|Sexto", "B|Sexto"], ["A", "B"], ["Sexto"], con_resto=False)
+    partes = {supresion.atomo_celda("A|Sexto"): (20, 10), supresion.atomo_celda("B|Sexto"): (20, 10)}
+    assert supresion.suprimir(jer, partes) == set()
+    sup = supresion.suprimir(jer, partes, previos={supresion.COLEGIO("A")})
+    assert supresion.COLEGIO("A") in sup
+
+
+@pytest.mark.parametrize("semilla", range(6))
+def test_el_estado_de_la_tabla_se_reproduce_con_lo_publicado(semilla):
+    """Con las cifras publicadas de la tabla (sin datos) sale el mismo estado."""
+    a = pipeline.analizar(_datos_config(*CONFIGURACIONES[0], semilla=semilla), CONFIGURACIONES[0][0],
+                          n_boot=5)
+    t = a.alertas
+    for f in t[t["agrupacion"] != al.TOTAL].to_dict("records"):
+        nivel = t[(t["alerta"] == f["alerta"]) & (t["agrupacion"] == al.TOTAL)].iloc[0]
+        assert f["estado"] == al.estado(f["pct"], f["n"], nivel["pct"], nivel["n"])
