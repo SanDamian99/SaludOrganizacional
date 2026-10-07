@@ -46,6 +46,11 @@ CLASE = {ac.PRIORIDAD: "prioridad", ac.PRESENTE: "presente", ac.REFERENCIA: "pre
          ac.SIN_ESTADO: "sin-estado"}
 
 
+def estado_valido(estado) -> str:
+    """El estado tal cual si se conoce; si no (una corrida de otra versión), «sin estado»."""
+    return estado if isinstance(estado, str) and estado in ac.ESTADOS else ac.SIN_ESTADO
+
+
 @dataclass(frozen=True)
 class Senal:
     alerta: str
@@ -65,11 +70,11 @@ class Senal:
 
     @property
     def etiqueta_estado(self) -> str:
-        return ac.ESTADOS[self.estado]
+        return ac.ESTADOS[estado_valido(self.estado)]
 
     @property
     def clase(self) -> str:
-        return CLASE[self.estado]
+        return CLASE.get(estado_valido(self.estado), CLASE[ac.SIN_ESTADO])
 
 
 # ══ Datos ═══════════════════════════════════════════════════════════════════
@@ -174,7 +179,7 @@ def senales(analisis, rol: str, filtros: dict | None = None) -> list[Senal]:
                                 que_hacer=definicion.que_hacer.get(rol, ""), listas=listas))
             continue
         salida.append(Senal(
-            alerta=alerta, nombre=definicion.nombre, estado=str(f["estado"]),
+            alerta=alerta, nombre=definicion.nombre, estado=estado_valido(f["estado"]),
             frase=frase(alerta, float(f["pct"])), que_hacer=definicion.que_hacer.get(rol, ""),
             pct=float(f["pct"]), ic_inf=float(f["ic_inf"]), ic_sup=float(f["ic_sup"]),
             n=int(f["n"]), listas=listas))
@@ -187,8 +192,9 @@ def explicaciones(lista: list[Senal]) -> list[str]:
               ac.REFERENCIA: ac.QUE_ES_REFERENCIA, ac.SIN_ESTADO: ac.QUE_ES_SIN_ESTADO}
     vistos: list[str] = []
     for s in lista:
-        if textos[s.estado] not in vistos:
-            vistos.append(textos[s.estado])
+        texto = textos[estado_valido(s.estado)]
+        if texto not in vistos:
+            vistos.append(texto)
     return vistos
 
 
@@ -240,8 +246,9 @@ def _celda_html(f) -> str:
         return (f'<td class="senal-sin-estado"><span class="estado">'
                 f'{_e(ac.ESTADOS[ac.SIN_ESTADO])}</span>'
                 f'<small>{_e(ac.CIFRAS_PEQUENAS_CORTO)}</small></td>')
-    clase = CLASE[str(f["estado"])]
-    return (f'<td class="senal-{clase}"><span class="estado">{_e(ac.ESTADOS[f["estado"]])}'
+    estado = estado_valido(f["estado"])
+    return (f'<td class="senal-{CLASE.get(estado, CLASE[ac.SIN_ESTADO])}"><span class="estado">'
+            f'{_e(ac.ESTADOS[estado])}'
             f'</span> {float(f["pct"]):.0f} %<small>{float(f["ic_inf"]):.0f}–'
             f'{float(f["ic_sup"]):.0f}</small></td>')
 

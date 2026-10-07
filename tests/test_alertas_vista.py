@@ -365,3 +365,49 @@ def test_la_metodologia_define_las_alertas(analisis):
 
 def test_la_pestana_de_alertas_existe():
     assert vi.PESTANAS.index("Alertas") == 5 and len(vi.PESTANAS) == 9
+
+
+# ══ Si el panel falla, la tarjeta de muerte no desaparece ══════════════════
+def test_un_estado_desconocido_se_lee_sin_estado():
+    filas = [_r("malestar", "total", "Todos", 16.7, "estado_nuevo", n=900),
+             _r("malestar", "Colegio", "LauV", 25.0, "otro", n=400)]
+    ns = _ns(filas)
+    s = va.senales(ns, "municipio", {})
+    assert [x.estado for x in s] == [S]
+    assert s[0].clase == va.CLASE[S] and s[0].etiqueta_estado == ac.ESTADOS[S]
+    assert ac.ESTADOS[S] in va.panel_html(ns, "colegio", {})
+    assert va.explicaciones(s) == [ac.QUE_ES_SIN_ESTADO]
+    assert "LauV" in va.tabla_secretaria_html(ns) or "Laura" in va.tabla_secretaria_html(ns)
+
+
+def _falla(*a, **k):
+    raise RuntimeError("módulo viejo")
+
+
+def test_si_el_panel_falla_la_vista_conserva_la_tarjeta_de_muerte(monkeypatch, analisis):
+    monkeypatch.setattr(va, "render_panel", _falla)
+    assert vc._panel_alertas(analisis, "colegio", {}) is False
+    fichas = vc.tarjetas(analisis, "colegio", {}, panel_dibujado=False)
+    viejo = dataclasses.replace(analisis, alertas=pd.DataFrame())
+    assert ({t.clave for t in fichas} == {t.clave for t in vc.tarjetas(viejo, "colegio")})
+
+
+def test_si_las_senales_fallan_no_se_reemplaza_la_muerte(monkeypatch, analisis):
+    monkeypatch.setattr(va, "senales", _falla)
+    assert not vc.panel_reemplaza_muerte(analisis, "colegio")
+    assert "ideacion" in vc.indicadores_comparables(analisis, "colegio")
+
+
+def test_si_el_panel_falla_los_informes_conservan_la_muerte(monkeypatch, analisis):
+    monkeypatch.setattr(va, "panel_html", _falla)
+    monkeypatch.setattr(va, "tabla_secretaria_html", _falla)
+    fuente = {cat.NIVEL_SECUNDARIA: analisis}
+    assert "Piensa en la muerte con frecuencia" in inf.informe_colegio_html(
+        fuente, COLEGIO, fecha=date(2026, 10, 8))
+    assert "Piensa en la muerte con frecuencia" in inf.informe_secretaria_html(
+        fuente, fecha=date(2026, 10, 8))
+    viejo = dataclasses.replace(analisis, alertas=pd.DataFrame())
+    titulo = cat.MENSAJES["ideacion"].titulo
+    for rol in ("colegio", "municipio"):
+        assert ((titulo in inf.informe_una_pagina_html(analisis, rol, _f()))
+                == (titulo in inf.informe_una_pagina_html(viejo, rol, _f())))

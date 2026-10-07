@@ -188,30 +188,33 @@ def _alertas_vista():
         return None
 
 
-def panel_reemplaza_muerte(analisis, rol: str) -> bool:
+def panel_reemplaza_muerte(analisis, rol: str, filtros: dict | None = None) -> bool:
     """¿El panel de alertas sustituye la tarjeta «Pensamientos sobre la muerte»?
 
-    Solo para colegio y municipio, y solo si la corrida trae la alerta de
-    desesperanza (spec §5.4, «Unificación»): si no, serían dos cifras sobre el
-    mismo ítem. Con una corrida anterior a la fase 3 la tarjeta sigue igual.
+    Solo para colegio y municipio, y solo si el panel de verdad trae la señal
+    de desesperanza (spec §5.4, «Unificación»): si no, serían dos cifras sobre
+    el mismo ítem. Con una corrida anterior a la fase 3, o si el panel falla al
+    armarse, la tarjeta sigue igual: nunca desaparece en silencio.
     """
     if rol not in ("colegio", "municipio"):
         return False
     va = _alertas_vista()
+    if va is None:
+        return False
     try:
-        return bool(va and va.hay_alerta(analisis, "desesperanza"))
+        return any(s.alerta == "desesperanza" for s in va.senales(analisis, rol, filtros or {}))
     except Exception:                                      # noqa: BLE001
         return False
 
 
-def indicadores_comparables(analisis, rol: str) -> list[str]:
+def indicadores_comparables(analisis, rol: str, panel_dibujado: bool = True) -> list[str]:
     """Indicadores del selector «Comparar entre grupos» para este rol.
 
     Familia nunca ve el de la muerte (spec §6). Colegio y municipio tampoco
     cuando el panel de alertas la reemplaza.
     """
     opciones = [k for k in INDICADORES if prevalencia(analisis, k, {})]
-    if rol == "familia" or panel_reemplaza_muerte(analisis, rol):
+    if rol == "familia" or (panel_dibujado and panel_reemplaza_muerte(analisis, rol)):
         opciones = [k for k in opciones if k != "ideacion"]
     return opciones or ["sdq_alto"]
 
@@ -240,16 +243,17 @@ def aviso_ruta_pendiente() -> str:
     return ac.RUTA_PENDIENTE if modo_app.modo() == modo_app.COMPLETO else ""
 
 
-def _panel_alertas(a, rol: str, filtros: dict) -> None:
-    """Dibuja el panel; si algo falla, la página sigue sin él."""
+def _panel_alertas(a, rol: str, filtros: dict) -> bool:
+    """Dibuja el panel. True si se dibujó; si algo falla, False y la página sigue."""
     va = _alertas_vista()
     if va is None:
-        return
+        return False
     try:
-        va.render_panel(a, rol, filtros)
+        return bool(va.render_panel(a, rol, filtros))
     except Exception:                                      # noqa: BLE001
         import logging
         logging.getLogger(__name__).exception("No se pudo dibujar el panel de alertas")
+        return False
 
 
 def enunciado_pssm(item: str, orientado: bool = False) -> str:
@@ -903,8 +907,13 @@ def n_bandas(analisis, filtros: dict | None = None) -> int:
     return int(f["n"]) if f is not None else 0
 
 
-def tarjetas(analisis, rol: str, filtros: dict | None = None) -> list[Tarjeta]:
-    """Hasta `MAX_TARJETAS` tarjetas con cifra real, textos del catálogo y acción del rol."""
+def tarjetas(analisis, rol: str, filtros: dict | None = None,
+             panel_dibujado: bool = True) -> list[Tarjeta]:
+    """Hasta `MAX_TARJETAS` tarjetas con cifra real, textos del catálogo y acción del rol.
+
+    `panel_dibujado=False` (el panel de alertas falló o no salió): la tarjeta de
+    muerte se queda, aunque la corrida traiga la alerta.
+    """
     filtros = filtros or {}
     permitidos = mensajes_para_rol(rol)
     salida: list[Tarjeta] = []
@@ -916,7 +925,8 @@ def tarjetas(analisis, rol: str, filtros: dict | None = None) -> list[Tarjeta]:
         accion = accion_para_rol(mensaje, rol)
         if not accion:
             continue
-        if clave == "ideacion" and panel_reemplaza_muerte(analisis, rol):
+        if (clave == "ideacion" and panel_dibujado
+                and panel_reemplaza_muerte(analisis, rol, filtros)):
             continue
         cifra, detalle = "", ""
         if clave in INDICADORES:
@@ -1212,10 +1222,10 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
                 "distribución por niveles.", icon="ℹ️")
 
     # ── 1b. señales para actuar a tiempo (alertas de grupo, spec §5.4)
-    _panel_alertas(a, rol, filtros)
+    panel_dibujado = _panel_alertas(a, rol, filtros)
 
-    # ── 2. tarjetas
-    fichas = tarjetas(a, rol, filtros)
+    # ── 2. tarjetas (sin la de muerte solo si el panel salió de verdad)
+    fichas = tarjetas(a, rol, filtros, panel_dibujado=panel_dibujado)
     if fichas:
         columnas = st.columns(len(fichas))
         for col, t in zip(columnas, fichas):
@@ -1240,7 +1250,7 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         dimension = st.radio("Comparar por", dimensiones, horizontal=True,
                              key="est_com_dimension")
     with col_der:
-        opciones = indicadores_comparables(a, rol)
+        opciones = indicadores_comparables(a, rol, panel_dibujado=panel_dibujado)
         indicador = st.selectbox(
             "Indicador", opciones,
             format_func=lambda k: INDICADORES[k]["etiqueta"].capitalize(),
