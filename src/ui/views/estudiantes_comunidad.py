@@ -1107,12 +1107,25 @@ def _boton_una_pagina(a, rol: str, filtros: dict) -> None:
         st.caption("Se abre en el navegador; desde ahí se imprime o se guarda como PDF.")
 
 
+def _vista_previa(html: str) -> None:
+    """Muestra un informe HTML embebido.
+
+    `st.iframe` reemplaza a `components.html`, que Streamlit retira; las
+    versiones anteriores a `st.iframe` siguen usando el componente.
+    """
+    iframe = getattr(st, "iframe", None)
+    if callable(iframe):
+        iframe(html, height=900)
+        return
+    import streamlit.components.v1 as components
+    components.html(html, height=900, scrolling=True)
+
+
 def _seccion_informes(analisis: dict, rol: str, colegio: str) -> None:
     """Informes imprimibles en HTML: por colegio y, para el municipio, el de la Secretaría.
 
     Conviven con el PDF de docentes para comparar formatos con el equipo.
     """
-    import streamlit.components.v1 as components
 
     from src.estudiantes.ingest import nombre_colegio
     from src.ui.views import estudiantes_informe as inf
@@ -1154,4 +1167,4 @@ def _seccion_informes(analisis: dict, rol: str, colegio: str) -> None:
         elif html_secretaria:
             previa = html_secretaria
         if previa:
-            components.html(previa, height=900, scrolling=True)
+            _vista_previa(previa)
