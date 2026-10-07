@@ -188,3 +188,102 @@ def test_las_credenciales_de_escritura_salen_del_archivo_local_si_no_estan_en_el
     # sin archivo y sin entorno, nada
     monkeypatch.delenv("SUPABASE_URL"); monkeypatch.delenv("SUPABASE_SERVICE_KEY")
     assert publicar.credenciales_escritura(str(tmp_path / "no_existe.toml")) == (None, None)
+
+
+# ══ Auditoría de restas, enmascarado y despublicación ═══════════════════════
+from tests.test_estudiantes_comunidad import _formulario  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def analisis_sintetico():
+    from src.estudiantes import ingest, scoring
+    bruto, _ = ingest.cargar(_formulario())
+    return {cat.NIVEL_SECUNDARIA: pipeline.analizar(scoring.puntuar(bruto),
+                                                    cat.NIVEL_SECUNDARIA, n_boot=20)}
+
+
+def test_la_auditoria_de_restas_pasa_con_la_base(analisis_sintetico):
+    assert publicar.verificar_restas(analisis_sintetico) == []
+
+
+def test_la_auditoria_bloquea_una_base_manipulada(analisis_sintetico):
+    import copy
+    a = copy.copy(analisis_sintetico[cat.NIVEL_SECUNDARIA])
+    b = copy.copy(a.base)
+    b.colegios = dict(b.colegios)
+    b.colegios["LauV"] = a.datos.index[a.datos["Colegio"] == "LauV"]   # incluye Noveno (4)
+    a.base = b
+    assert publicar.verificar_restas({cat.NIVEL_SECUNDARIA: a})
+
+
+class _Tabla:
+    def __init__(self, registro, nombre):
+        self.r, self.n = registro, nombre
+
+    def insert(self, filas):
+        self.r.append(("insert", self.n, filas)); return self
+
+    def update(self, valores):
+        self.r.append(("update", self.n, valores)); return self
+
+    def eq(self, k, v):
+        self.r.append(("eq", self.n, (k, v))); return self
+
+    def neq(self, k, v):
+        self.r.append(("neq", self.n, (k, v))); return self
+
+    def execute(self):
+        class R:
+            data = [{"id": 7}]
+        return R()
+
+
+class _Cliente:
+    def __init__(self):
+        self.registro = []
+        cliente = self
+
+        class _Schema:
+            def table(self, nombre): return _Tabla(cliente.registro, nombre)
+
+        class _Postgrest:
+            def schema(self, _): return _Schema()
+        self.postgrest = _Postgrest()
+
+
+def test_publicar_ya_despublica_la_corrida_anterior_del_modulo(analisis_sintetico):
+    cli = _Cliente()
+    publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
+    pasos = cli.registro
+    assert ("update", "corridas", {"publicada": False}) in pasos
+    assert ("eq", "corridas", ("modulo", "estudiantes")) in pasos
+    assert ("neq", "corridas", ("id", 7)) in pasos
+
+
+def test_sin_publicar_ya_no_toca_otras_corridas(analisis_sintetico):
+    cli = _Cliente()
+    publicar.publicar(analisis_sintetico, publicar_ya=False, cliente=cli)
+    assert not any(p[0] == "update" for p in cli.registro)
+
+
+def test_los_conteos_crudos_se_enmascaran_al_publicar():
+    class Inf:
+        nivel = "secundaria"
+        crudo_colegio_grado = {"LauV|Sexto": 95, "CdP|Décimo": 6}
+    filas = publicar.aplanar_ingesta([Inf()])
+    crudo = filas[0]["detalle"]["ingesta"]["crudo_colegio_grado"]
+    assert crudo["LauV|Sexto"] == 95 and crudo["CdP|Décimo"] == "<10"
+
+
+def test_la_fila_muestra_enmascara_celdas_y_suprimidos_pequenos(analisis_sintetico):
+    import copy
+    a = copy.copy(analisis_sintetico[cat.NIVEL_SECUNDARIA])
+    m = dict(a.muestra)
+    m["colegio_grado"] = {"LauV|Sexto": 95, "LauV|Noveno": 4}
+    m["suprimidos"] = {"SDQ_Total": 3, "PSSM": 25}
+    a.muestra = m
+    fila = next(f for f in publicar.aplanar({cat.NIVEL_SECUNDARIA: a})
+                if f["tipo"] == "muestra")
+    pub = fila["detalle"]["muestra"]
+    assert pub["colegio_grado"] == {"LauV|Sexto": 95, "LauV|Noveno": "<10"}
+    assert pub["suprimidos"] == {"SDQ_Total": "<10", "PSSM": 25}

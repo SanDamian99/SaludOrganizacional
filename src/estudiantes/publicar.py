@@ -42,7 +42,7 @@ import numpy as np
 import pandas as pd
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import pipeline
+from src.estudiantes import pipeline, privacidad
 
 # Columnas que no pueden aparecer en nada que se publique
 COLUMNAS_PROHIBIDAS = {"id", "nombre", "nombre_completo", "ts", "sede",
@@ -50,6 +50,7 @@ COLUMNAS_PROHIBIDAS = {"id", "nombre", "nombre_completo", "ts", "sede",
 TABLA_CORRIDAS = "corridas"
 TABLA_RESULTADOS = "resultados"
 ESQUEMA = "obs360"
+MODULO = "estudiantes"
 
 
 def _num(v):
@@ -229,7 +230,10 @@ def aplanar(analisis: dict) -> list[dict]:
         # descripción de la muestra, en una sola fila cuyo N es el del nivel
         if a.muestra:
             # La muestra va anidada en un solo campo: sus claves (n, sexo, edad…)
-            # chocarían con las columnas de la fila.
+            # chocarían con las columnas de la fila. Los tamaños de grupo
+            # (colegio_grado, base) no se tratan como sensibles (spec §5.1: dicen
+            # cuántos respondieron, no qué respondieron); solo se enmascaran los
+            # conteos por debajo del mínimo.
             filas.append(_fila(
                 nivel, "muestra", "muestra", a.n, a.n,
                 escala="Descripción de la muestra",
@@ -315,7 +319,7 @@ CAMPOS_INGESTA = ("filas_archivo", "sin_consentimiento", "excluidas_prueba",
                   "filas_validas", "erq_invalidado", "escalas_detectadas",
                   "escalas_ausentes", "etiquetas_no_mapeadas",
                   "faltantes_por_escala", "edades_fuera_de_rango",
-                  "colegios_enmascarados", "avisos")
+                  "colegios_enmascarados", "crudo_colegio_grado", "avisos")
 
 
 def aplanar_ingesta(informes: list) -> list[dict]:
@@ -328,7 +332,7 @@ def aplanar_ingesta(informes: list) -> list[dict]:
             if valor in (None, [], {}):
                 continue
             detalle[campo] = (_enmascarar_conteos(valor)
-                              if campo == "colegios" else valor)
+                              if campo == "crudo_colegio_grado" else valor)
         colegios = getattr(inf, "colegios", None)
         if colegios:
             detalle["colegios"] = _enmascarar_conteos(colegios)
@@ -366,6 +370,21 @@ def verificar(filas: list[dict]) -> None:
             f"{len(problemas)} problema(s) de privacidad:\n  - "
             + "\n  - ".join(problemas[:20])
             + ("\n  … y más" if len(problemas) > 20 else ""))
+
+
+def verificar_restas(analisis: dict) -> list[str]:
+    """Problemas de resta en cualquier nivel con datos (ver privacidad.auditar).
+
+    Audita todas las columnas de análisis de los datos ya enmascarados, no solo
+    las publicadas: es más estricto y por eso más seguro.
+    """
+    problemas: list[str] = []
+    for nivel, a in (analisis or {}).items():
+        if a is None or getattr(a, "base", None) is None or a.datos is None or a.datos.empty:
+            continue
+        problemas += [f"{nivel} · {p}" for p in
+                      privacidad.auditar(a.datos, a.base, privacidad.columnas_de_analisis(a.datos))]
+    return problemas
 
 
 def version_analisis(analisis: dict) -> str:
@@ -421,11 +440,16 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
     """Sube el lote. Devuelve el resumen de lo insertado."""
     filas = aplanar(analisis) + aplanar_ingesta(informes)
     verificar(filas)
+    restas = verificar_restas(analisis)
+    if restas:
+        raise PublicacionInsegura(
+            "No se publicó nada: alguna resta entre cifras publicadas dejaría un grupo "
+            f"de menos de {cat.MIN_GROUP_N}:\n  - " + "\n  - ".join(restas[:20]))
     cli = cliente or _cliente()
     tabla = lambda t: cli.postgrest.schema(ESQUEMA).table(t)  # noqa: E731
 
     corrida = dict(
-        modulo="estudiantes", version_analisis=version_analisis(analisis),
+        modulo=MODULO, version_analisis=version_analisis(analisis),
         n_secundaria=(analisis.get(cat.NIVEL_SECUNDARIA).n
                       if analisis.get(cat.NIVEL_SECUNDARIA) else None),
         n_primaria=(analisis.get(cat.NIVEL_PRIMARIA).n
@@ -437,6 +461,12 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
     for i in range(0, len(filas), 500):
         lote = [dict(f, corrida_id=corrida_id) for f in filas[i:i + 500]]
         tabla(TABLA_RESULTADOS).insert(lote).execute()
+
+    if corrida["publicada"]:
+        # Dos corridas legibles a la vez permitirían restar una de otra y aislar
+        # las respuestas nuevas: solo queda publicada la última de este módulo.
+        (tabla(TABLA_CORRIDAS).update({"publicada": False})
+         .eq("modulo", MODULO).neq("id", corrida_id).execute())
 
     return dict(corrida_id=corrida_id, version=corrida["version_analisis"],
                 filas=len(filas), publicada=corrida["publicada"])
@@ -490,6 +520,10 @@ def main(argv=None) -> int:
           f"(el umbral es {cat.MIN_GROUP_N})")
 
     if args.ensayo:
+        restas = verificar_restas(analisis)
+        if restas:
+            print("AVISO: la auditoría de restas encontró problemas:\n  - "
+                  + "\n  - ".join(restas))
         with open(args.salida, "w", encoding="utf-8") as fh:
             json.dump(dict(version=version_analisis(analisis),
                            mensajes=mensajes_para_subir(), filas=filas),
