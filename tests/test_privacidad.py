@@ -214,8 +214,14 @@ def test_las_relaciones_de_nivel_tienen_nombres_distintos():
 
 
 def test_union_conserva_el_tipo_entero():
-    u = pv._union([pd.Index([3, 1], dtype="int64"), pd.Index([2], dtype="int64")])
+    u = pv.union([pd.Index([3, 1], dtype="int64"), pd.Index([2], dtype="int64")])
     assert u.dtype == "int64" and list(u) == [1, 2, 3]
+
+
+def test_ayudantes_publicos_y_alias_antiguos():
+    assert pv._union is pv.union and pv._activo is pv.activo
+    assert pv.activo("LauV") and not pv.activo(pv.TODOS) and not pv.activo(None)
+    assert not pv.activo("")
 
 
 def test_datos_reales_enmascarados_pasan_la_auditoria():

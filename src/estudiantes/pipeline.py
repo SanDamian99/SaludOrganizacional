@@ -138,8 +138,8 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     a.matriz = stats.matriz_correlaciones(dn, corr_vars)
 
     a.por_sexo = stats.comparar_por_sexo(dn, claves)
-    en_grados = dm.loc[privacidad._union(base.grados.values())]
-    en_colegios = dm.loc[privacidad._union(base.colegios.values())]
+    en_grados = dm.loc[privacidad.union(base.grados.values())]
+    en_colegios = dm.loc[privacidad.union(base.colegios.values())]
     a.por_grado, _ = stats.comparar_por_grupo(en_grados, claves, "Grado", orden_grados)
     a.por_colegio, _ = stats.comparar_por_grupo(en_colegios, claves, "Colegio")
     # Enmascarados: los colegios y grados presentes que la base no publica.

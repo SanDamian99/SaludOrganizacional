@@ -241,14 +241,14 @@ def grupos_publicables(analisis, columna: str, otra=TODOS) -> list[str]:
     pos = 0 if columna == "Colegio" else 1
     base = getattr(analisis, "base", None)
     if base is not None and hay_datos_crudos(analisis):
-        if not privacidad._activo(otra):
+        if not privacidad.activo(otra):
             grupos = list((base.colegios if columna == "Colegio" else base.grados).keys())
         else:
             grupos = [privacidad.partir_celda(k)[pos] for k in base.celdas
                       if privacidad.partir_celda(k)[1 - pos] == str(otra)]
     else:
         sub = getattr(analisis, "subgrupos", None) or {}
-        if not privacidad._activo(otra):
+        if not privacidad.activo(otra):
             grupos = list((sub.get(columna) or {}).keys())
         else:
             grupos = [privacidad.partir_celda(k)[pos]
@@ -331,7 +331,7 @@ def grados_ocultos(analisis, colegio=TODOS) -> list[str]:
     """
     if analisis is None:
         return []
-    if not privacidad._activo(colegio):
+    if not privacidad.activo(colegio):
         return grupos_visibles(analisis, "Grado")[1]
     conteo = (getattr(analisis, "muestra", None) or {}).get("colegio_grado") or {}
     if not conteo:
@@ -361,7 +361,7 @@ def texto_ocultos(analisis, colegio=TODOS, con_colegios: bool = True) -> str:
     if analisis is None:
         return ""
     minimo = cat.MIN_GROUP_N
-    elegido = privacidad._activo(colegio)
+    elegido = privacidad.activo(colegio)
     grados = grados_ocultos(analisis, colegio)
     colegios = [] if (elegido or not con_colegios) else grupos_visibles(analisis, "Colegio")[1]
     frases = []
@@ -538,7 +538,7 @@ def prevalencia_por(analisis, indicador: str, columna: str,
         valor_otra = filtros.get(otra, TODOS)
         grupos = grupos_publicables(analisis, columna, valor_otra)
         propio = filtros.get(columna.lower(), TODOS)
-        if privacidad._activo(propio):
+        if privacidad.activo(propio):
             grupos = [g for g in grupos if g == str(propio)]
         partes = []
         for g in grupos:

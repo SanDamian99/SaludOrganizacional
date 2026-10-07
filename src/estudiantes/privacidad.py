@@ -89,7 +89,8 @@ def partir_celda(clave: str) -> tuple[str, str]:
     return colegio, grado
 
 
-def _union(indices) -> pd.Index:
+def union(indices) -> pd.Index:
+    """Unión de varios índices de fila, conservando el tipo (int64 sigue int64)."""
     lista = list(indices)
     if not lista:
         return pd.Index([])
@@ -99,8 +100,14 @@ def _union(indices) -> pd.Index:
     return salida
 
 
-def _activo(valor) -> bool:
+def activo(valor) -> bool:
+    """¿El filtro tiene un valor elegido (no «Todos», vacío ni None)?"""
     return valor not in (TODOS, None, "")
+
+
+# Nombres antiguos, privados; se conservan por compatibilidad.
+_union = union
+_activo = activo
 
 
 @dataclass
@@ -114,7 +121,7 @@ class Base:
 
     @property
     def n_fuera_de_celdas(self) -> int:
-        return self.n_total - len(_union(self.celdas.values()))
+        return self.n_total - len(union(self.celdas.values()))
 
     def resumen(self) -> dict:
         """Tamaños de la base. De las respuestas fuera de celdas publicables,
@@ -124,7 +131,7 @@ class Base:
                     n_fuera_de_celdas=self.n_fuera_de_celdas,
                     n_fuera_del_nivel=self.n_total - len(self.nivel),
                     n_solo_en_total=len(self.nivel.difference(
-                        _union(self.colegios.values()))),
+                        union(self.colegios.values()))),
                     incluye_resto=self.incluye_resto)
 
 
@@ -140,14 +147,14 @@ def base_publicable(d: pd.DataFrame, minimo: int = cat.MIN_GROUP_N) -> Base:
     for colegio, sub in d.groupby("Colegio"):
         propias = [i for k, i in b.celdas.items() if partir_celda(k)[0] == str(colegio)]
         if propias:
-            b.colegios[str(colegio)] = _union(propias)
+            b.colegios[str(colegio)] = union(propias)
         elif len(sub) >= minimo:
             b.colegios[str(colegio)] = sub.index
     for grado in d["Grado"].dropna().unique():
         propias = [i for k, i in b.celdas.items() if partir_celda(k)[1] == str(grado)]
         if propias:
-            b.grados[str(grado)] = _union(propias)
-    publicado = _union(b.colegios.values())
+            b.grados[str(grado)] = union(propias)
+    publicado = union(b.colegios.values())
     resto = d.index.difference(publicado)
     b.incluye_resto = len(resto) == 0 or _resto_suficiente(d.loc[resto, "Colegio"], minimo)
     b.nivel = d.index if b.incluye_resto else publicado
@@ -156,11 +163,11 @@ def base_publicable(d: pd.DataFrame, minimo: int = cat.MIN_GROUP_N) -> Base:
 
 def filas(d: pd.DataFrame, base: Base, colegio=TODOS, grado=TODOS) -> pd.DataFrame:
     """Filas sobre las que se calcula el grupo pedido; vacío si no es publicable."""
-    if _activo(colegio) and _activo(grado):
+    if activo(colegio) and activo(grado):
         idx = base.celdas.get(clave_celda(colegio, grado))
-    elif _activo(colegio):
+    elif activo(colegio):
         idx = base.colegios.get(str(colegio))
-    elif _activo(grado):
+    elif activo(grado):
         idx = base.grados.get(str(grado))
     else:
         idx = base.nivel
@@ -201,7 +208,7 @@ def auditar(d: pd.DataFrame, base: Base, columnas: list[str],
             publicados = [h for h in publicados if len(h) >= minimo]
             if not publicados:
                 continue
-            resto = padre.difference(_union(publicados))
+            resto = padre.difference(union(publicados))
             if 0 < len(resto) < minimo:
                 problemas.append(f"{etiqueta}: {nombre} menos sus subgrupos publicados "
                                  f"deja {len(resto)} respuestas")
@@ -240,7 +247,7 @@ def aplicar_todo_o_nada(d: pd.DataFrame, base: Base, columnas: list[str] | None 
     if columnas is None:
         columnas = columnas_de_analisis(d)
     lista = unidades(base)
-    en_unidades = _union(i for _, i in lista)
+    en_unidades = union(i for _, i in lista)
     resto = (d.index.intersection(base.nivel).difference(en_unidades)
              if base.incluye_resto else d.index[:0])
     grupos = [d.index.intersection(i) for _, i in lista]
@@ -265,21 +272,10 @@ def aplicar_todo_o_nada(d: pd.DataFrame, base: Base, columnas: list[str] | None 
                     borrar.append(resto)
         if not borrar:
             continue
-        idx = _union(borrar)
+        idx = union(borrar)
         n = int(validos.loc[idx].sum())
         if n:
             dm.loc[idx, col] = np.nan
             suprimidos[col] = n
     return dm, suprimidos
 
-
-def columnas_publicadas(a) -> list[str]:
-    """Columnas de `a.datos` cuyas cifras salen publicadas por grupo o por nivel."""
-    cols = set(a.escalas or [])
-    for tabla in (a.cortes, a.bandas, a.items_pssm):
-        if tabla is not None and not tabla.empty:
-            col = "item" if "item" in tabla.columns else "clave"
-            cols.update(str(v) for v in tabla[col])
-    for c in a.contrastes or []:
-        cols.update([c["resultado"], c["protector"]])
-    return sorted(cols)
