@@ -352,6 +352,48 @@ def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS) -> set:
             sup |= mejor[1]
 
 
+# ── solapamiento SDQ × ARI (solo del nivel) ───────────────────────────────
+CLAVES_SOLAPAMIENTO_MISMA_BASE = ("pct_sdq_alto", "pct_ari_alto", "pct_ari_alto_si_sdq_alto",
+                                  "pct_ari_alto_si_sdq_promedio")
+
+
+def partes_solapamiento(d: pd.DataFrame) -> tuple[list[int] | None, bool]:
+    """(casillas de la tabla 3×2, ¿bases iguales?) del solapamiento SDQ × ARI.
+
+    Filas: banda 0, banda 1 y bandas 2-3 del SDQ total; columnas: ARI > 2 o no,
+    sobre quienes respondieron los dos. Las bases son iguales si esa base
+    coincide con la del corte del SDQ y con la del ARI. (None, False) si faltan
+    las columnas.
+    """
+    if "banda_SDQ_Total" not in d.columns or "ARI_Total" not in d.columns:
+        return None, False
+    banda, ari = d["banda_SDQ_Total"], d["ARI_Total"]
+    base = banda.notna() & ari.notna()
+    if not base.any():
+        return None, False
+    alto = ari > 2
+    casillas = [int((filas & base & a).sum())
+                for filas in (banda == 0, banda == 1, banda >= 2) for a in (alto, ~alto)]
+    sdq = d["SDQ_Total"].notna() if "SDQ_Total" in d.columns else banda.notna()
+    n = int(base.sum())
+    return casillas, n == int(sdq.sum()) == int(ari.notna().sum())
+
+
+def auditar_solapamiento(sol: dict, d: pd.DataFrame, minimo: int = MIN_CASOS) -> list[str]:
+    """Problemas del solapamiento publicado, recalculado sobre las filas del nivel."""
+    if not sol or not any(k != "n" for k in sol):
+        return []
+    casillas, bases_iguales = partes_solapamiento(d)
+    if casillas is None or not partes_publicables(casillas, minimo):
+        return [f"solapamiento: la tabla SDQ × ARI tiene una casilla con menos de "
+                f"{minimo} respuestas"]
+    if not bases_iguales and any(sol.get(k) is not None
+                                 for k in CLAVES_SOLAPAMIENTO_MISMA_BASE):
+        return ["solapamiento: publica porcentajes por indicador o condicionados con "
+                "una base distinta de la de los cortes"]
+    return []
+
+
 # ══ Aplicación al objeto Analisis ═════════════════════════════════════════
 COLUMNAS_CORTE_NULAS = ("pct", "ic_inf", "ic_sup", "casos")
 COLUMNAS_BANDA_NULAS = tuple(f"{p}_b{i}" for p in ("pct", "n") for i in range(4)) \
@@ -534,6 +576,8 @@ def auditar(a, minimo: int = MIN_CASOS) -> list[str]:
         for s in fugas(jer, partes, pub & set(jer.grupos), minimo):
             problemas.append(f"{clave}: una resta entre cifras publicadas deja un conjunto "
                              f"de {len(s)} grupo(s) con menos de {minimo} casos o no casos")
+    problemas += auditar_solapamiento(getattr(a, "solapamiento", None) or {},
+                                      d.loc[d.index.intersection(base.nivel)], minimo)
     for g, o in objs.items():
         if g == NIVEL:
             filas = d.loc[d.index.intersection(base.nivel)]

@@ -137,3 +137,67 @@ def test_solapamiento_con_pocos_casos_no_se_publica():
     d = pd.DataFrame({"banda_SDQ_Total": rng.integers(0, 4, 200),
                       "ARI_Total": rng.integers(0, 8, 200)})
     assert stats.solapamiento(d).get("pct_ambos") is not None
+
+
+# ── solapamiento: tabla 3×2 y bases iguales ────────────────────────────────
+SDQ_DE_BANDA = {0: 10, 1: 16, 2: 18, 3: 25}
+
+
+def _solap(celdas, extra_sin_ari=0):
+    """celdas = [(banda, n, k_ari_alto)]; `extra_sin_ari` filas con SDQ y sin ARI."""
+    filas = []
+    for b, n, k in celdas:
+        for i in range(n):
+            filas.append(dict(SDQ_Total=SDQ_DE_BANDA[b], banda_SDQ_Total=b,
+                              ARI_Total=4 if i < k else 0))
+    for _ in range(extra_sin_ari):
+        filas.append(dict(SDQ_Total=25, banda_SDQ_Total=3, ARI_Total=np.nan))
+    return pd.DataFrame(filas)
+
+
+def test_solapamiento_exige_la_tabla_3x2_completa():
+    from src.estudiantes import stats
+    # repro de la revisión: en la banda 1 solo 1 con ARI alto
+    d = _solap([(0, 30, 6), (1, 12, 1), (2, 9, 4), (3, 9, 4)], extra_sin_ari=1)
+    assert stats.solapamiento(d) == {}
+
+
+def test_solapamiento_con_bases_distintas_omite_marginales_y_condicionados():
+    from src.estudiantes import stats
+    d = _solap([(0, 30, 6), (1, 12, 4), (2, 9, 4), (3, 9, 4)], extra_sin_ari=1)
+    s = stats.solapamiento(d)
+    assert s.get("pct_ambos") is not None and s.get("pct_alguno") is not None
+    for clave in ("pct_sdq_alto", "pct_ari_alto", "pct_ari_alto_si_sdq_alto",
+                  "pct_ari_alto_si_sdq_promedio"):
+        assert clave not in s
+    completo = stats.solapamiento(_solap([(0, 30, 6), (1, 12, 4), (2, 9, 4), (3, 9, 4)]))
+    assert "pct_ari_alto_si_sdq_promedio" in completo and "pct_sdq_alto" in completo
+
+
+def _con_colegios(d):
+    d = d.copy().reset_index(drop=True)
+    d["Colegio"] = ["A" if i % 2 else "B" for i in range(len(d))]
+    d["Grado"] = "Sexto"
+    d["Sexo"] = ["Mujer" if i % 3 else "Hombre" for i in range(len(d))]
+    d["Edad"] = [12 + i % 4 for i in range(len(d))]
+    d["nivel"] = NIVEL
+    # un protector con variación: el modelo del ARI necesita algún predictor
+    d["MSPSS_Fam"] = np.random.default_rng(5).uniform(1, 5, len(d)).round(2)
+    return d
+
+
+def test_la_auditoria_revisa_el_solapamiento():
+    import copy
+    a = pipeline.analizar(
+        _con_colegios(_solap([(0, 30, 6), (1, 12, 4), (2, 9, 4), (3, 9, 4)],
+                             extra_sin_ari=1)), NIVEL, n_boot=5)
+    assert not [p for p in supresion.auditar(a) if "solapamiento" in p]
+    malo = copy.deepcopy(a)
+    malo.solapamiento["pct_sdq_alto"] = 30.0          # bases distintas: prohibido
+    assert [p for p in supresion.auditar(malo) if "solapamiento" in p]
+    b = pipeline.analizar(
+        _con_colegios(_solap([(0, 30, 6), (1, 12, 1), (2, 9, 4), (3, 9, 4)])), NIVEL, n_boot=5)
+    assert b.solapamiento == {}
+    malo = copy.deepcopy(b)
+    malo.solapamiento = dict(n=60, pct_ambos=13.3)    # tabla 3×2 con una casilla de 1
+    assert [p for p in supresion.auditar(malo) if "solapamiento" in p]

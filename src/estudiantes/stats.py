@@ -300,38 +300,37 @@ def contraste_protector(d: pd.DataFrame, resultado: str, protector: str,
 def solapamiento(d: pd.DataFrame) -> dict:
     """Comorbilidad entre los indicadores con corte: cuánto se superponen.
 
-    Cifras que no delatan (supresion): las cuatro casillas SDQ alto × ARI alto
-    deben tener cada una al menos MIN_CASOS respuestas, o no se devuelve nada;
-    cada porcentaje condicionado se omite si su propia proporción no cumple.
+    Cifras que no delatan (supresion.partes_solapamiento): la tabla SDQ total
+    (banda 0 / banda 1 / bandas 2-3) × ARI alto debe tener al menos MIN_CASOS
+    respuestas por casilla (y no casos), o no se devuelve nada. Si la base del
+    solapamiento (las dos respondidas) no es la misma que la del corte del SDQ
+    y la del ARI, se omiten los porcentajes de cada indicador y los
+    condicionados: restados de los cortes publicados aislarían a quienes solo
+    respondieron uno.
     """
-    from src.estudiantes.supresion import partes_publicables, proporcion_publicable
+    from src.estudiantes.supresion import partes_publicables, partes_solapamiento
     out = {}
-    if "banda_SDQ_Total" not in d.columns or "ARI_Total" not in d.columns:
+    casillas, bases_iguales = partes_solapamiento(d)
+    if casillas is None or not partes_publicables(casillas):
         return out
     sdq_alto = d["banda_SDQ_Total"] >= 2
     ari_alto = d["ARI_Total"] > 2
     base = d["banda_SDQ_Total"].notna() & d["ARI_Total"].notna()
     n = int(base.sum())
-    if n == 0:
-        return out
-    casillas = [int((a & b & base).sum()) for a in (sdq_alto, ~sdq_alto)
-                for b in (ari_alto, ~ari_alto)]
-    if not partes_publicables(casillas):
-        return out
     out["n"] = n
-    out["pct_sdq_alto"] = wilson(int((sdq_alto & base).sum()), n)[0]
-    out["pct_ari_alto"] = wilson(int((ari_alto & base).sum()), n)[0]
     out["pct_ambos"] = wilson(int((sdq_alto & ari_alto & base).sum()), n)[0]
     out["pct_alguno"] = wilson(int(((sdq_alto | ari_alto) & base).sum()), n)[0]
+    if not bases_iguales:
+        return out
+    out["pct_sdq_alto"] = wilson(int((sdq_alto & base).sum()), n)[0]
+    out["pct_ari_alto"] = wilson(int((ari_alto & base).sum()), n)[0]
     sub = d[base]
     for clave, filtro in (("pct_ari_alto_si_sdq_alto", sub["banda_SDQ_Total"] >= 2),
                           ("pct_ari_alto_si_sdq_promedio", sub["banda_SDQ_Total"] == 0)):
         n_c = int(filtro.sum())
         if n_c < cat.MIN_GROUP_N:
             continue
-        k_c = int((sub.loc[filtro, "ARI_Total"] > 2).sum())
-        if proporcion_publicable(k_c, n_c):
-            out[clave] = wilson(k_c, n_c)[0]
+        out[clave] = wilson(int((sub.loc[filtro, "ARI_Total"] > 2).sum()), n_c)[0]
     return out
 
 
