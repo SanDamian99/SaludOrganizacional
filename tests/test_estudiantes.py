@@ -314,9 +314,12 @@ def referencia():
 
 @pytest.fixture(scope="module")
 def analisis_real():
-    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
+    # La referencia se calculó sobre los formularios del 18-sep-2026. Los datos
+    # vigentes cambian con cada exportación; la regresión no debe moverse con ellos.
+    base = os.path.join(carpeta_datos("otros"), "archivo", "estudiantes_2026-09-18")
+    rutas = pipeline.localizar_formularios(base)
     if len(rutas) < 2:
-        pytest.skip("Los CSV originales no están en el directorio de trabajo")
+        pytest.skip("Falta la instantánea de referencia del 18-sep")
     res, informes = pipeline.cargar_y_analizar(rutas, n_boot=60)
     return res, informes
 
