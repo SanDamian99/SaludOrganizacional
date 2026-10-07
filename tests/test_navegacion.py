@@ -97,6 +97,20 @@ def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
 
 
+def test_comunidad_con_dos_paginas_publicas_muestra_el_selector(monkeypatch):
+    import sys
+    monkeypatch.setattr(nav, "DISPONIBLES",
+                        nav.DISPONIBLES | {nav.PAGINA_CUIDADORES})
+    at = _main_en_comunidad(monkeypatch).run()
+    assert not at.exception
+    radio = at.radio(key="nav_pagina")
+    assert list(radio.options) == ["Estudiantes 360", "Cuidadores 360"]
+    radio.set_value("Cuidadores 360").run()
+    assert not at.exception
+    for m in PROHIBIDOS_EN_COMUNIDAD:
+        assert m not in sys.modules, f"{m} se importó en modo comunidad"
+
+
 def test_no_queda_dashboard_visible_en_la_interfaz():
     """Lo que ve la persona dice «Docentes». Los comentarios técnicos no cuentan."""
     import pathlib
