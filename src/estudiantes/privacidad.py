@@ -33,6 +33,13 @@ sumo, una unión de esas unidades, así que nunca deja de 1 a MIN_GROUP_N − 1.
 `auditar` comprueba, por indicador, que ninguna resta de un paso entre un
 agregado y sus subgrupos publicados deje entre 1 y MIN_GROUP_N − 1 respuestas;
 sobre datos ya enmascarados es un control de coherencia.
+
+Alcance. La garantía es por columna. Las cifras de dos columnas (contrastes
+`stats.contraste_protector` y modelos `stats.modelo`) usan solo las filas con
+ambas respondidas, y ese conjunto de pares no se audita. El riesgo práctico es
+bajo: los contrastes exigen ≥ 30 pares completos y recalculan los terciles en
+cada grupo, y los modelos solo se publican para el nivel, así que una resta
+entre dos de esas cifras no devuelve las respuestas de un grupo pequeño.
 """
 from __future__ import annotations
 

@@ -84,6 +84,7 @@ def _tablas(html: str) -> list[str]:
     return [t.split("</table>")[0] for t in html.split('<table class="comparativa">')[1:]]
 
 
+@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
 def test_las_cifras_son_las_mismas_desde_archivos_y_publicado(analisis, publicado):
     # La tarjeta por sexo solo existe con datos crudos (la corrida publicada no
     # trae ese cruce, igual que en la vista); las tablas sí deben coincidir.

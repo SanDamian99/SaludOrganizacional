@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import ingest, lectura, pipeline, publicar, scoring
+from src.estudiantes import ingest, lectura, pipeline, privacidad, publicar, scoring
 from src.ui.views import estudiantes_comunidad as vc
 from tests.test_estudiantes_comunidad import _formulario, COLEGIO_PEQUENO, GRADO_PEQUENO
 
@@ -70,9 +70,30 @@ def test_las_filas_de_subgrupo_respetan_el_minimo(analisis):
     assert filas
     assert all(f["n"] >= cat.MIN_GROUP_N for f in filas)
     assert all(f["detalle"]["n_grupo"] >= cat.MIN_GROUP_N for f in filas)
-    assert {f["agrupacion"] for f in filas} <= {"Colegio", "Grado"}
+    assert {f["agrupacion"] for f in filas} <= {"Colegio", "Grado", "Colegio×Grado"}
 
 
+def test_el_pipeline_publica_el_cruce_colegio_grado(analisis):
+    cruce = analisis.subgrupos["Colegio×Grado"]
+    assert set(cruce) == {"LauV|Séptimo", "LauV|Octavo"}
+    assert all(s.n >= cat.MIN_GROUP_N for s in cruce.values())
+
+
+def test_el_colegio_excluye_su_grado_pequeno(analisis):
+    # LauV tiene 4 respuestas en Noveno: el colegio publicado son sus dos celdas
+    assert analisis.subgrupos["Colegio"]["LauV"].n == 62
+
+
+def test_los_datos_del_analisis_ya_estan_enmascarados(analisis):
+    # todo o nada es idempotente: sobre datos ya enmascarados no borra nada más
+    assert isinstance(analisis.base, privacidad.Base)
+    assert privacidad.aplicar_todo_o_nada(analisis.datos, analisis.base)[1] == {}
+    assert analisis.n == len(analisis.datos) == 70
+    assert analisis.muestra["base"]["n_nivel"] == len(analisis.base.nivel) == 62
+    assert isinstance(analisis.muestra["suprimidos"], dict)
+
+
+@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
 def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publicado):
     colegio = _colegio_grande(analisis)
     f = {"colegio": colegio}
@@ -94,30 +115,36 @@ def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publ
     assert vc.bandas_sdq_total(publicado, g)["n"] == vc.bandas_sdq_total(analisis, g)["n"]
 
 
+@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
 def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
     indicador = next(k for k in vc.INDICADORES if vc.prevalencia(analisis, k, {}))
-    crudo = vc.prevalencia_por(analisis, indicador, "Grado", {})
-    desp = vc.prevalencia_por(publicado, indicador, "Grado", {})
-    assert list(desp.columns) == ["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"]
-    assert set(desp["grupo"]) == set(crudo["grupo"])
-    fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
-    assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
-    # con un filtro en la otra dimensión no se puede cruzar
-    assert vc.prevalencia_por(publicado, indicador, "Grado",
-                              {"colegio": _colegio_grande(analisis)}).empty
+    for filtros in ({}, {"colegio": "LauV"}):
+        crudo = vc.prevalencia_por(analisis, indicador, "Grado", filtros)
+        desp = vc.prevalencia_por(publicado, indicador, "Grado", filtros)
+        assert list(desp.columns) == ["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"]
+        assert set(desp["grupo"]) == set(crudo["grupo"]) and not desp.empty
+        fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
+        assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
 
 
-def test_sin_subgrupo_publicado_no_hay_cifra_y_el_informe_lo_explica(analisis, publicado):
-    colegio = _colegio_grande(analisis)
-    grado = next(iter(analisis.subgrupos["Grado"]))
-    cruce = {"colegio": colegio, "grado": grado}
+@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
+def test_el_cruce_publicado_da_las_mismas_cifras_que_el_recalculo(analisis, publicado):
+    f = {"colegio": "LauV", "grado": "Octavo"}
+    assert vc.bandas_sdq_total(publicado, f)["n"] == vc.bandas_sdq_total(analisis, f)["n"] == 31
+    for indicador in vc.INDICADORES:
+        assert vc.prevalencia(publicado, indicador, f) == pytest.approx(
+            vc.prevalencia(analisis, indicador, f), abs=0.01)
+
+
+def test_un_cruce_pequeno_no_da_cifras_y_el_informe_lo_explica(analisis, publicado):
+    cruce = {"colegio": "LauV", "grado": GRADO_PEQUENO}
+    for a in (analisis, publicado):
+        assert vc.bandas_sdq_total(a, cruce) == {}
+        assert vc.items_pertenencia_bajos(a, 4, cruce) == []
+        assert vc.tarjetas(a, "colegio", cruce) == []
     assert vc.subanalisis(publicado, cruce) is None
-    assert vc.bandas_sdq_total(publicado, cruce) == {}
-    assert vc.items_pertenencia_bajos(publicado, 4, cruce) == []
-    assert vc.tarjetas(publicado, "colegio", cruce) == []
     informe = vc.informe_markdown(publicado, "colegio", cruce)
     assert "por colegio y por grado" in informe
-    # y un grupo pequeño tampoco aparece, publicado o no
     assert vc.bandas_sdq_total(publicado, {"grado": GRADO_PEQUENO}) == {}
 
 

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import ingest, scoring, stats
+from src.estudiantes import ingest, privacidad, scoring, stats
 
 # Fragmentos con los que se reconocen los dos formularios en disco. Se comparan
 # sobre el nombre normalizado porque macOS guarda los acentos descompuestos
@@ -66,12 +66,15 @@ class Analisis:
     items_pssm: pd.DataFrame = field(default_factory=pd.DataFrame)
     escalas: list = field(default_factory=list)
     avisos: list = field(default_factory=list)
-    # {"Colegio": {"LauV": Analisis}, "Grado": {"8": Analisis}}: los resultados
-    # que la vista comunidad necesita para un colegio o un grado, ya calculados
-    # sobre los grupos que llegan a MIN_GROUP_N. Existen para que el despliegue,
+    # {"Colegio": {"LauV": Analisis}, "Grado": {"8": Analisis},
+    #  "Colegio×Grado": {"LauV|8": Analisis}}: los resultados que la vista
+    # comunidad necesita para un colegio, un grado o una celda, ya calculados
+    # sobre la base publicable (privacidad.base_publicable). Existen para que el despliegue,
     # que no tiene fila por estudiante, pueda filtrar igual que la máquina que
     # procesa. Cada uno lleva `datos` vacío a propósito.
     subgrupos: dict = field(default_factory=dict)
+    # Base publicable (privacidad.Base). Solo existe con datos crudos; no se publica.
+    base: object = None
 
 
 CLAVES_PRINCIPALES = ["SDQ_Total", "SDQ_Emo", "SDQ_Con", "SDQ_Hip", "SDQ_Pares", "SDQ_Pro",
@@ -90,8 +93,15 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     orden_grados = (cat.ORDEN_GRADOS_SEC if nivel == cat.NIVEL_SECUNDARIA
                     else cat.ORDEN_GRADOS_PRI)
 
-    a = Analisis(nivel=nivel, n=len(d), datos=d, escalas=claves,
+    # Toda cifra publicada sale de la copia enmascarada (todo o nada por
+    # indicador) y de la misma base; los tamaños de muestra, en cambio, se
+    # cuentan sobre los datos crudos porque no son sensibles.
+    base = privacidad.base_publicable(d)
+    dm, suprimidos = privacidad.aplicar_todo_o_nada(d, base)
+    dn = dm.loc[base.nivel]           # lo que se publica a nivel de todo el nivel
+    a = Analisis(nivel=nivel, n=len(d), datos=dm, escalas=claves,
                  avisos=list(avisos or []))
+    a.base = base
     a.muestra = dict(
         n=len(d),
         sexo=d["Sexo"].value_counts().to_dict(),
@@ -101,50 +111,57 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
               d["Edad"].dropna().value_counts().sort_index().items()},
         grado=d["Grado"].value_counts().to_dict(),
         colegio=d["Colegio"].value_counts().to_dict(),
+        colegio_grado={privacidad.clave_celda(c, g): int(n) for (c, g), n in
+                       d.groupby(["Colegio", "Grado"]).size().items()},
+        base=base.resumen(),
+        # valores que el todo o nada borró, por columna (para el investigador)
+        suprimidos=suprimidos,
         fechas=([str(d["ts"].min().date()), str(d["ts"].max().date())]
                 if "ts" in d.columns and d["ts"].notna().any() else []),
     )
-    a.descriptivos = scoring.descriptivos(d)
-    a.fiabilidad = scoring.fiabilidad(d, n_boot=n_boot)
-    a.bandas = scoring.distribucion_bandas(d, "self")
-    a.cortes = scoring.sobre_cortes(d)
-    a.terciles = scoring.terciles(d)
+    a.descriptivos = scoring.descriptivos(dn)
+    a.fiabilidad = scoring.fiabilidad(dn, n_boot=n_boot)
+    a.bandas = scoring.distribucion_bandas(dn, "self")
+    a.cortes = scoring.sobre_cortes(dn)
+    a.terciles = scoring.terciles(dn)
     if "RCADS_Dep" in claves:
         a.percentiles = scoring.percentiles_por_sexo(
-            d, ["RCADS_Dep", "RCADS_Anx", "RCADS_Total"])
+            dn, ["RCADS_Dep", "RCADS_Anx", "RCADS_Total"])
 
     corr_vars = (cat.CORR_VARS_SEC if nivel == cat.NIVEL_SECUNDARIA else cat.CORR_VARS_PRI)
-    a.correlaciones = stats.correlaciones(d, corr_vars)
-    a.matriz = stats.matriz_correlaciones(d, corr_vars)
+    a.correlaciones = stats.correlaciones(dn, corr_vars)
+    a.matriz = stats.matriz_correlaciones(dn, corr_vars)
 
-    a.por_sexo = stats.comparar_por_sexo(d, claves)
-    a.por_grado, enm_g = stats.comparar_por_grupo(d, claves, "Grado", orden_grados)
-    a.por_colegio, enm_c = stats.comparar_por_grupo(d, claves, "Colegio")
+    a.por_sexo = stats.comparar_por_sexo(dn, claves)
+    en_grados = dm.loc[privacidad._union(base.grados.values())]
+    en_colegios = dm.loc[privacidad._union(base.colegios.values())]
+    a.por_grado, enm_g = stats.comparar_por_grupo(en_grados, claves, "Grado", orden_grados)
+    a.por_colegio, enm_c = stats.comparar_por_grupo(en_colegios, claves, "Colegio")
     a.enmascarados = {"Grado": enm_g, "Colegio": enm_c}
-    a.por_edad = stats.correlacion_con_edad(d, claves)
+    a.por_edad = stats.correlacion_con_edad(dn, claves)
 
     objetivos = [k for k in ("RCADS_Dep", "RCADS_Anx", "SDQ_Total", "ARI_Total") if k in claves]
     for y in objetivos:
-        m = stats.modelo(d, y, [p for p in PROTECTORES if p in claves])
+        m = stats.modelo(dn, y, [p for p in PROTECTORES if p in claves])
         if m:
             a.modelos.append(m)
     if "SDQ_Con" in claves and "TD_Total" in claves:
-        m = stats.modelo(d, "SDQ_Con", ["TD_Total", "ERQ_Sup", "ERQ_Reap", "PSSM_Total"])
+        m = stats.modelo(dn, "SDQ_Con", ["TD_Total", "ERQ_Sup", "ERQ_Reap", "PSSM_Total"])
         if m:
             a.modelos.append(m)
 
-    a.icc = {k: stats.icc_entre_grupos(d, k) for k in claves}
-    a.solapamiento = stats.solapamiento(d)
-    a.contrastes = _contrastes(d, claves)
-    a.items_pssm = stats.medias_items(d, "PSSM")
-    a.subgrupos = subanalizar(d, nivel, claves)
+    a.icc = {k: stats.icc_entre_grupos(dn, k) for k in claves}
+    a.solapamiento = stats.solapamiento(dn)
+    a.contrastes = _contrastes(dn, claves)
+    a.items_pssm = stats.medias_items(dn, "PSSM")
+    a.subgrupos = subanalizar(dm, nivel, claves, base)
 
     if nivel == cat.NIVEL_PRIMARIA and cat.AVISO_PRIMARIA not in a.avisos:
         a.avisos.append(cat.AVISO_PRIMARIA)
     return a
 
 
-COLUMNAS_SUBGRUPO = ("Colegio", "Grado")
+COLUMNAS_SUBGRUPO = ("Colegio", "Grado", privacidad.AGRUPACION_CRUCE)
 
 
 def _contrastes(d: pd.DataFrame, claves: list[str]) -> list[dict]:
@@ -157,19 +174,21 @@ def _contrastes(d: pd.DataFrame, claves: list[str]) -> list[dict]:
     return salida
 
 
-def subanalizar(d: pd.DataFrame, nivel: str, claves: list[str]) -> dict:
-    """Resultados de la vista comunidad para cada colegio y cada grado.
+def subanalizar(d: pd.DataFrame, nivel: str, claves: list[str], base=None) -> dict:
+    """Resultados de la vista comunidad por colegio, por grado y por celda colegio×grado.
 
     Solo las tablas que esa vista muestra (bandas, cortes, contrastes e ítems
-    de pertenencia) y solo para grupos con al menos `MIN_GROUP_N` respuestas.
-    No se cruzan colegio y grado: esas celdas casi nunca llegan al mínimo y,
-    publicadas, permitirían triangular.
+    de pertenencia). Cada grupo se calcula sobre la base publicable
+    (privacidad.base_publicable): así ninguna resta entre un colegio, un grado
+    y sus celdas deja un grupo pequeño. `analizar` le pasa los datos ya
+    enmascarados con todo o nada.
     """
+    base = base or privacidad.base_publicable(d)
     salida: dict = {}
-    for columna in COLUMNAS_SUBGRUPO:
-        if columna not in d.columns:
-            continue
-        for grupo, sub in d.groupby(columna):
+    for columna, grupos in (("Colegio", base.colegios), ("Grado", base.grados),
+                            (privacidad.AGRUPACION_CRUCE, base.celdas)):
+        for grupo, idx in grupos.items():
+            sub = d.loc[idx]
             if len(sub) < cat.MIN_GROUP_N:
                 continue
             s = Analisis(nivel=nivel, n=len(sub), datos=pd.DataFrame(),
