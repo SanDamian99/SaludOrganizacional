@@ -40,12 +40,12 @@ hacer ni con acceso total a la base.
 | Control | Estado |
 |---|---|
 | RLS activo en las tres tablas nuevas | sí |
-| Políticas de lectura para el rol anónimo | solo de corridas con `publicada = true` |
+| Políticas de lectura para el rol anónimo | solo la **última** corrida con `publicada = true` de cada módulo (función `obs360.es_ultima_publicada`, desde la migración 2026-10-07) |
 | Políticas de escritura para el rol anónimo | **ninguna** |
 | Concesiones `INSERT/UPDATE/DELETE` a `anon` en `public` y `obs360` | **ninguna** |
 | Tablas sin RLS en `public` y `obs360` | ninguna |
 | `CHECK` que rechaza filas con `n < 10` | probado: rechaza una fila con n = 3 |
-| `CHECK` que rechaza identificadores con forma `E########` | activo |
+| `CHECK` que rechaza identificadores con forma `E########`, `C########` o `N########` | activo |
 
 Escribir exige la clave `service_role`, que se queda en el equipo de quien
 publica y **nunca se despliega**.
