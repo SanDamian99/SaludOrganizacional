@@ -158,3 +158,24 @@ def test_contraste_aplica_la_regla_a_los_dos_terciles():
     assert sp.contraste_publicable(dict(k_bajo=5, n_bajo=30, k_alto=4, n_alto=30))
     assert not sp.contraste_publicable(dict(k_bajo=5, n_bajo=30, k_alto=1, n_alto=30))
     assert not sp.contraste_publicable(dict(k_bajo=28, n_bajo=30, k_alto=4, n_alto=30))
+
+
+def _componente_grande(m=sp.MAX_ENUMERAR + 2):
+    celdas = [f"C{i}|6" for i in range(m)]
+    jer = sp.jerarquia(celdas=celdas, colegios=[f"C{i}" for i in range(m)], grados=["6"],
+                       con_resto=False)
+    partes = {sp.atomo_celda(k): _binario(1, 20) for k in celdas}
+    return jer, partes
+
+
+def test_un_componente_demasiado_grande_es_un_hallazgo():
+    # 18 celdas ocultas ligadas por el grado: no se enumera, se falla cerrado.
+    jer, partes = _componente_grande()
+    assert sp.fugas(jer, partes, {sp.GRADO("6")})
+    sup = sp.suprimir(jer, partes)
+    assert sp.fugas(jer, partes, sp.publicados(jer, sup)) == []
+
+
+def test_un_componente_que_cabe_se_enumera_sin_hallazgos():
+    jer, partes = _componente_grande(sp.MAX_ENUMERAR)
+    assert sp.fugas(jer, partes, {sp.GRADO("6")}) == []

@@ -54,15 +54,15 @@ LÍMITES (riesgo residual)
   · La auditoría es exacta para restas y sumas de cifras publicadas; no cubre
     cotas por desigualdades (p. ej. «el colegio tiene 3 casos, luego la celda
     oculta tiene como mucho 3»).
-  · Componentes de más de MAX_ENUMERAR átomos ocultos ligados se revisan con
-    subconjuntos de hasta 3 átomos y sus complementos, no exhaustivamente.
+  · Componentes de más de MAX_ENUMERAR átomos ocultos ligados no se revisan:
+    se tratan como hallazgo (fallo cerrado) y `suprimir` oculta agregados hasta
+    que caben. Puede ocultar más de lo estrictamente necesario.
   · Las cifras de dos columnas con bases distintas (p. ej. solapamiento frente
     al corte del SDQ) quedan fuera, como en privacidad.auditar.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -234,18 +234,8 @@ def _componentes(z: np.ndarray) -> list[list[int]]:
 
 
 def _subconjuntos(c: int):
-    if c <= MAX_ENUMERAR:
-        for m in range(1, 1 << c):
-            yield [i for i in range(c) if m >> i & 1]
-        return
-    vistos = set()
-    for t in (1, 2, 3):
-        for comb in combinations(range(c), t):
-            for s in (comb, tuple(i for i in range(c) if i not in comb)):
-                if s and s not in vistos:
-                    vistos.add(s)
-                    yield list(s)
-    yield list(range(c))
+    for m in range(1, 1 << c):
+        yield [i for i in range(c) if m >> i & 1]
 
 
 def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[frozenset]:
@@ -253,11 +243,20 @@ def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[fr
 
     Lista vacía = nada de lo publicado deja, sumando o restando, un conjunto
     de respuestas con menos de `minimo` casos (o menos de `minimo` no casos).
+    Falla cerrado: un componente de más de MAX_ENUMERAR átomos ligados, que no
+    se revisa entero, cuenta como hallazgo (el componente completo).
     """
+    pequenas, grandes = _fugas(jer, partes, pub, minimo)
+    return pequenas + grandes
+
+
+def _fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS
+           ) -> tuple[list[frozenset], list[frozenset]]:
+    """(conjuntos que incumplen, componentes demasiado grandes para revisar)."""
     largo = _largo(partes)
     vivos = sorted(a for a, p in partes.items() if sum(int(x) for x in p) > 0)
     if not vivos:
-        return []
+        return [], []
     col = {a: i for i, a in enumerate(vivos)}
     filas = []
     for g in pub:
@@ -268,7 +267,7 @@ def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[fr
         if v.any():
             filas.append(v)
     if not filas:
-        return []
+        return [], []
     m = np.vstack(filas)
     _, s, vt = np.linalg.svd(m)
     rango = int((s > 1e-9).sum())
@@ -280,8 +279,12 @@ def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[fr
     for j in determinados:
         if not union_segura(P[j], minimo):
             salida.append(frozenset({vivos[j]}))
+    grandes: list[frozenset] = []
     if z.shape[0]:
         for comp in _componentes(z):
+            if len(comp) > MAX_ENUMERAR:
+                grandes.append(frozenset(vivos[j] for j in comp))
+                continue
             for sub in _subconjuntos(len(comp)):
                 idx = [comp[i] for i in sub]
                 if np.any(np.abs(z[:, idx].sum(axis=1)) > 1e-7):
@@ -289,7 +292,7 @@ def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[fr
                 if not union_segura(P[idx].sum(axis=0), minimo):
                     salida.append(frozenset(vivos[j] for j in idx))
     salida.sort(key=lambda s: (int(_suma(s, partes, largo).sum()), sorted(s)))
-    return salida
+    return salida, grandes
 
 
 # ── supresión ──────────────────────────────────────────────────────────────
@@ -331,7 +334,17 @@ def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS) -> set:
     vivos = [a for a, p in partes.items() if sum(int(x) for x in p) > 0]
     while True:
         pub = publicados(jer, sup)
-        encontradas = fugas(jer, partes, pub, minimo)
+        encontradas, grandes = _fugas(jer, partes, pub, minimo)
+        if grandes:
+            # Falla cerrado: se oculta el agregado publicado más pequeño que
+            # toca el componente, hasta que se pueda revisar entero (o no quede
+            # nada publicado que lo toque).
+            tocan = [g for g in pub if jer.grupos[g] & grandes[0]]
+            if not tocan:                 # no debería pasar: se oculta todo
+                sup |= pub
+                continue
+            sup.add(min(tocan, key=lambda g: (_n(jer, g, partes, largo), str(g))))
+            continue
         if not encontradas:
             return sup
         s_conj = encontradas[0]
