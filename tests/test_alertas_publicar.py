@@ -224,3 +224,15 @@ def test_la_corrida_oculta_conserva_las_alertas_y_avisa_que_no_se_abra(analisis,
     assert r["publicada"] is False and r["alertas_omitidas"] == 0
     err = capsys.readouterr().err
     assert publicar.AVISO_ALERTAS_NO_APROBADAS in err and "--publicar-ya" in err
+
+
+@pytest.mark.parametrize("dano", [dict(n=None), dict(n="diez"), dict(clave=None, n=[])])
+def test_una_fila_de_alerta_mal_formada_no_rompe_la_lectura(analisis, dano):
+    from src.ui.views import estudiantes_comunidad as vc
+    filas = publicar.aplanar({cat.NIVEL_SECUNDARIA: analisis})
+    i = next(i for i, f in enumerate(filas) if f["tipo"] == "alerta_grupo")
+    filas[i] = dict(filas[i], **dano)
+    leido = lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas)
+    assert leido.alertas.empty                         # sin alertas: tarjeta de muerte
+    assert "ideacion" in {t.clave for t in vc.tarjetas(leido, "colegio")}
+    assert not leido.cortes.empty                      # el resto se leyó

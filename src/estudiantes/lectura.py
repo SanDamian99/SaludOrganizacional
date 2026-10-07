@@ -266,7 +266,7 @@ def _reconstruir(nivel: str, filas: list[dict]) -> Analisis:
     a.contrastes = _lista_contrastes(por_tipo.get("contraste", []))
     a.items_pssm = _tabla_items(por_tipo.get("item", []))
     a.subgrupos = _subgrupos(nivel, filas)
-    a.alertas = _tabla_alertas(nivel, filas)
+    a.alertas = _tabla_alertas_segura(nivel, filas)
     return a
 
 
@@ -335,6 +335,25 @@ def _tabla_alertas(nivel: str, filas: list[dict]) -> pd.DataFrame:
                            ic_sup=f["ic_sup"],
                            estado=_det(f, "estado", ac.SIN_ESTADO) or ac.SIN_ESTADO))
     return al.ordenar(_df(salida, al.COLUMNAS_TABLA), nivel)
+
+
+def _tabla_alertas_segura(nivel: str, filas: list[dict]) -> pd.DataFrame:
+    """`_tabla_alertas`, pero una fila de alerta mal formada no rompe la lectura.
+
+    Si algo falla, la corrida se lee sin alertas: la vista vuelve a la tarjeta
+    de muerte, como con una corrida anterior a la fase 3.
+    """
+    try:
+        return _tabla_alertas(nivel, filas)
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception(
+            "Filas de alertas mal formadas en la corrida: se lee sin alertas")
+        try:
+            from src.estudiantes import alertas as al
+            return pd.DataFrame(columns=al.COLUMNAS_TABLA)
+        except Exception:                                  # noqa: BLE001
+            return pd.DataFrame()
 
 
 TIPOS_SUBGRUPO = ("banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo")
