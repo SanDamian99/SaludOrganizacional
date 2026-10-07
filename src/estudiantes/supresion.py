@@ -352,6 +352,52 @@ def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS) -> set:
             sup |= mejor[1]
 
 
+# ── medias de ítems que tienen un corte publicado ─────────────────────────
+# {ítem: (mínimo, máximo, último valor que cuenta como caso)}. PSSM7 («hay al
+# menos un adulto con quien puedo hablar», 1 a 5, sin invertir) tiene el corte
+# «sin adulto de confianza» = ≤ 2 en scoring.sobre_cortes. La media de un
+# ítem acota sus casos: con Σ = M·n, k ≤ (máx·n − Σ)/(máx − c) y
+# n − k ≤ (Σ − mín·n)/(c + 1 − mín).
+ITEMS_CON_CORTE = {"PSSM7": (1, 5, 2)}
+REDONDEO_MEDIA = 0.005           # stats.medias_items redondea la media a 2 decimales
+
+
+def cotas_item(item: str, media, n, holgura: float = 0.0) -> tuple[int, int] | None:
+    """(máximo de casos, máximo de no casos) que deja ver la media; None si no aplica.
+
+    `holgura` desplaza Σ en el sentido que estrecha cada cota (conservador
+    frente al redondeo de la media publicada).
+    """
+    if item not in ITEMS_CON_CORTE or media is None or pd.isna(media) or not n:
+        return None
+    lo, hi, c = ITEMS_CON_CORTE[item]
+    n = int(n)
+    k_max = np.floor(((hi * n) - (float(media) + holgura) * n) / (hi - c) + 1e-9)
+    nk_max = np.floor(((float(media) - holgura) * n - lo * n) / (c + 1 - lo) + 1e-9)
+    return int(min(k_max, n)), int(min(nk_max, n))
+
+
+def item_delata(item: str, media, n, minimo: int = MIN_CASOS,
+                holgura: float = REDONDEO_MEDIA) -> bool:
+    """True si la media publicada obliga a que haya < minimo casos o no casos."""
+    cotas = cotas_item(item, media, n, holgura)
+    return cotas is not None and min(cotas) < minimo
+
+
+def _omitir_items(obj, minimo: int = MIN_CASOS) -> int:
+    """Quita las medias de ítems con corte cuyo corte no se publica o que lo acotan."""
+    t = getattr(obj, "items_pssm", None)
+    if t is None or not isinstance(t, pd.DataFrame) or t.empty or "item" not in t.columns:
+        return 0
+    quitar = [i for i, f in t.iterrows()
+              if str(f["item"]) in ITEMS_CON_CORTE
+              and (not _publicado(obj, str(f["item"]))
+                   or item_delata(str(f["item"]), f["M"], f["n"], minimo))]
+    if quitar:
+        obj.items_pssm = t.drop(index=quitar).reset_index(drop=True)
+    return len(quitar)
+
+
 # ── solapamiento SDQ × ARI (solo del nivel) ───────────────────────────────
 CLAVES_SOLAPAMIENTO_MISMA_BASE = ("pct_sdq_alto", "pct_ari_alto", "pct_ari_alto_si_sdq_alto",
                                   "pct_ari_alto_si_sdq_promedio")
@@ -511,6 +557,9 @@ def aplicar(a, minimo: int = MIN_CASOS) -> dict:
         n = suprimir_contrastes(getattr(o, "contrastes", None), minimo)
         if n:
             resumen[(g[0], "contraste")] = resumen.get((g[0], "contraste"), 0) + n
+        n = _omitir_items(o, minimo)
+        if n:
+            resumen[(g[0], "item")] = resumen.get((g[0], "item"), 0) + n
     return resumen
 
 
@@ -587,6 +636,20 @@ def auditar(a, minimo: int = MIN_CASOS) -> list[str]:
             filas = privacidad.filas(d, base, colegio=g[1])
         else:
             filas = privacidad.filas(d, base, grado=g[1])
+        items = getattr(o, "items_pssm", None)
+        if isinstance(items, pd.DataFrame) and not items.empty and "item" in items.columns:
+            for _, f in items.iterrows():
+                item = str(f["item"])
+                if item not in ITEMS_CON_CORTE or pd.isna(f["M"]):
+                    continue
+                if not _publicado(o, item):
+                    problemas.append(f"{item}: {g[0]} {g[1] or ''} publica la media del "
+                                     "ítem con su corte suprimido")
+                    continue
+                v = filas[item].dropna() if item in filas.columns else pd.Series(dtype=float)
+                if len(v) and item_delata(item, v.mean(), len(v), minimo, holgura=0.0):
+                    problemas.append(f"{item}: {g[0]} {g[1] or ''} publica una media que "
+                                     f"acota los casos por debajo de {minimo}")
         for c in getattr(o, "contrastes", None) or []:
             if c.get("suprimido"):
                 continue

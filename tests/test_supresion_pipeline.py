@@ -201,3 +201,52 @@ def test_la_auditoria_revisa_el_solapamiento():
     malo = copy.deepcopy(b)
     malo.solapamiento = dict(n=60, pct_ambos=13.3)    # tabla 3×2 con una casilla de 1
     assert [p for p in supresion.auditar(malo) if "solapamiento" in p]
+
+
+# ── medias de ítems con corte publicado (PSSM7, adulto de confianza) ──────
+def _pssm7(celdas):
+    """{(colegio, grado): (n, k)} con PSSM7 = 1 (sin adulto) en k filas y 4 en el resto."""
+    filas = []
+    for (c, g), (n, k) in celdas.items():
+        for i in range(n):
+            filas.append(dict(Colegio=c, Grado=g, Sexo="Mujer" if i % 2 else "Hombre",
+                              Edad=13, nivel=NIVEL, PSSM7=1 if i < k else 4))
+    return pd.DataFrame(filas)
+
+
+def _items(obj):
+    t = obj.items_pssm
+    return set() if t is None or t.empty else set(t["item"])
+
+
+def test_cota_de_un_item_con_corte():
+    # PSSM7 de 1 a 5, caso = ≤ 2. Media 4,9 en 20: a lo sumo 0 casos.
+    assert supresion.item_delata("PSSM7", 4.9, 20)
+    assert supresion.item_delata("PSSM7", 1.1, 20)     # casi todos son caso
+    assert not supresion.item_delata("PSSM7", 3.5, 20)
+    assert not supresion.item_delata("PSSM_otro", 4.9, 20)
+    assert supresion.cotas_item("PSSM7", 4.0, 20) == (6, 20)
+
+
+def test_la_media_del_item_se_omite_donde_su_corte_se_suprime():
+    a = pipeline.analizar(_pssm7(CELDAS), NIVEL, n_boot=5)
+    oculta = a.subgrupos[CRUCE]["A|Sexto"]
+    assert pd.isna(_pct(oculta.cortes, "PSSM7"))
+    assert "PSSM7" not in _items(oculta)
+    publicados = [o for grupos in a.subgrupos.values() for o in grupos.values()
+                  if not pd.isna(_pct(o.cortes, "PSSM7"))]
+    assert publicados and all("PSSM7" in _items(o) for o in publicados)
+    for f in publicar.aplanar({NIVEL: a}):
+        if f["tipo"] in ("item", "item_grupo") and f["clave"] == "PSSM7":
+            assert f["grupo"] != "A|Sexto"
+    assert supresion.auditar(a) == []
+
+
+def test_la_auditoria_ve_una_media_de_item_que_acota_los_casos():
+    import copy
+    a = pipeline.analizar(_pssm7(CELDAS), NIVEL, n_boot=5)
+    malo = copy.deepcopy(a)
+    oculta = malo.subgrupos[CRUCE]["A|Sexto"]
+    oculta.items_pssm = pd.concat([oculta.items_pssm, pd.DataFrame(
+        [dict(item="PSSM7", M=3.85, DE=0.67, n=20)])], ignore_index=True)
+    assert [p for p in supresion.auditar(malo) if "PSSM7" in p]
