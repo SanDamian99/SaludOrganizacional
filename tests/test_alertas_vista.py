@@ -220,3 +220,68 @@ def test_si_el_panel_falla_la_pagina_sigue(monkeypatch, analisis):
         raise RuntimeError("módulo viejo")
     monkeypatch.setattr(va, "render_panel", falla)
     vc._panel_alertas(analisis, "colegio", {})          # no lanza
+
+
+# ══ Informes ════════════════════════════════════════════════════════════════
+from src.ui.views import estudiantes_informe as inf  # noqa: E402
+
+COLEGIO = "LauV"
+
+
+@pytest.fixture(scope="module", params=["archivos", "publicado"])
+def fuente(request, analisis):
+    if request.param == "archivos":
+        return {cat.NIVEL_SECUNDARIA: analisis}
+    filas = publicar.aplanar({cat.NIVEL_SECUNDARIA: analisis})
+    publicar.verificar(filas)
+    return {cat.NIVEL_SECUNDARIA: lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas)}
+
+
+def test_el_informe_del_colegio_trae_el_panel(fuente):
+    html = inf.informe_colegio_html(fuente, COLEGIO, fecha=date(2026, 10, 8))
+    assert ac.TITULO_PANEL in html and ac.NO_ES_DIAGNOSTICO in html
+    assert html.index(ac.TITULO_PANEL) < html.index("Resultados y qué hacer")
+    assert "casos" not in _seccion(html).lower()
+    assert "Piensa en la muerte con frecuencia" not in html     # el panel la reemplaza
+    assert ac.RUTA_PENDIENTE not in html
+
+
+def test_la_secretaria_trae_la_tabla_por_colegio(fuente):
+    html = inf.informe_secretaria_html(fuente, fecha=date(2026, 10, 8))
+    assert '<table class="senales-tabla">' in html and "Laura Vicuña" in html
+    assert "Piensa en la muerte con frecuencia" not in html
+    assert ac.RUTA_PENDIENTE not in html
+
+
+def test_la_tabla_de_alertas_es_la_misma_desde_archivos_y_publicado(analisis):
+    filas = publicar.aplanar({cat.NIVEL_SECUNDARIA: analisis})
+    pub = {cat.NIVEL_SECUNDARIA: lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas)}
+
+    def tabla(x):
+        return inf.informe_secretaria_html(x, fecha=date(2026, 10, 8)).split(
+            '<table class="senales-tabla">')[1].split("</table>")[0]
+    assert tabla({cat.NIVEL_SECUNDARIA: analisis}) == tabla(pub)
+
+
+def test_sin_alertas_los_informes_quedan_como_antes(analisis):
+    viejo = {cat.NIVEL_SECUNDARIA: dataclasses.replace(analisis, alertas=pd.DataFrame())}
+    html = inf.informe_secretaria_html(viejo, fecha=date(2026, 10, 8))
+    assert ac.TITULO_PANEL not in html
+    assert "Piensa en la muerte con frecuencia" in html
+
+
+def test_con_modulos_viejos_los_informes_no_se_caen(monkeypatch, analisis):
+    """Streamlit Cloud puede conservar un `estudiantes_comunidad` sin `ruta_para_rol`
+    o un panel que falla: el informe sale igual, con la ruta vigente."""
+    monkeypatch.delattr(vc, "ruta_para_rol")
+
+    def falla(*a, **k):
+        raise RuntimeError("módulo viejo")
+    monkeypatch.setattr(va, "panel_html", falla)
+    monkeypatch.setattr(va, "tabla_secretaria_html", falla)
+    fuente = {cat.NIVEL_SECUNDARIA: analisis}
+    for html in (inf.informe_colegio_html(fuente, COLEGIO, fecha=date(2026, 10, 8)),
+                 inf.informe_secretaria_html(fuente, fecha=date(2026, 10, 8)),
+                 inf.informe_una_pagina_html(analisis, "colegio", {})):
+        assert ac.TITULO_PANEL not in html
+        assert cat.RUTA_ATENCION[0][0] in html
