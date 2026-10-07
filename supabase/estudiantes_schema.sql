@@ -39,7 +39,8 @@ CREATE SCHEMA IF NOT EXISTS obs360;
 
 -- El mínimo de casos por grupo vive en la base, no solo en Python.
 CREATE OR REPLACE FUNCTION obs360.min_grupo() RETURNS integer
-  LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT 10 $$;
+  LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path = obs360, pg_temp
+  AS $$ SELECT 10 $$;
 
 COMMENT ON FUNCTION obs360.min_grupo() IS
   'Mínimo de estudiantes por grupo para poder publicar una cifra. '
@@ -163,8 +164,13 @@ ALTER TABLE obs360.mensajes   ENABLE ROW LEVEL SECURITY;
 -- dueño, que debe saltarse RLS: desde el SQL Editor el dueño es `postgres`
 -- (dueño de las tablas, por lo tanto exento de RLS). Se fija explícito abajo.
 -- `search_path` fijo para que nadie sustituya objetos con un esquema propio.
--- Va antes de las políticas que la usan.
-CREATE OR REPLACE FUNCTION obs360.es_ultima_publicada(p_id bigint) RETURNS boolean
+-- Va antes de las políticas que la usan, y en un esquema que la API REST no
+-- expone (`obs360_interno`): así nadie la puede llamar como /rpc desde fuera.
+CREATE SCHEMA IF NOT EXISTS obs360_interno;
+REVOKE ALL ON SCHEMA obs360_interno FROM PUBLIC;
+GRANT USAGE ON SCHEMA obs360_interno TO anon, authenticated, service_role;
+DROP FUNCTION IF EXISTS obs360.es_ultima_publicada(bigint) CASCADE;
+CREATE OR REPLACE FUNCTION obs360_interno.es_ultima_publicada(p_id bigint) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = obs360, pg_temp AS $$
   SELECT p_id = (SELECT c.id FROM obs360.corridas c
                  WHERE c.publicada
@@ -172,21 +178,21 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = obs360, pg_temp AS $$
                                    WHERE m.id = p_id)
                  ORDER BY c.creada_en DESC, c.id DESC LIMIT 1);
 $$;
-ALTER FUNCTION obs360.es_ultima_publicada(bigint) OWNER TO postgres;
-REVOKE ALL ON FUNCTION obs360.es_ultima_publicada(bigint) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION obs360.es_ultima_publicada(bigint)
+ALTER FUNCTION obs360_interno.es_ultima_publicada(bigint) OWNER TO postgres;
+REVOKE ALL ON FUNCTION obs360_interno.es_ultima_publicada(bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION obs360_interno.es_ultima_publicada(bigint)
     TO anon, authenticated, service_role;
 
 -- Anónimo: solo lectura, y solo de la ÚLTIMA corrida publicada de cada módulo.
 -- Una corrida vieja que siga marcada como publicada no se lee.
 DROP POLICY IF EXISTS "lectura publica de corridas publicadas" ON obs360.corridas;
 CREATE POLICY "lectura publica de corridas publicadas" ON obs360.corridas
-    FOR SELECT TO anon, authenticated USING (obs360.es_ultima_publicada(id));
+    FOR SELECT TO anon, authenticated USING (obs360_interno.es_ultima_publicada(id));
 
 DROP POLICY IF EXISTS "lectura publica de resultados publicados" ON obs360.resultados;
 CREATE POLICY "lectura publica de resultados publicados" ON obs360.resultados
     FOR SELECT TO anon, authenticated
-    USING (obs360.es_ultima_publicada(corrida_id));
+    USING (obs360_interno.es_ultima_publicada(corrida_id));
 
 DROP POLICY IF EXISTS "lectura publica de mensajes vigentes" ON obs360.mensajes;
 CREATE POLICY "lectura publica de mensajes vigentes" ON obs360.mensajes
