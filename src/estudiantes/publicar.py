@@ -8,16 +8,24 @@ QUÉ SUBE
 Solo agregados: una fila por nivel, grupo, tipo e indicador. Ni una respuesta
 individual, ni un identificador, ni un nombre.
 
-TRES GUARDAS, EN ESTE ORDEN
+GUARDAS, EN ESTE ORDEN
   1. `aplanar` construye las filas únicamente desde tablas ya agregadas del
-     objeto `Analisis`; nunca toca `Analisis.datos`.
+     objeto `Analisis` (calculadas sobre la base publicable y la copia
+     enmascarada todo o nada por columna); nunca toca `Analisis.datos`.
   2. `verificar` rechaza el lote completo si aparece un grupo con n < MIN_GROUP_N,
      una columna de identificación o algo con forma de identificador de
-     estudiante. Falla el lote entero, no la fila: si una guarda salta, hay un
-     error de programación y publicar «lo que se pueda» lo esconde.
-  3. El esquema tiene un CHECK de n >= 10 y no da política de escritura al rol
-     anónimo, así que la base rechazaría el error aunque las dos guardas
-     anteriores fallaran.
+     estudiante.
+     Falla el lote entero, no la fila: si una guarda salta, hay un error de
+     programación y publicar «lo que se pueda» lo esconde.
+  3. `verificar_restas` audita las restas entre nivel, colegios, grados y
+     celdas colegio×grado (privacidad.auditar): si alguna diferencia deja un
+     grupo de 1 a MIN_GROUP_N − 1, no se publica nada.
+  4. El esquema tiene un CHECK de n >= 10 y de identificadores, y RLS sin
+     política de escritura para el rol anónimo: la base rechazaría el error
+     aunque las guardas anteriores fallaran.
+  5. La corrida entra oculta (`publicada = false`) y solo se abre con todos sus
+     resultados dentro; al abrirla con `--publicar-ya` se despublican las demás
+     corridas del módulo (y la política de lectura solo deja ver la última).
 
 USO
     # ensayo: no toca la red, deja el lote en un JSON para revisarlo
@@ -218,11 +226,12 @@ def aplanar(analisis: dict) -> list[dict]:
                                    escala=cat.PSSM.nombre, DE=f["DE"],
                                    orientado=True))
 
-        # resultados por colegio y por grado para la vista comunidad desplegada.
-        # Tipos propios («banda_grupo»…) para que el lector no los confunda con
-        # los del nivel completo. Se omite cualquier fila que no llegue al
-        # mínimo: un indicador con pocas respuestas válidas dentro de un colegio
-        # no se publica, aunque el colegio sí llegue.
+        # resultados por colegio, por grado y por celda colegio×grado para la
+        # vista comunidad desplegada. Tipos propios («banda_grupo»…) para que el
+        # lector no los confunda con los del nivel completo. Descartar las filas
+        # que no llegan al mínimo es solo un respaldo: el enmascaramiento todo o
+        # nada ya garantiza que cada columna tiene ≥ MIN_GROUP_N o 0 respuestas
+        # válidas en cada grupo de la base.
         for columna, grupos in (getattr(a, "subgrupos", None) or {}).items():
             for grupo, s in grupos.items():
                 filas.extend(_aplanar_subgrupo(nivel, columna, grupo, s))
@@ -305,8 +314,8 @@ def _enmascarar_conteos(d: dict) -> dict:
     hay respuestas fuera de la base, no «menos de 10».
 
     Las distribuciones de la muestra (edad, colegio) pueden tener celdas de
-    pocos casos. El recuento exacto de esas celdas se queda en la corrida local,
-    que es la que usa el artículo; lo que se publica dice «<10».
+    pocos casos. El recuento exacto de esas celdas solo queda en la corrida
+    local; lo que se publica dice «<10».
     """
     salida = {}
     for k, v in d.items():

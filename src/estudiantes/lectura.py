@@ -8,15 +8,17 @@ menores, se quedan en la máquina de quien procesa.
 QUÉ RECONSTRUYE
 Un objeto `Analisis` por nivel, con las tablas que consumen las vistas. Lo que
 **no** puede reconstruir es `Analisis.datos`, la fila por estudiante, porque eso
-nunca se publica. Queda como un DataFrame vacío, y las vistas lo tratan como lo
-que es: no hay filtro por colegio ni por grado, solo las cifras del nivel
-completo y las comparaciones que sí se publicaron.
+nunca se publica. Queda como un DataFrame vacío. El filtro por colegio, por
+grado y por grado dentro de un colegio (Colegio×Grado) sí funciona: usa los
+subgrupos ya agregados que se publicaron (filas «_grupo», ver `_subgrupos`),
+calculados sobre la base publicable; no recalcula nada.
 
 Esa limitación es el diseño, no un defecto: un despliegue público no debería
 poder recalcular nada sobre individuos.
 
-Solo lee corridas con `publicada = true`, y lo hace con la clave `anon`, que no
-tiene permiso de escritura.
+Solo lee la ÚLTIMA corrida publicada del módulo de estudiantes (filtro por
+`modulo` y, desde la migración 2026-10-07, también la política RLS), y lo hace
+con la clave `anon`, que no tiene permiso de escritura.
 """
 from __future__ import annotations
 
@@ -313,7 +315,8 @@ TIPOS_SUBGRUPO = ("banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo")
 
 
 def _subgrupos(nivel: str, filas: list[dict]) -> dict:
-    """Rearma {"Colegio": {"LauV": Analisis}, "Grado": {...}} desde las filas «_grupo».
+    """Rearma {"Colegio": {"LauV": Analisis}, "Grado": {...}, "Colegio×Grado":
+    {"LauV|8": Analisis}} desde las filas «_grupo».
 
     Cada subgrupo es un `Analisis` con `datos` vacío y solo las tablas que la
     vista comunidad usa, igual que el que produce `pipeline.subanalizar`.

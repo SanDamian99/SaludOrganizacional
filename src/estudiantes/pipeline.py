@@ -44,7 +44,10 @@ class Analisis:
     """Resultado completo para un nivel educativo."""
     nivel: str
     n: int
-    datos: pd.DataFrame                     # con puntuaciones; sin identificadores directos
+    # Copia ENMASCARADA (todo o nada por columna, privacidad.aplicar_todo_o_nada)
+    # de los datos puntuados; sin identificadores directos. No son los datos
+    # crudos: un indicador que no llega al mínimo en algún grupo ya viene vacío.
+    datos: pd.DataFrame
     muestra: dict = field(default_factory=dict)
     descriptivos: pd.DataFrame = field(default_factory=pd.DataFrame)
     fiabilidad: pd.DataFrame = field(default_factory=pd.DataFrame)
