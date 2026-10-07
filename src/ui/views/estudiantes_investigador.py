@@ -140,7 +140,8 @@ def _cortes_de_clave(a, clave: str) -> tuple[str, str, str]:
     if isinstance(cortes, pd.DataFrame) and not cortes.empty and "clave" in cortes.columns:
         filas = cortes[cortes["clave"] == clave]
         if not filas.empty:
-            pct = " · ".join(f"{v:.1f} %" for v in filas["pct"])
+            pct = " · ".join(_SIN_DATO if pd.isna(v) else f"{v:.1f} %"
+                             for v in filas["pct"])
             indicadores = " · ".join(str(v) for v in filas["indicador"])
             fuentes = " · ".join(dict.fromkeys(str(v) for v in filas["fuente"]))
             return pct, indicadores, fuentes
@@ -735,8 +736,10 @@ def _tab_cortes(a) -> None:
         vista = cortes.copy()
         vista["IC 95 %"] = [_texto_ic(lo, hi, 1, " %")
                             for lo, hi in zip(vista["ic_inf"], vista["ic_sup"])]
-        vista = vista[["indicador", "n", "casos", "pct", "IC 95 %", "fuente"]].rename(
-            columns={"indicador": "Indicador", "n": "Base N", "casos": "Casos",
+        # Sin columna de casos: el número de casos no se muestra (supresion.py);
+        # un % vacío es una cifra suprimida por pocos casos.
+        vista = vista[["indicador", "n", "pct", "IC 95 %", "fuente"]].rename(
+            columns={"indicador": "Indicador", "n": "Base N",
                      "pct": "%", "fuente": "Fuente del corte"})
         st.dataframe(vista, hide_index=True, width="stretch")
     else:

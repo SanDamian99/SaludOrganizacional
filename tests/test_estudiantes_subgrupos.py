@@ -61,8 +61,10 @@ def test_publicar_y_leer_conserva_los_subgrupos(analisis, publicado):
     original = analisis.subgrupos["Colegio"][colegio]
     leido = publicado.subgrupos["Colegio"][colegio]
     assert leido.n == original.n
+    # el número de casos no se publica (supresion.py): se compara sin él
     pd.testing.assert_frame_equal(
-        leido.cortes.reset_index(drop=True), original.cortes.reset_index(drop=True),
+        leido.cortes.reset_index(drop=True),
+        original.cortes.drop(columns=["casos"]).reset_index(drop=True),
         check_dtype=False)
 
 
@@ -113,7 +115,8 @@ def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publ
 
     grado = next(iter(analisis.subgrupos["Grado"]))
     g = {"grado": grado}
-    assert vc.bandas_sdq_total(publicado, g)["n"] == vc.bandas_sdq_total(analisis, g)["n"]
+    assert vc.bandas_sdq_total(publicado, g) == vc.bandas_sdq_total(analisis, g)
+    assert vc.n_bandas(publicado, g) == vc.n_bandas(analisis, g) > 0
 
 
 def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
@@ -121,15 +124,20 @@ def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
     for filtros in ({}, {"colegio": "LauV"}):
         crudo = vc.prevalencia_por(analisis, indicador, "Grado", filtros)
         desp = vc.prevalencia_por(publicado, indicador, "Grado", filtros)
-        assert list(desp.columns) == ["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"]
-        assert set(desp["grupo"]) == set(crudo["grupo"]) and not desp.empty
+        assert list(desp.columns) == ["grupo", "n", "pct", "ic_inf", "ic_sup"]
+        ocultos = vc.grupos_sin_cifra(publicado, indicador, "Grado", filtros)
+        assert ocultos == vc.grupos_sin_cifra(analisis, indicador, "Grado", filtros)
+        assert set(desp["grupo"]) == set(crudo["grupo"])
+        assert not desp.empty or ocultos
         fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
-        assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
+        if not fusion.empty:
+            assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
 
 
 def test_el_cruce_publicado_da_las_mismas_cifras_que_el_recalculo(analisis, publicado):
     f = {"colegio": "LauV", "grado": "Octavo"}
-    assert vc.bandas_sdq_total(publicado, f)["n"] == vc.bandas_sdq_total(analisis, f)["n"] == 31
+    assert vc.n_bandas(publicado, f) == vc.n_bandas(analisis, f) == 31
+    assert vc.bandas_sdq_total(publicado, f) == vc.bandas_sdq_total(analisis, f)
     for indicador in vc.INDICADORES:
         assert vc.prevalencia(publicado, indicador, f) == pytest.approx(
             vc.prevalencia(analisis, indicador, f), abs=0.01)
