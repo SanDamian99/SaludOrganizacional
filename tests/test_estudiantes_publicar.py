@@ -43,6 +43,23 @@ def test_rechaza_identificador_de_estudiante_como_grupo():
     assert "identificador de estudiante" in str(e.value)
 
 
+@pytest.mark.parametrize("ident", ["E1a2b3c4d", "C1a2b3c4d", "N1a2b3c4d",
+                                   "c00ff00aa", "nABCDEF12"])
+def test_rechaza_identificadores_e_c_n_como_en_la_base(ident):
+    """Misma regla que el CHECK de la base: ^[ECN][0-9a-f]{8}$, sin distinguir mayúsculas."""
+    with pytest.raises(publicar.PublicacionInsegura):
+        publicar.verificar([_fila_valida(agrupacion="ID", grupo=ident)])
+    with pytest.raises(publicar.PublicacionInsegura) as e:
+        publicar.verificar([_fila_valida(clave=ident)])
+    assert "clave" in str(e.value)
+
+
+@pytest.mark.parametrize("valor", ["LauV", "Sexto", "E1a2b3c4", "E1a2b3c4d5",
+                                   "X1a2b3c4d", "E1a2b3c4z", "LauV|Sexto"])
+def test_no_confunde_grupos_normales_con_identificadores(valor):
+    publicar.verificar([_fila_valida(agrupacion="Colegio", grupo=valor)])
+
+
 @pytest.mark.parametrize("prohibida", ["nombre", "id", "ts", "sede"])
 def test_rechaza_columnas_de_identificacion_en_el_detalle(prohibida):
     with pytest.raises(publicar.PublicacionInsegura):

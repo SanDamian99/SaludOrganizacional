@@ -13,8 +13,8 @@ GUARDAS, EN ESTE ORDEN
      objeto `Analisis` (calculadas sobre la base publicable y la copia
      enmascarada todo o nada por columna); nunca toca `Analisis.datos`.
   2. `verificar` rechaza el lote completo si aparece un grupo con n < MIN_GROUP_N,
-     una columna de identificación o algo con forma de identificador de
-     estudiante.
+     una columna de identificación o algo con forma de identificador (E/C/N +
+     8 hexadecimales, la misma regla que la base) en `grupo` o en `clave`.
      Falla el lote entero, no la fila: si una guarda salta, hay un error de
      programación y publicar «lo que se pueda» lo esconde.
   3. `verificar_restas` audita las restas entre nivel, colegios, grados y
@@ -43,6 +43,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import date
 
@@ -59,6 +60,10 @@ TABLA_CORRIDAS = "corridas"
 TABLA_RESULTADOS = "resultados"
 ESQUEMA = "obs360"
 MODULO = "estudiantes"
+# Identificador de estudiante (E), cuidador (C) o niño (N): la misma regla que el
+# CHECK `resultados_sin_id_estudiante` de la base (^[ECN][0-9a-f]{8}$, sin
+# distinguir mayúsculas).
+PATRON_ID = re.compile(r"[ECN][0-9a-f]{8}", re.IGNORECASE)
 
 
 def _num(v):
@@ -371,11 +376,11 @@ def verificar(filas: list[dict]) -> None:
         for prohibida in COLUMNAS_PROHIBIDAS:
             if f'"{prohibida}"' in texto:
                 problemas.append(f"fila {i}: contiene la columna prohibida «{prohibida}»")
-        grupo = str(f.get("grupo") or "")
-        if len(grupo) == 9 and grupo[0].upper() == "E" and \
-                all(c in "0123456789abcdef" for c in grupo[1:].lower()):
-            problemas.append(f"fila {i}: el grupo «{grupo}» tiene forma de "
-                             "identificador de estudiante")
+        for campo in ("grupo", "clave"):
+            valor = str(f.get(campo) or "")
+            if PATRON_ID.fullmatch(valor):
+                problemas.append(f"fila {i}: el campo {campo} «{valor}» tiene forma de "
+                                 "identificador de estudiante, cuidador o niño")
     if problemas:
         raise PublicacionInsegura(
             "No se publicó nada. El lote tiene "
