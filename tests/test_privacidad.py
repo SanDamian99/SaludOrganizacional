@@ -89,3 +89,144 @@ def test_filas_respeta_la_base():
     assert len(pv.filas(d, b, grado="Décimo")) == 122
     assert len(pv.filas(d, b, colegio="LauV", grado="Décimo")) == 90
     assert len(pv.filas(d, b, colegio="CdP", grado="Décimo")) == 0
+
+
+# ══ Revisión del 7-oct: todo o nada por indicador, margen del resto, índice ══
+import numpy as np
+
+from src.estudiantes import catalog as cat
+
+# Puente de dos pasos: cada celda tiene ≥ 10 filas pero < 10 respuestas válidas
+PUENTE = {("X", "A"): (12, 5), ("X", "B"): (12, 5), ("Y", "A"): (12, 5),
+          ("Y", "B"): (12, 5), ("Z", "C"): (12, 5), ("Z", "D"): (12, 5),
+          ("W", "C"): (12, 5), ("W", "D"): (12, 5), ("X", "C"): (12, 3)}
+
+
+def _d_validos(conteos: dict, columna: str = "SDQ_Total") -> pd.DataFrame:
+    """conteos: (colegio, grado) → (filas, respuestas válidas de `columna`)."""
+    filas = [dict(Colegio=c, Grado=g, **{columna: 1.0 if k < v else np.nan})
+             for (c, g), (n, v) in conteos.items() for k in range(n)]
+    return pd.DataFrame(filas)
+
+
+def _validos(d, b, col, colegio=pv.TODOS, grado=pv.TODOS) -> pd.Index:
+    sub = pv.filas(d, b, colegio=colegio, grado=grado)
+    return sub.index[sub[col].notna()]
+
+
+def _puente(d, b, col="SDQ_Total") -> int:
+    """|X ∪ Y| − |A| − |B| en respuestas válidas: X|C si A y B son X|·, Y|·."""
+    x, y = _validos(d, b, col, colegio="X"), _validos(d, b, col, colegio="Y")
+    a, bb = _validos(d, b, col, grado="A"), _validos(d, b, col, grado="B")
+    return len(x) + len(y) - len(a) - len(bb)
+
+
+def test_el_puente_de_dos_pasos_escapa_a_la_auditoria_de_un_paso():
+    d = _d_validos(PUENTE)
+    b = pv.base_publicable(d)
+    assert pv.auditar(d, b, ["SDQ_Total"]) == []
+    assert _puente(d, b) == 3                      # X|C reconstruido
+
+
+def test_todo_o_nada_cierra_el_puente():
+    d = _d_validos(PUENTE)
+    b = pv.base_publicable(d)
+    dm, suprimidos = pv.aplicar_todo_o_nada(d, b)
+    assert pv.auditar(dm, b, ["SDQ_Total"]) == []
+    combinacion = _puente(dm, b)
+    assert combinacion == 0 or combinacion >= cat.MIN_GROUP_N
+    assert suprimidos == {"SDQ_Total": 8 * 5 + 3}
+    assert d["SDQ_Total"].notna().sum() == 43      # no toca el original
+
+
+def test_todo_o_nada_conserva_las_unidades_completas():
+    conteos = {**PUENTE, ("X", "A"): (12, 10), ("X", "B"): (12, 11)}
+    d = _d_validos(conteos)
+    b = pv.base_publicable(d)
+    dm, suprimidos = pv.aplicar_todo_o_nada(d, b)
+    assert len(_validos(dm, b, "SDQ_Total", colegio="X", grado="A")) == 10
+    assert len(_validos(dm, b, "SDQ_Total", colegio="X")) == 21   # sin X|C
+    assert suprimidos == {"SDQ_Total": 6 * 5 + 3}
+    assert pv.auditar(dm, b, ["SDQ_Total"]) == []
+
+
+def test_resto_con_pocas_respuestas_validas_se_suprime():
+    """Como ERQ en secundaria: el resto tiene 11 filas (8 + 3) y 4 respuestas."""
+    conteos = {("LauV", "Sexto"): (95, 95), ("LaBalsa", "Décimo"): (32, 30),
+               ("CdP", "Décimo"): (8, 3), ("DiosCh", "Sexto"): (3, 1)}
+    d = _d_validos(conteos, "ERQ_Reap")
+    b = pv.base_publicable(d)
+    assert b.incluye_resto
+    assert any("deja 4" in p for p in pv.auditar(d, b, ["ERQ_Reap"]))
+    dm, suprimidos = pv.aplicar_todo_o_nada(d, b)
+    assert suprimidos == {"ERQ_Reap": 4}
+    resto = dm["Colegio"].isin(["CdP", "DiosCh"])
+    assert dm.loc[resto, "ERQ_Reap"].isna().all()
+    assert pv.auditar(dm, b, ["ERQ_Reap"]) == []
+
+
+def test_las_columnas_de_identificacion_no_se_tocan():
+    d = _d_validos(PUENTE)
+    d["Edad"] = 12
+    d["_peso"] = 1.0
+    dm, suprimidos = pv.aplicar_todo_o_nada(d, pv.base_publicable(d))
+    assert set(suprimidos) == {"SDQ_Total"}
+    assert dm["Edad"].notna().all() and dm["_peso"].notna().all()
+
+
+def test_margen_del_resto_dominado_por_un_colegio():
+    assert pv.MARGEN_RESTO == 3
+    base = {("LauV", "Sexto"): 95, ("LaBalsa", "Décimo"): 32}
+    justo = pv.base_publicable(_d({**base, ("CdP", "Décimo"): 8, ("DiosCh", "Sexto"): 3}))
+    assert justo.incluye_resto                     # 11 − 8 = 3
+    dominado = pv.base_publicable(_d({**base, ("CdP", "Décimo"): 9, ("DiosCh", "Sexto"): 2}))
+    assert not dominado.incluye_resto              # 11 − 9 = 2
+    assert len(dominado.nivel) == 127
+
+
+def test_margen_del_resto_por_indicador():
+    """El resto llega a 10 respuestas, pero 9 son de un solo colegio."""
+    conteos = {("LauV", "Sexto"): (95, 95), ("LaBalsa", "Décimo"): (32, 32),
+               ("CdP", "Décimo"): (9, 9), ("DiosCh", "Sexto"): (5, 1)}
+    d = _d_validos(conteos)
+    b = pv.base_publicable(d)
+    assert b.incluye_resto                         # filas: 14 − 9 = 5
+    dm, suprimidos = pv.aplicar_todo_o_nada(d, b)
+    assert suprimidos == {"SDQ_Total": 10}
+
+
+@pytest.mark.parametrize("funcion", ["base_publicable", "auditar", "aplicar_todo_o_nada"])
+def test_indice_duplicado_se_rechaza(funcion):
+    d = _d(DECIMO)
+    b = pv.base_publicable(d)
+    dup = pd.concat([d.iloc[:5], d.iloc[:5]])
+    llamadas = {"base_publicable": lambda: pv.base_publicable(dup),
+                "auditar": lambda: pv.auditar(dup, b, []),
+                "aplicar_todo_o_nada": lambda: pv.aplicar_todo_o_nada(dup, b)}
+    with pytest.raises(ValueError, match="índice"):
+        llamadas[funcion]()
+
+
+def test_las_relaciones_de_nivel_tienen_nombres_distintos():
+    nombres = [r[0] for r in pv.relaciones(pv.base_publicable(_d(DECIMO)))]
+    assert "Nivel−colegios" in nombres and "Nivel−grados" in nombres
+    assert "Nivel" not in nombres
+
+
+def test_union_conserva_el_tipo_entero():
+    u = pv._union([pd.Index([3, 1], dtype="int64"), pd.Index([2], dtype="int64")])
+    assert u.dtype == "int64" and list(u) == [1, 2, 3]
+
+
+def test_datos_reales_enmascarados_pasan_la_auditoria():
+    from src.core.rutas import carpeta_datos
+    from src.estudiantes import ingest, pipeline, scoring
+    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
+    if not rutas:
+        pytest.skip("Los formularios originales no están en el directorio de trabajo")
+    todo, _ = ingest.cargar_varios(rutas)
+    todo = scoring.puntuar(todo)
+    for nivel, d in todo.groupby("nivel"):
+        b = pv.base_publicable(d)
+        dm, _ = pv.aplicar_todo_o_nada(d, b)
+        assert pv.auditar(dm, b, pv.columnas_de_analisis(dm)) == [], nivel
