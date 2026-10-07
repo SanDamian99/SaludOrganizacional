@@ -65,20 +65,35 @@ def test_un_modo_desconocido_se_trata_como_comunidad():
     assert nav.menu("cualquier-cosa") == nav.menu(COMUNIDAD)
 
 
-def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
-    """Arranca main.py de verdad en modo comunidad, sin datos ni Supabase."""
+PROHIBIDOS_EN_COMUNIDAD = (
+    "src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
+    "src.ui.trends", "src.ai.gemini_client",
+    "src.ui.views.estudiantes_investigador")
+
+
+def _main_en_comunidad(monkeypatch):
+    """Ejecuta main.py en modo comunidad con los módulos prohibidos descargados."""
     import sys
     from streamlit.testing.v1 import AppTest
     monkeypatch.setenv("OBS360_MODO", "comunidad")
     monkeypatch.setenv("OBS360_DATOS_DIR", "/ruta/que/no/existe")
-    for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
-              "src.ui.views.estudiantes_investigador"):
-        sys.modules.pop(m, None)
+    for m in PROHIBIDOS_EN_COMUNIDAD:
+        monkeypatch.delitem(sys.modules, m, raising=False)
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    at = AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=60).run()
+    return AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=60)
+
+
+def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
+    """Arranca main.py de verdad en modo comunidad.
+
+    Puede leer la corrida publicada en Supabase si hay secretos configurados;
+    solo garantiza que no lanza excepción y que no se importa ningún módulo
+    interno.
+    """
+    import sys
+    at = _main_en_comunidad(monkeypatch).run()
     assert not at.exception
-    for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
-              "src.ui.views.estudiantes_investigador"):
+    for m in PROHIBIDOS_EN_COMUNIDAD:
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
 
 
