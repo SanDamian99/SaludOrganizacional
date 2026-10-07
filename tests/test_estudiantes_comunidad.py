@@ -378,11 +378,87 @@ def test_la_comparacion_por_sexo_tambien_va_sobre_la_base(analisis):
 
 def test_la_nota_de_base_acepta_el_valor_enmascarado_y_el_cero():
     class Falso:
-        def __init__(self, fuera):
-            self.muestra = {"base": {"n_fuera_de_celdas": fuera}}
+        def __init__(self, **base):
+            self.muestra = {"base": base}
 
-    assert "menos de 10" in vc.nota_base(Falso("<10"))
-    assert "25" in vc.nota_base(Falso(25))
+    # la corrida publicada trae «<10» en vez del número
+    nota = vc.nota_base(Falso(n_fuera_de_celdas="<10", n_fuera_del_nivel="<10",
+                              n_solo_en_total=0, incluye_resto=False))
+    assert "Menos de 10 respuestas de grupos muy pequeños no entran" in nota
+    nota = vc.nota_base(Falso(n_fuera_de_celdas=25, n_fuera_del_nivel=0,
+                              n_solo_en_total=25, incluye_resto=True))
+    assert "25 respuestas de grupos pequeños cuentan solo en el total del nivel" in nota
     for vacio in (0, "0", None):
-        assert vc.nota_base(Falso(vacio)) == ""
+        assert vc.nota_base(Falso(n_fuera_de_celdas=vacio)) == ""
     assert vc.nota_base(None) == ""
+    # una corrida anterior sin el desglose no afirma adónde van esas respuestas
+    nota = vc.nota_base(Falso(n_fuera_de_celdas=16))
+    assert nota and "cuentan" not in nota and "no entran" not in nota
+
+
+# ══ Lo que se dice de los grupos que no se muestran ════════════════════════
+class _AnalisisDeBase:
+    """Análisis mínimo con base publicable a partir de conteos colegio × grado."""
+
+    def __init__(self, conteos: dict, nivel=cat.NIVEL_PRIMARIA):
+        from src.estudiantes import privacidad as pv
+        filas = [dict(Colegio=c, Grado=g) for (c, g), n in conteos.items()
+                 for _ in range(n)]
+        self.datos = pd.DataFrame(filas)
+        self.base = pv.base_publicable(self.datos)
+        self.nivel = nivel
+        self.subgrupos = {}
+        self.muestra = dict(
+            base=self.base.resumen(),
+            grado=self.datos["Grado"].value_counts().to_dict(),
+            colegio=self.datos["Colegio"].value_counts().to_dict(),
+            colegio_grado={pv.clave_celda(c, g): n for (c, g), n in conteos.items()})
+
+
+# Primaria real (oct-2026): SJMEB 6 + 8 sin celdas, publicado entero; DiosCh 2
+# queda fuera del nivel. 16 respuestas fuera de celdas, solo 2 fuera de todo.
+PRIMARIA = {("CdP", "Cuarto"): 11, ("CdP", "Quinto"): 30, ("LauV", "Quinto"): 97,
+            ("SJMEB", "Cuarto"): 6, ("SJMEB", "Quinto"): 8, ("DiosCh", "Cuarto"): 2}
+# Un resto grande y de dos colegios sí entra en el nivel.
+CON_RESTO = {("LaBalsa", "Décimo"): 32, ("LauV", "Décimo"): 90, ("CdP", "Décimo"): 6,
+             ("CdP", "Sexto"): 2, ("DiosCh", "Sexto"): 3, ("LauV", "Sexto"): 95,
+             ("DiosCh", "Octavo"): 5}
+
+
+def test_la_nota_no_dice_que_cuenta_en_el_total_lo_que_queda_fuera():
+    a = _AnalisisDeBase(PRIMARIA)
+    nota = vc.nota_base(a)
+    assert "2 respuestas de grupos muy pequeños no entran en ninguna cifra publicada" in nota
+    assert "16" not in nota and "solo en el total" not in nota
+    assert "sí cuentan" not in vc.texto_ocultos(a)
+
+
+def test_la_nota_con_el_resto_dentro_del_nivel():
+    a = _AnalisisDeBase(CON_RESTO, nivel=cat.NIVEL_SECUNDARIA)
+    nota = vc.nota_base(a)
+    assert "16 respuestas de grupos pequeños cuentan solo en el total del nivel" in nota
+    assert "no entran" not in nota
+    assert "sí cuentan en el total del nivel" in vc.texto_ocultos(a)
+
+
+def test_los_grados_ocultos_se_cuentan_en_el_colegio_elegido():
+    a = _AnalisisDeBase(PRIMARIA)
+    assert vc.grados_ocultos(a) == []                  # Cuarto y Quinto tienen celdas
+    assert vc.grados_ocultos(a, "SJMEB") == ["Cuarto", "Quinto"]
+    assert vc.grados_ocultos(a, "CdP") == []
+    texto = vc.texto_ocultos(a, "SJMEB")
+    assert "2 grados" in texto and "en este colegio" in texto
+    # SJMEB se publica entero: sus grados sí están en las cifras del colegio
+    assert "cifras del colegio" in texto
+
+
+def test_los_grados_ocultos_dicen_que_no_llegan_en_ningun_colegio(analisis):
+    texto = vc.texto_ocultos(analisis)
+    assert "1 grado no se muestra" in texto
+    assert f"no llega a {cat.MIN_GROUP_N} estudiantes en ningún colegio" in texto
+    assert f"1 colegio no se muestra por tener menos de {cat.MIN_GROUP_N}" in texto
+    # en el sintético el resto no entra en el nivel: no se afirma que cuente
+    assert "sí cuentan" not in texto
+    assert vc.grados_ocultos(analisis, "LauV") == [GRADO_PEQUENO]
+    md = vc.informe_markdown(analisis, "colegio")
+    assert "en ningún colegio" in md and "sí cuentan" not in md

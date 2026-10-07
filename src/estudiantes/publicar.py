@@ -299,7 +299,10 @@ def _aplanar_subgrupo(nivel: str, columna: str, grupo: str, s) -> list[dict]:
 
 
 def _enmascarar_conteos(d: dict) -> dict:
-    """Sustituye por «<10» cualquier celda por debajo del mínimo publicable.
+    """Sustituye por «<10» cualquier celda de 1 a MIN_GROUP_N − 1.
+
+    Un cero no identifica a nadie y se deja: la vista necesita saber que no
+    hay respuestas fuera de la base, no «menos de 10».
 
     Las distribuciones de la muestra (edad, colegio) pueden tener celdas de
     pocos casos. El recuento exacto de esas celdas se queda en la corrida local,
@@ -307,7 +310,7 @@ def _enmascarar_conteos(d: dict) -> dict:
     """
     salida = {}
     for k, v in d.items():
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and v < cat.MIN_GROUP_N:
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < cat.MIN_GROUP_N:
             salida[str(k)] = f"<{cat.MIN_GROUP_N}"
         else:
             salida[str(k)] = v

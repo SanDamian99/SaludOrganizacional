@@ -352,3 +352,9 @@ def test_la_fila_muestra_enmascara_celdas_y_suprimidos_pequenos(analisis_sinteti
     pub = fila["detalle"]["muestra"]
     assert pub["colegio_grado"] == {"LauV|Sexto": 95, "LauV|Noveno": "<10"}
     assert pub["suprimidos"] == {"SDQ_Total": "<10", "PSSM": 25}
+
+
+def test_un_conteo_cero_no_se_enmascara():
+    # un cero no identifica a nadie y la vista necesita distinguirlo de «<10»
+    assert publicar._enmascarar_conteos({"a": 0, "b": 3, "c": 12}) == \
+        {"a": 0, "b": "<10", "c": 12}

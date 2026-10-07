@@ -257,31 +257,141 @@ def grupos_publicables(analisis, columna: str, otra=TODOS) -> list[str]:
     return _ordenar(analisis, columna, [str(g) for g in grupos])
 
 
-NOTA_BASE = ("Las cifras por colegio y por grado se calculan sobre los grupos de "
-             f"{cat.MIN_GROUP_N} o más estudiantes; {{n}} respuestas de grupos más "
-             "pequeños cuentan solo en el total del nivel.")
+NOTA_BASE = (f"Las cifras por colegio y por grado se calculan sobre grupos de "
+             f"{cat.MIN_GROUP_N} o más estudiantes.")
+NOTA_FUERA_DEL_NIVEL = ("{n} respuestas de grupos muy pequeños no entran en ninguna "
+                        "cifra publicada.")
+NOTA_SOLO_EN_TOTAL = "{n} respuestas de grupos pequeños cuentan solo en el total del nivel."
+
+
+def _resumen_base(analisis) -> dict:
+    """`muestra["base"]` (local o publicada); {} si no viene."""
+    return ((getattr(analisis, "muestra", None) or {}).get("base") or {})
+
+
+def _conteo(valor):
+    """Un conteo del resumen: entero, «menos de 10» si llegó enmascarado, None si falta."""
+    if valor is None:
+        return None
+    try:
+        return int(float(valor))
+    except (TypeError, ValueError):
+        texto = str(valor).strip()
+        if not texto:
+            return None
+        return f"menos de {texto[1:].strip()}" if texto.startswith("<") else texto
+
+
+def _hay(valor) -> bool:
+    """True si el conteo es positivo o llegó enmascarado (de 1 a 9)."""
+    return isinstance(valor, str) or (isinstance(valor, int) and valor > 0)
+
+
+def _frase(plantilla: str, n) -> str:
+    texto = plantilla.format(n=n)
+    return texto[:1].upper() + texto[1:]
+
+
+def _incluye_resto(analisis):
+    """Si el nivel publicado incluye todas las respuestas; None si no se sabe."""
+    valor = _resumen_base(analisis).get("incluye_resto")
+    if valor is None and getattr(analisis, "base", None) is not None:
+        valor = analisis.base.incluye_resto
+    return valor
 
 
 def nota_base(analisis) -> str:
-    """Cuántas respuestas quedan fuera de las celdas publicables; "" si ninguna.
+    """Qué pasa con las respuestas fuera de las celdas publicables; "" si no hay.
 
-    La corrida publicada trae el número enmascarado («<10») cuando es pequeño;
-    entonces se dice «menos de 10».
+    Distingue las que no entran en ninguna cifra (el nivel no incluye el resto)
+    de las que cuentan solo en el total del nivel. Las de un colegio publicado
+    entero (sin ningún grado de 10 o más) sí están en la cifra del colegio, así
+    que no se cuentan en ninguna de las dos frases. La corrida publicada trae
+    «<10» en vez del número pequeño: se dice «menos de 10». Una corrida anterior
+    sin ese desglose solo dice sobre qué grupos se calcula.
     """
-    fuera = (((getattr(analisis, "muestra", None) or {}).get("base") or {})
-             .get("n_fuera_de_celdas"))
-    if fuera is None:
+    r = _resumen_base(analisis)
+    if not _hay(_conteo(r.get("n_fuera_de_celdas"))):
         return ""
-    try:
-        n = int(float(fuera))
-    except (TypeError, ValueError):
-        texto = str(fuera).strip()
-        if not texto:
-            return ""
-        if texto.startswith("<"):
-            texto = f"menos de {texto[1:].strip()}"
-        return NOTA_BASE.format(n=texto)
-    return NOTA_BASE.format(n=n) if n > 0 else ""
+    partes = [NOTA_BASE]
+    fuera = _conteo(r.get("n_fuera_del_nivel"))
+    solo = _conteo(r.get("n_solo_en_total"))
+    if _hay(fuera):
+        partes.append(_frase(NOTA_FUERA_DEL_NIVEL, fuera))
+    elif _hay(solo):
+        partes.append(_frase(NOTA_SOLO_EN_TOTAL, solo))
+    return " ".join(partes)
+
+
+def grados_ocultos(analisis, colegio=TODOS) -> list[str]:
+    """Grados presentes que no se muestran: en todo el nivel o en el colegio elegido.
+
+    Sin colegio, los de `grupos_visibles`. Con colegio, los grados que ese
+    colegio tiene con respuestas pero sin celda publicable.
+    """
+    if analisis is None:
+        return []
+    if not privacidad._activo(colegio):
+        return grupos_visibles(analisis, "Grado")[1]
+    conteo = (getattr(analisis, "muestra", None) or {}).get("colegio_grado") or {}
+    if not conteo:
+        datos = getattr(analisis, "datos", None)
+        if datos is None or not {"Colegio", "Grado"} <= set(datos.columns):
+            return []
+        conteo = {privacidad.clave_celda(c, g): n for (c, g), n in
+                  datos.groupby(["Colegio", "Grado"]).size().items()}
+    presentes = [privacidad.partir_celda(k)[1] for k in conteo
+                 if privacidad.partir_celda(k)[0] == str(colegio)]
+    publicables = grupos_publicables(analisis, "Grado", colegio)
+    return _ordenar(analisis, "Grado", [g for g in presentes if g not in publicables])
+
+
+def _plural(n: int, singular: str, plural: str) -> str:
+    return singular if n == 1 else plural
+
+
+def texto_ocultos(analisis, colegio=TODOS, con_colegios: bool = True) -> str:
+    """Qué grupos no se muestran y, solo si es cierto, dónde cuentan sus respuestas.
+
+    Un grado se oculta cuando no llega a 10 estudiantes en ningún colegio (o en
+    el colegio elegido), aunque sume 10 o más en el nivel; un colegio, cuando
+    tiene menos de 10. «Sí cuentan en el total» solo se dice si el nivel
+    publicado incluye todas las respuestas.
+    """
+    if analisis is None:
+        return ""
+    minimo = cat.MIN_GROUP_N
+    elegido = privacidad._activo(colegio)
+    grados = grados_ocultos(analisis, colegio)
+    colegios = [] if (elegido or not con_colegios) else grupos_visibles(analisis, "Colegio")[1]
+    frases = []
+    if grados:
+        n = len(grados)
+        donde = "en este colegio" if elegido else "en ningún colegio"
+        frases.append(f"{n} {_plural(n, 'grado no se muestra', 'grados no se muestran')} "
+                      f"porque no {_plural(n, 'llega', 'llegan')} a {minimo} estudiantes "
+                      f"{donde}")
+    if colegios:
+        n = len(colegios)
+        frases.append(f"{n} {_plural(n, 'colegio no se muestra', 'colegios no se muestran')} "
+                      f"por tener menos de {minimo} estudiantes")
+    if not frases:
+        return ""
+    texto = "; ".join(frases) + "."
+    incluye = _incluye_resto(analisis)
+    if elegido:
+        if str(colegio) in grupos_publicables(analisis, "Colegio") and \
+                not grupos_publicables(analisis, "Grado", colegio):
+            texto += " Sus respuestas sí cuentan en las cifras del colegio."
+        elif incluye is True:
+            texto += " Sus respuestas cuentan solo en el total del nivel."
+        elif incluye is False:
+            texto += " Sus respuestas no entran en ninguna cifra publicada."
+    elif incluye is True:
+        texto += " Sus respuestas sí cuentan en el total del nivel."
+    elif incluye is False and nota_base(analisis):
+        texto += " " + nota_base(analisis)
+    return texto
 
 
 def _mascara(datos: pd.DataFrame, cfg: dict) -> pd.Series | None:
@@ -675,17 +785,18 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
             lineas.append(f"- {it['enunciado']} — media {it['media']:.2f} de 5")
         lineas.append("")
 
-    visibles_g, pequenos_g = grupos_visibles(analisis, "Grado")
-    visibles_c, pequenos_c = grupos_visibles(analisis, "Colegio")
+    visibles_g, _ = grupos_visibles(analisis, "Grado")
+    visibles_c, _ = grupos_visibles(analisis, "Colegio")
     if visibles_g:
         lineas.append("## Grupos que se muestran")
         lineas.append("- Grados: " + ", ".join(visibles_g))
         if ve_colegios(rol) and visibles_c:
             lineas.append(f"- Colegios comparados: {len(visibles_c)}")
-        pequenos = pequenos_g + (pequenos_c if ve_colegios(rol) else [])
-        if pequenos:
-            lineas.append(f"- {len(pequenos)} grupos no se muestran por ser pequeños "
-                          f"(menos de {cat.MIN_GROUP_N} estudiantes).")
+        ocultos = texto_ocultos(analisis, filtros.get("colegio", TODOS)
+                                if ve_colegios(rol) else TODOS,
+                                con_colegios=ve_colegios(rol))
+        if ocultos:
+            lineas.append(f"- {ocultos}")
         lineas.append("")
 
     lineas.append("## Si un estudiante necesita ayuda")
@@ -831,9 +942,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         _sin_datos()
         return
 
-    colegio, peq_colegio = (_selector_grupo(a, "Colegio", "Colegio")
+    colegio, _ = (_selector_grupo(a, "Colegio", "Colegio")
                             if ve_colegios(rol) else (TODOS, []))
-    grado, peq_grado = _selector_grupo(a, "Grado", "Grado", colegio=colegio)
+    grado, _ = _selector_grupo(a, "Grado", "Grado", colegio=colegio)
     filtros = {"nivel": nivel, "colegio": colegio, "grado": grado}
 
     # ── 1. bandas del SDQ total
@@ -892,11 +1003,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
             width="stretch", key="est_com_comparativa")
         st.caption("Las líneas verticales son el margen de error (intervalo de "
                    "Wilson al 95 %). Se compara, no se ranquea.")
-    pequenos = peq_grado + peq_colegio
-    if pequenos:
-        st.caption(f"{len(pequenos)} grupos no se muestran por ser grupos pequeños "
-                   f"(menos de {cat.MIN_GROUP_N} estudiantes); sus respuestas sí "
-                   "cuentan en el total.")
+    ocultos = texto_ocultos(a, colegio, con_colegios=ve_colegios(rol))
+    if ocultos:
+        st.caption(ocultos)
 
     # ── 4. ítems de pertenencia más bajos
     items = items_pertenencia_bajos(a, 4, filtros)

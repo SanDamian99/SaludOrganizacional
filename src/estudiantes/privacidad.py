@@ -117,8 +117,14 @@ class Base:
         return self.n_total - len(_union(self.celdas.values()))
 
     def resumen(self) -> dict:
+        """Tamaños de la base. De las respuestas fuera de celdas publicables,
+        `n_fuera_del_nivel` no entran en ninguna cifra y `n_solo_en_total` solo
+        en el nivel; el resto son de colegios publicados enteros (sin celdas)."""
         return dict(n_total=self.n_total, n_nivel=len(self.nivel),
                     n_fuera_de_celdas=self.n_fuera_de_celdas,
+                    n_fuera_del_nivel=self.n_total - len(self.nivel),
+                    n_solo_en_total=len(self.nivel.difference(
+                        _union(self.colegios.values()))),
                     incluye_resto=self.incluye_resto)
 
 

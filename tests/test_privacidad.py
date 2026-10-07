@@ -230,3 +230,15 @@ def test_datos_reales_enmascarados_pasan_la_auditoria():
         b = pv.base_publicable(d)
         dm, _ = pv.aplicar_todo_o_nada(d, b)
         assert pv.auditar(dm, b, pv.columnas_de_analisis(dm)) == [], nivel
+
+
+def test_el_resumen_distingue_lo_que_queda_fuera_del_nivel():
+    # PRIMARIA: SJMEB (14) se publica entero; DiosCh (2) queda fuera del nivel
+    r = pv.base_publicable(_d(PRIMARIA)).resumen()
+    assert r["n_fuera_de_celdas"] == 16
+    assert r["n_fuera_del_nivel"] == 2
+    assert r["n_solo_en_total"] == 0
+    # con un resto grande, las 16 respuestas cuentan solo en el total
+    r = pv.base_publicable(_d({**DECIMO, ("DiosCh", "Octavo"): 5})).resumen()
+    assert r["incluye_resto"] and r["n_fuera_del_nivel"] == 0
+    assert r["n_solo_en_total"] == r["n_fuera_de_celdas"] == 16
