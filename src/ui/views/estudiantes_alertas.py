@@ -241,6 +241,28 @@ def panel_html(analisis, rol: str, filtros: dict | None = None,
             + f'<p class="nota-senal">{_e(" ".join(notas))}</p></section>')
 
 
+def panel_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
+    """El panel en Markdown (informe de texto). «» si la corrida no trae alertas."""
+    lista = senales(analisis, rol, filtros)
+    if not lista:
+        return ""
+    lineas = [f"## {ac.TITULO_PANEL}"]
+    for s in lista:
+        lineas += ["", f"### {s.nombre} · {s.etiqueta_estado}", s.frase]
+        if s.visible:
+            lineas.append(f"Margen de error {s.ic_inf:.0f}–{s.ic_sup:.0f} % · base de "
+                          f"{s.n} estudiantes.")
+        for titulo, nombres in s.listas:
+            lineas.append(f"{titulo} {_unir(nombres)}")
+        if s.que_hacer:
+            lineas.append(f"*Qué hacer:* {s.que_hacer}")
+    notas = [ac.NO_ES_DIAGNOSTICO, ac.NOTA_AZAR]
+    if getattr(analisis, "nivel", None) == cat.NIVEL_PRIMARIA:
+        notas.append(cat.AVISO_PRIMARIA)
+    lineas += ["", " ".join(notas), ""]
+    return "\n".join(lineas)
+
+
 def _celda_html(f) -> str:
     if not _con_cifra(f):
         return (f'<td class="senal-sin-estado"><span class="estado">'

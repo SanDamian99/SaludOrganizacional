@@ -411,3 +411,25 @@ def test_si_el_panel_falla_los_informes_conservan_la_muerte(monkeypatch, analisi
     for rol in ("colegio", "municipio"):
         assert ((titulo in inf.informe_una_pagina_html(analisis, rol, _f()))
                 == (titulo in inf.informe_una_pagina_html(viejo, rol, _f())))
+
+
+# ══ Informe en Markdown ═════════════════════════════════════════════════════
+def test_el_informe_markdown_trae_el_panel(analisis):
+    md = vc.informe_markdown(analisis, "colegio")
+    assert ac.TITULO_PANEL in md and ac.NO_ES_DIAGNOSTICO in md
+    assert ac.ALERTAS["desesperanza"].nombre in md
+    assert md.index(ac.TITULO_PANEL) < md.index("## Resultados y qué hacer")
+    assert cat.MENSAJES["ideacion"].titulo not in md          # el panel la reemplaza
+    assert "casos" not in md.lower()
+    familia = vc.informe_markdown(analisis, "familia")
+    assert ac.ALERTAS["malestar"].nombre in familia
+    assert ac.ALERTAS["desesperanza"].nombre not in familia
+
+
+def test_si_el_panel_falla_el_markdown_conserva_la_muerte(monkeypatch, analisis):
+    monkeypatch.setattr(va, "panel_markdown", _falla)
+    md = vc.informe_markdown(analisis, "colegio")
+    viejo = vc.informe_markdown(dataclasses.replace(analisis, alertas=pd.DataFrame()), "colegio")
+    assert ac.TITULO_PANEL not in md
+    titulo = cat.MENSAJES["ideacion"].titulo
+    assert (titulo in md) == (titulo in viejo)

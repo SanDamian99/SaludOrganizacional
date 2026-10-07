@@ -256,6 +256,19 @@ def _panel_alertas(a, rol: str, filtros: dict) -> bool:
         return False
 
 
+def _panel_markdown(a, rol: str, filtros: dict) -> str:
+    """El panel en Markdown, o «» si no hay alertas o algo falla."""
+    va = _alertas_vista()
+    if va is None:
+        return ""
+    try:
+        return va.panel_markdown(a, rol, filtros) or ""
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("No se pudo armar el panel de alertas")
+        return ""
+
+
 def enunciado_pssm(item: str, orientado: bool = False) -> str:
     """Texto corto del ítem de pertenencia; el código si no está en el catálogo local.
 
@@ -986,7 +999,8 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
               f"**Estoy viendo esto como:** {cat.ROLES.get(rol, rol)}", ""]
 
     b = bandas_sdq_total(analisis, filtros)
-    fichas = tarjetas(analisis, rol, filtros)
+    panel = _panel_markdown(analisis, rol, filtros)
+    fichas = tarjetas(analisis, rol, filtros, panel_dibujado=bool(panel))
     if not b and not fichas:
         # Sin cifras que mostrar. Las dos causas posibles son distintas y el
         # informe no puede confundirlas: decir «grupo pequeño» de un colegio de
@@ -1007,6 +1021,8 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
         for etiqueta, pct in zip(b["etiquetas"], b["pct"]):
             lineas.append(f"- {etiqueta}: {pct:.0f} %")
         lineas.append("")
+    if panel:
+        lineas.append(panel)
 
 
     if fichas:
