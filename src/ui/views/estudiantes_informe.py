@@ -178,7 +178,7 @@ def _cuerpo_tarjeta(a, t: vc.Tarjeta, filtros: dict, etiqueta_grupo: str,
                   f' · base de {p["n"]} estudiantes</p>')
         return cuerpo, comp
     if t.clave == "emocional_sexo":
-        tabla = vc.prevalencia_por(a, "emocional", "Sexo", filtros)
+        tabla = vc.prevalencia_por_sexo(a, filtros)
         barras = "".join(_barra_simple(str(f["grupo"]), f["pct"]) for _, f in tabla.iterrows())
         cuerpo = ('<p class="etiqueta">con síntomas emocionales en nivel alto, por sexo</p>'
                   + barras)

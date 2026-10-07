@@ -566,6 +566,31 @@ def prevalencia_por(analisis, indicador: str, columna: str,
     return stats.prevalencia_por_grupo(d, mask, columna, orden)
 
 
+def prevalencia_por_sexo(analisis, filtros: dict | None = None,
+                         indicador: str = "emocional") -> pd.DataFrame:
+    """Prevalencia por sexo del grupo elegido, o vacío si el corte no es seguro.
+
+    Solo se muestra si los grupos de sexo (cada uno con ≥ MIN_GROUP_N) cubren
+    TODAS las filas del grupo y todas sus respuestas válidas del indicador. Si
+    queda un resto (otra categoría pequeña o sexo sin dato), restar Mujer y
+    Hombre de la cifra del grupo, que también se publica, lo aislaría: la
+    tarjeta no sale.
+    """
+    tabla = prevalencia_por(analisis, indicador, "Sexo", filtros)
+    if tabla.empty or len(tabla) < 2:
+        return pd.DataFrame()
+    cfg = INDICADORES.get(indicador)
+    d = subconjunto(analisis, filtros or {})
+    if cfg is None or "Sexo" not in d.columns or d["Sexo"].isna().any():
+        return pd.DataFrame()
+    if (d["Sexo"].value_counts() < cat.MIN_GROUP_N).any():
+        return pd.DataFrame()
+    mask = _mascara(d, cfg)
+    if mask is None or int(tabla["n"].sum()) != int(mask.notna().sum()):
+        return pd.DataFrame()
+    return tabla
+
+
 def _prevalencia_por_publicada(analisis, indicador: str, columna: str,
                                filtros: dict) -> pd.DataFrame:
     """La comparación entre grupos leída de los subgrupos publicados (también el cruce).
@@ -703,8 +728,8 @@ def tarjetas(analisis, rol: str, filtros: dict | None = None) -> list[Tarjeta]:
                        f"base de {p['n']} estudiantes")
             etiqueta = INDICADORES[clave]["etiqueta"]
         elif clave == "emocional_sexo":
-            tabla = prevalencia_por(analisis, "emocional", "Sexo", filtros)
-            if tabla.empty or len(tabla) < 2:
+            tabla = prevalencia_por_sexo(analisis, filtros)
+            if tabla.empty:
                 continue
             tabla = tabla.sort_values("pct", ascending=False)
             cifra = " · ".join(f"{f['pct']:.0f} %" for _, f in tabla.iterrows())

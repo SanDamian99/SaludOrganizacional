@@ -462,3 +462,31 @@ def test_los_grados_ocultos_dicen_que_no_llegan_en_ningun_colegio(analisis):
     assert vc.grados_ocultos(analisis, "LauV") == [GRADO_PEQUENO]
     md = vc.informe_markdown(analisis, "colegio")
     assert "en ningún colegio" in md and "sí cuentan" not in md
+
+
+# ══ Corte por sexo dentro de un grupo filtrado ══════════════════════════════
+def _con_sexo_residual(analisis, valor, k=3):
+    """Copia del análisis con `k` filas de LauV con un sexo distinto (o vacío)."""
+    import copy
+    a = copy.copy(analisis)
+    a.datos = analisis.datos.copy()
+    idx = a.datos.index[a.datos["Colegio"] == "LauV"][:k]
+    a.datos["Sexo"] = a.datos["Sexo"].astype(object)
+    a.datos.loc[idx, "Sexo"] = valor
+    return a
+
+
+def test_el_corte_por_sexo_sale_si_los_sexos_cubren_el_grupo(analisis):
+    tabla = vc.prevalencia_por_sexo(analisis, {"colegio": "LauV"})
+    assert len(tabla) == 2
+    assert "emocional_sexo" in [t.clave for t in vc.tarjetas(analisis, "colegio",
+                                                              {"colegio": "LauV"})]
+
+
+@pytest.mark.parametrize("valor", ["Otro", None])
+def test_el_corte_por_sexo_se_quita_si_queda_un_resto(analisis, valor):
+    """Grupo − Mujer − Hombre aislaría a 3 estudiantes: la tarjeta no sale."""
+    a = _con_sexo_residual(analisis, valor)
+    assert vc.prevalencia_por_sexo(a, {"colegio": "LauV"}).empty
+    claves = [t.clave for t in vc.tarjetas(a, "colegio", {"colegio": "LauV"})]
+    assert "emocional_sexo" not in claves
