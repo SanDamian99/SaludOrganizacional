@@ -25,7 +25,7 @@ from src.estudiantes import catalog as cat
 from src.estudiantes import pipeline, privacidad, publicar
 
 CRUCE = privacidad.AGRUPACION_CRUCE
-TIPOS = ("corte", "banda", "item")
+TIPOS = ("corte", "banda", "item", "alerta")   # «alerta»: alertas de grupo (fase 3)
 
 
 def _clave(f) -> tuple:

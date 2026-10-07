@@ -6,7 +6,10 @@ Convierte los objetos `Analisis` en filas agregadas y las sube al esquema
 
 QUÉ SUBE
 Solo agregados: una fila por nivel, grupo, tipo e indicador. Ni una respuesta
-individual, ni un identificador, ni un nombre.
+individual, ni un identificador, ni un nombre. Las alertas de grupo (`alerta` y
+`alerta_grupo`, spec §5.4) llevan n, % e IC donde la supresión los deja, y el
+estado solo donde hay %; nunca casos. La sensibilidad y la distribución de los
+ítems de las alertas no se publican: son de la vista local de investigadores.
 
 GUARDAS, EN ESTE ORDEN
   1. `aplanar` construye las filas únicamente desde tablas ya agregadas del
@@ -249,6 +252,9 @@ def aplanar(analisis: dict) -> list[dict]:
             for grupo, s in grupos.items():
                 filas.extend(_aplanar_subgrupo(nivel, columna, grupo, s))
 
+        # alertas de grupo (spec §5.4): sin casos; estado solo donde hay %
+        filas.extend(_aplanar_alertas(nivel, a))
+
         # descripción de la muestra, en una sola fila cuyo N es el del nivel
         if a.muestra:
             # La muestra va anidada en un solo campo: sus claves (n, sexo, edad…)
@@ -318,6 +324,37 @@ def _aplanar_subgrupo(nivel: str, columna: str, grupo: str, s) -> list[dict]:
             filas.append(_fila(nivel, "item_grupo", f["item"], f["n"], f["M"],
                                escala=cat.PSSM.nombre, DE=f["DE"], orientado=True,
                                **comun))
+    return filas
+
+
+def _aplanar_alertas(nivel: str, a) -> list[dict]:
+    """Filas `alerta` (nivel) y `alerta_grupo` desde `Analisis.alertas`. Nunca casos.
+
+    La tabla ya viene suprimida (supresion.aplicar) y con el estado calculado
+    solo con cifras publicadas (alertas.estado).
+    """
+    from src.estudiantes import alertas as al
+    from src.estudiantes import alertas_catalogo as ac
+    tabla = getattr(a, "alertas", None)
+    if not isinstance(tabla, pd.DataFrame) or tabla.empty:
+        return []
+    subgrupos = getattr(a, "subgrupos", None) or {}
+    filas: list[dict] = []
+    for f in tabla.to_dict("records"):
+        if int(f["n"]) < cat.MIN_GROUP_N or f["alerta"] not in ac.ALERTAS:
+            continue
+        nombre = ac.ALERTAS[f["alerta"]].nombre
+        comun = dict(escala=nombre, ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
+                     indicador=nombre, estado=str(f["estado"]))
+        if f["agrupacion"] == al.TOTAL:
+            filas.append(_fila(nivel, "alerta", f["alerta"], f["n"], f["pct"], **comun))
+            continue
+        s = (subgrupos.get(f["agrupacion"]) or {}).get(str(f["grupo"]))
+        if s is None or s.n < cat.MIN_GROUP_N:
+            continue
+        filas.append(_fila(nivel, "alerta_grupo", f["alerta"], f["n"], f["pct"],
+                           agrupacion=f["agrupacion"], grupo=str(f["grupo"]),
+                           n_grupo=s.n, **comun))
     return filas
 
 
@@ -405,6 +442,10 @@ def verificar(filas: list[dict]) -> None:
             if campo in (f.get("detalle") or {}):
                 problemas.append(f"fila {i} ({f['tipo']}/{f['clave']}): publica el conteo "
                                  f"«{campo}»; solo se publican proporciones y n")
+        if (str(f.get("tipo", "")).startswith("alerta") and f.get("valor") is None
+                and (f.get("detalle") or {}).get("estado", "sin_estado") != "sin_estado"):
+            problemas.append(f"fila {i} ({f['tipo']}/{f['clave']}/{f['grupo']}): una alerta "
+                             "sin porcentaje publicado no puede llevar estado")
         for campo in ("grupo", "clave"):
             valor = str(f.get(campo) or "")
             if PATRON_ID.fullmatch(valor):
@@ -425,7 +466,7 @@ def verificar_restas(analisis: dict) -> list[str]:
     1 a MIN_GROUP_N − 1; todas las columnas de los datos enmascarados, no solo
     las publicadas) y `supresion.auditar` (cifras que no delatan: cada
     proporción publicada tiene de MIN_CASOS a n − MIN_CASOS casos, y ninguna
-    suma o resta de proporciones publicadas deja un conjunto que no cumpla).
+    suma o resta de proporciones publicadas deja un conjunto que no cumpla; también las alertas de grupo, como una familia más).
     """
     problemas: list[str] = []
     for nivel, a in (analisis or {}).items():

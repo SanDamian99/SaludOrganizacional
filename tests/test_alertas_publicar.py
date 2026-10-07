@@ -64,3 +64,62 @@ def test_sensibilidad_e_items_del_nivel(analisis):
     assert set(analisis.alertas_items["item"]) == {
         "SDQ5", "SDQ6", "SDQ8", "SDQ13", "SDQ19", "SDQ24",
         "RCADS1", "RCADS4", "RCADS16", "RCADS18"}
+
+
+# ══ Publicar ════════════════════════════════════════════════════════════════
+def _filas(a, nivel=cat.NIVEL_SECUNDARIA):
+    return publicar.aplanar({nivel: a})
+
+
+def test_las_alertas_se_publican_sin_casos(config):
+    nivel, a = config
+    filas = _filas(a, nivel)
+    alertas = [f for f in filas if f["tipo"].startswith("alerta")]
+    assert {f["tipo"] for f in alertas} == {"alerta", "alerta_grupo"}
+    for f in alertas:
+        assert not set(f["detalle"]) & set(publicar.CAMPOS_CONTEO_PROHIBIDOS)
+        if f["valor"] is None:
+            assert f["ic_inf"] is None and f["detalle"]["estado"] == ac.SIN_ESTADO
+        else:
+            # la regla, fila por fila: k = % × n queda en [3, n − 3]
+            k = round(f["valor"] * f["n"] / 100)
+            assert supresion.MIN_CASOS <= k <= f["n"] - supresion.MIN_CASOS
+        if f["tipo"] == "alerta_grupo":
+            assert f["detalle"]["n_grupo"] >= cat.MIN_GROUP_N
+    publicar.verificar(filas)
+    assert publicar.verificar_restas({nivel: a}) == []
+
+
+def test_no_se_publican_sensibilidad_ni_items(analisis):
+    tipos = {f["tipo"] for f in _filas(analisis)}
+    assert not {"alerta_sensibilidad", "alerta_item"} & tipos
+
+
+def test_verificar_rechaza_una_alerta_con_casos(analisis):
+    fila = next(f for f in _filas(analisis) if f["tipo"] == "alerta")
+    mala = dict(fila, detalle=dict(fila["detalle"], casos=5))
+    with pytest.raises(publicar.PublicacionInsegura, match="casos"):
+        publicar.verificar([mala])
+
+
+def test_verificar_rechaza_un_estado_sin_porcentaje(analisis):
+    fila = next(f for f in _filas(analisis) if f["tipo"] == "alerta_grupo")
+    mala = dict(fila, valor=None, ic_inf=None, ic_sup=None,
+                detalle=dict(fila["detalle"], estado=ac.PRIORIDAD))
+    with pytest.raises(publicar.PublicacionInsegura, match="estado"):
+        publicar.verificar([mala])
+
+
+def test_verificar_restas_bloquea_una_alerta_destapada(config):
+    import copy
+    nivel, a = config
+    for agrupacion, grupos in a.subgrupos.items():
+        for grupo, s in grupos.items():
+            t = s.cortes_alerta
+            if len(t) and t["pct"].isna().any():
+                b = copy.deepcopy(a)
+                tb = b.subgrupos[agrupacion][grupo].cortes_alerta
+                tb.loc[tb["pct"].isna(), "pct"] = 5.0
+                assert any("alerta" in p for p in publicar.verificar_restas({nivel: b}))
+                return
+    pytest.skip("esta configuración no suprime ninguna alerta de subgrupo")
