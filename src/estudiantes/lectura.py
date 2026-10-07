@@ -28,6 +28,7 @@ from src.estudiantes import catalog as cat
 from src.estudiantes.pipeline import Analisis
 
 ESQUEMA = "obs360"
+MODULO = "estudiantes"   # las corridas de otros módulos (cuidadores) no se mezclan
 
 
 class InformeLeido:
@@ -80,13 +81,14 @@ def _cliente():
 
 
 def id_corrida_vigente() -> int | None:
-    """Id de la corrida publicada más reciente, o None. Consulta mínima: una fila.
+    """Id de la corrida publicada más reciente de estudiantes, o None. Consulta mínima: una fila.
 
     Sirve como clave de caché en la aplicación: si aparece una corrida nueva la
     clave cambia y se vuelve a leer todo, sin esperar a que el proceso reinicie.
     """
     cli = _cliente()
     filas = (cli.postgrest.schema(ESQUEMA).table("corridas").select("id")
+             .eq("modulo", MODULO)
              .order("creada_en", desc=True).limit(1).execute().data)
     return int(filas[0]["id"]) if filas else None
 
@@ -94,7 +96,7 @@ def id_corrida_vigente() -> int | None:
 def _traer_filas(cli) -> tuple[dict | None, list[dict]]:
     """(corrida publicada, filas de resultados). RLS ya filtra por `publicada`."""
     tabla = cli.postgrest.schema(ESQUEMA)
-    corridas = (tabla.table("corridas").select("*")
+    corridas = (tabla.table("corridas").select("*").eq("modulo", MODULO)
                 .order("creada_en", desc=True).limit(1).execute().data)
     if not corridas:
         return None, []
@@ -357,6 +359,7 @@ def cargar_desde_supabase() -> tuple[dict, list, dict | None]:
 
 
 AVISO_SIN_DATOS_CRUDOS = (
-    "Los resultados vienen de la corrida publicada en la base de datos, no de los "
-    "archivos originales: por eso no se puede filtrar por colegio ni por grado. "
-    "Las respuestas individuales nunca salen del equipo que procesa los datos.")
+    "Los resultados vienen de la corrida publicada en la base de datos: se puede "
+    "filtrar por colegio, por grado y por grado dentro de un colegio cuando el grupo "
+    "tiene 10 o más estudiantes. Las respuestas individuales nunca salen del equipo "
+    "que procesa los datos.")

@@ -190,6 +190,21 @@ YOUR_API_KEY = "clave-de-gemini"  # opcional; el modo comunidad no usa IA
 
 La clave `service_role` y el token de acceso **no** van ahí. Nunca.
 
+## Migración: corridas por módulo (7 oct 2026)
+
+Archivo: `supabase/migraciones/2026-10-07-modulo-y-ultima-corrida.sql`.
+
+- **Cuándo:** correrla en el SQL Editor **antes** de desplegar esta rama.
+- **Qué hace:** admite el nivel `cuidadores`, extiende el CHECK de identificadores
+  a `E`/`C`/`N`, y hace que el público (y las vistas `ultima_corrida` y
+  `resultados_vigentes`) vea solo la última corrida publicada **de cada módulo**,
+  no una sola global. Añade `modulo` a `mensajes`.
+- **Verificar:** `SELECT modulo, id, creada_en FROM obs360.ultima_corrida;` debe
+  dar una fila por módulo con corrida publicada (hoy, solo `estudiantes`).
+- **Compatibilidad:** el código funciona con o sin la migración, porque el filtro
+  `modulo = 'estudiantes'` usa una columna que ya existe. Sin ella, simplemente no
+  hay aislamiento entre módulos en el lado de la base.
+
 ## Lo que falta
 
 1. **Aprobar la corrida 2** (la línea de SQL de arriba). Es tu decisión en persona.
