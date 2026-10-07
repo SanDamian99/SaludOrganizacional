@@ -251,19 +251,84 @@ class _Cliente:
         self.postgrest = _Postgrest()
 
 
-def test_publicar_ya_despublica_la_corrida_anterior_del_modulo(analisis_sintetico):
+def test_publicar_ya_inserta_oculta_y_publica_al_final(analisis_sintetico):
     cli = _Cliente()
     publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
     pasos = cli.registro
-    assert ("update", "corridas", {"publicada": False}) in pasos
-    assert ("eq", "corridas", ("modulo", "estudiantes")) in pasos
-    assert ("neq", "corridas", ("id", 7)) in pasos
+    ins = [p for p in pasos if p[0] == "insert"]
+    assert ins[0][1] == "corridas" and ins[0][2]["publicada"] is False
+    assert all(p[1] == "resultados" for p in ins[1:]) and len(ins) > 1
+    ult_insert = max(i for i, p in enumerate(pasos) if p[0] == "insert")
+    i_true = pasos.index(("update", "corridas", {"publicada": True}))
+    i_false = pasos.index(("update", "corridas", {"publicada": False}))
+    assert ult_insert < i_true < i_false
+    assert ("eq", "corridas", ("id", 7)) in pasos[i_true:i_false]
+    assert ("eq", "corridas", ("modulo", "estudiantes")) in pasos[i_false:]
+    assert ("neq", "corridas", ("id", 7)) in pasos[i_false:]
+
+
+def test_publicar_ya_devuelve_publicada_true(analisis_sintetico):
+    r = publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=_Cliente())
+    assert r["publicada"] is True
+
+
+def test_si_falla_el_insert_de_resultados_no_se_publica(analisis_sintetico):
+    cli = _Cliente()
+    original = _Tabla.execute
+
+    def execute(self):
+        if self.n == "resultados":
+            raise RuntimeError("red caída")
+        return original(self)
+    _Tabla.execute = execute
+    try:
+        with pytest.raises(RuntimeError):
+            publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
+    finally:
+        _Tabla.execute = original
+    assert not any(p[0] == "update" and p[2] == {"publicada": True}
+                   for p in cli.registro)
 
 
 def test_sin_publicar_ya_no_toca_otras_corridas(analisis_sintetico):
     cli = _Cliente()
     publicar.publicar(analisis_sintetico, publicar_ya=False, cliente=cli)
     assert not any(p[0] == "update" for p in cli.registro)
+
+
+def test_auditoria_fallida_no_llama_al_cliente(analisis_sintetico, monkeypatch):
+    monkeypatch.setattr(publicar, "verificar_restas", lambda a: ["x"])
+    cli = _Cliente()
+    with pytest.raises(publicar.PublicacionInsegura):
+        publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
+    assert cli.registro == []
+
+
+def test_verificar_restas_vacio_y_sin_base():
+    from src.estudiantes.pipeline import Analisis
+    import pandas as pd
+    assert publicar.verificar_restas({}) == []
+    a = Analisis(nivel="secundaria", n=50, datos=pd.DataFrame())
+    assert getattr(a, "base", None) is None
+    assert publicar.verificar_restas({"secundaria": a, "primaria": None}) == []
+
+
+def test_main_devuelve_2_si_publicar_es_inseguro(analisis_sintetico, monkeypatch, capsys):
+    monkeypatch.setattr(publicar.pipeline, "cargar_y_analizar",
+                        lambda base=None: (analisis_sintetico, []))
+    def falla(*a, **k):
+        raise publicar.PublicacionInsegura("resta")
+    monkeypatch.setattr(publicar, "publicar", falla)
+    assert publicar.main([]) == 2
+
+
+def test_ensayo_con_restas_escribe_json_y_devuelve_2(analisis_sintetico, monkeypatch, tmp_path):
+    monkeypatch.setattr(publicar.pipeline, "cargar_y_analizar",
+                        lambda base=None: (analisis_sintetico, []))
+    monkeypatch.setattr(publicar, "verificar_restas", lambda a: ["x"])
+    salida = tmp_path / "l.json"
+    assert publicar.main(["--ensayo", "--salida", str(salida)]) == 2
+    assert salida.exists()
 
 
 def test_los_conteos_crudos_se_enmascaran_al_publicar():

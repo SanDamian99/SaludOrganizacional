@@ -444,7 +444,8 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
     if restas:
         raise PublicacionInsegura(
             "No se publicó nada: alguna resta entre cifras publicadas dejaría un grupo "
-            f"de menos de {cat.MIN_GROUP_N}:\n  - " + "\n  - ".join(restas[:20]))
+            f"de menos de {cat.MIN_GROUP_N}:\n  - " + "\n  - ".join(restas[:20])
+            + ("\n  … y más" if len(restas) > 20 else ""))
     cli = cliente or _cliente()
     tabla = lambda t: cli.postgrest.schema(ESQUEMA).table(t)  # noqa: E731
 
@@ -454,22 +455,35 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
                       if analisis.get(cat.NIVEL_SECUNDARIA) else None),
         n_primaria=(analisis.get(cat.NIVEL_PRIMARIA).n
                     if analisis.get(cat.NIVEL_PRIMARIA) else None),
-        notas=notas or None, publicada=bool(publicar_ya))
+        notas=notas or None, publicada=False)
     res = tabla(TABLA_CORRIDAS).insert(corrida).execute()
     corrida_id = res.data[0]["id"]
 
-    for i in range(0, len(filas), 500):
-        lote = [dict(f, corrida_id=corrida_id) for f in filas[i:i + 500]]
-        tabla(TABLA_RESULTADOS).insert(lote).execute()
+    try:
+        for i in range(0, len(filas), 500):
+            lote = [dict(f, corrida_id=corrida_id) for f in filas[i:i + 500]]
+            tabla(TABLA_RESULTADOS).insert(lote).execute()
+    except Exception:
+        # La corrida sigue oculta (publicada = false); se intenta borrarla.
+        try:
+            tabla(TABLA_RESULTADOS).delete().eq("corrida_id", corrida_id).execute()
+            tabla(TABLA_CORRIDAS).delete().eq("id", corrida_id).execute()
+        except Exception:
+            pass
+        raise
 
-    if corrida["publicada"]:
-        # Dos corridas legibles a la vez permitirían restar una de otra y aislar
-        # las respuestas nuevas: solo queda publicada la última de este módulo.
+    publicada = False
+    if publicar_ya:
+        # Solo con todos los resultados dentro se abre la corrida nueva; y dos
+        # corridas legibles a la vez permitirían restar una de otra y aislar
+        # las respuestas nuevas, así que se cierran las demás del módulo.
+        tabla(TABLA_CORRIDAS).update({"publicada": True}).eq("id", corrida_id).execute()
         (tabla(TABLA_CORRIDAS).update({"publicada": False})
          .eq("modulo", MODULO).neq("id", corrida_id).execute())
+        publicada = True
 
     return dict(corrida_id=corrida_id, version=corrida["version_analisis"],
-                filas=len(filas), publicada=corrida["publicada"])
+                filas=len(filas), publicada=publicada)
 
 
 def mensajes_para_subir() -> list[dict]:
@@ -529,10 +543,14 @@ def main(argv=None) -> int:
                            mensajes=mensajes_para_subir(), filas=filas),
                       fh, ensure_ascii=False, indent=1, default=str)
         print(f"✓ Ensayo. Nada se subió. Lote escrito en {args.salida}")
-        return 0
+        return 2 if restas else 0
 
-    resumen = publicar(analisis, notas=args.notas, publicar_ya=args.publicar_ya,
-                       informes=informes)
+    try:
+        resumen = publicar(analisis, notas=args.notas, publicar_ya=args.publicar_ya,
+                           informes=informes)
+    except PublicacionInsegura as exc:
+        print(f"✗ {exc}", file=sys.stderr)
+        return 2
     print(f"✓ Corrida {resumen['corrida_id']} con {resumen['filas']} filas. "
           f"Publicada: {resumen['publicada']}")
     if not resumen["publicada"]:
