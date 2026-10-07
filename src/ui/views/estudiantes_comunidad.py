@@ -30,6 +30,7 @@ import streamlit as st
 
 from src.estudiantes import catalog as cat
 from src.estudiantes import privacidad, scoring, stats
+from src.ui import estado
 
 # Colores del semáforo para las cuatro bandas del SDQ (verde → rojo).
 COLORES_BANDAS = ["#1A7F4B", "#8FBF3F", "#B07D0D", "#C0392B"]
@@ -931,9 +932,13 @@ def _selector_grupo(analisis, columna: str, etiqueta: str,
     clave = f"est_com_{columna.lower()}"
     if not opciones:
         return TODOS, pequenos
+    if columna == "Colegio":
+        estado.sembrar(clave, estado.COLEGIO, [TODOS] + opciones)
     if st.session_state.get(clave, TODOS) not in [TODOS] + opciones:
         st.session_state[clave] = TODOS     # el grado elegido no existe en este colegio
     valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave)
+    if columna == "Colegio":
+        estado.guardar(estado.COLEGIO, valor)
     return valor, pequenos
 
 
@@ -952,9 +957,11 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         _sin_datos()
         return
 
+    estado.sembrar("est_com_rol", estado.ROL, list(cat.ROLES))
     rol = st.radio("Estoy viendo esto como", list(cat.ROLES),
                    format_func=lambda r: cat.ROLES[r], horizontal=True,
                    key="est_com_rol")
+    estado.guardar(estado.ROL, rol)
 
     st.sidebar.markdown("### Estudiantes · vista comunidad")
     disponibles = [n for n in (cat.NIVEL_SECUNDARIA, cat.NIVEL_PRIMARIA) if n in analisis]
