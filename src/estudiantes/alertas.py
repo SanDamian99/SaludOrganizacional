@@ -29,8 +29,10 @@ porcentaje está suprimido, el estado es neutro («sin estado»).
 LO QUE NO SE PUBLICA
 La sensibilidad (umbrales 2/3/4 y regla amplia) y la distribución de los ítems
 son solo para la vista local de investigadores: no van a Supabase ni al ZIP.
-Aun así cumplen la regla: cada reparto anidado se muestra entero o no se
-muestra (`supresion.partes_publicables`).
+Aun así cumplen la regla y no deshacen la supresión de lo publicado: la
+sensibilidad solo sale si la cifra vigente del nivel quedó publicada y su
+reparto anidado (con el corte del ítem 18 en la desesperanza) pasa entero
+`supresion.partes_publicables` (ver `sensibilidad`).
 
 Faltantes: el malestar exige los 6 ítems respondidos; la desesperanza, los de
 su regla (16 y 18 la estricta; 1, 4, 16 y 18 la amplia).
@@ -293,29 +295,67 @@ def tabla(a) -> pd.DataFrame:
 
 
 # ── Sensibilidad y distribución de ítems (solo el nivel, solo local) ────────
-def sensibilidad(dn: pd.DataFrame, nivel: str) -> pd.DataFrame:
+def _publicada(publicadas, alerta: str) -> bool:
+    """¿La cifra del nivel de `alerta` quedó publicada tras `supresion.aplicar`?
+
+    `publicadas` es `Analisis.cortes_alerta` del nivel, ya suprimida. Sin esa
+    tabla no se sabe: se responde que no (lo prudente para la sensibilidad).
+    """
+    if not isinstance(publicadas, pd.DataFrame) or publicadas.empty:
+        return False
+    if not {"clave", "pct"} <= set(publicadas.columns):
+        return False
+    filas = publicadas[publicadas["clave"] == alerta]
+    return bool(len(filas)) and not any(_vacio(v) for v in filas["pct"])
+
+
+def _cadena(n: int, ks) -> list[int]:
+    """Reparto anidado (n − k₁, k₁ − k₂, …, k_último) con ks de mayor a menor."""
+    ks = list(ks)
+    return [n - ks[0]] + [ks[i] - ks[i + 1] for i in range(len(ks) - 1)] + [ks[-1]]
+
+
+def sensibilidad(dn: pd.DataFrame, nivel: str, publicadas=None) -> pd.DataFrame:
     """Prevalencia del nivel con cada variante de umbral o de regla. Solo local.
 
-    Todas las variantes de una alerta usan las mismas filas (las que tienen
-    todas sus variantes). Las variantes están anidadas (2 ⊇ 3 ⊇ 4; amplia ⊇
-    estricta), así que se muestran todas o ninguna: el reparto anidado
-    (n − k_a, k_a − k_b, …) tiene que cumplir `supresion.partes_publicables`.
+    `publicadas` es la tabla `cortes_alerta` del nivel YA suprimida. Las
+    variantes de una alerta solo llevan cifras cuando:
+      · la cifra vigente de esa alerta en el nivel quedó publicada (si no, las
+        variantes la delatarían), y
+      · el reparto anidado sobre la base publicada de la alerta cumple
+        `supresion.partes_publicables` en todas sus partes:
+          malestar      n − k₂, k₂ − k₃, k₃ − k₄, k₄ (filas con los 6 ítems);
+          desesperanza  n − k_amplia, k_amplia − k₁₈, k₁₈ − k_estricta,
+                        k_estricta (filas con los ítems 16 y 18), donde k₁₈
+                        es RCADS 18 ≥ «Con frecuencia», el corte publicado
+                        de la tarjeta de muerte. Una fila sin el ítem 1 o el 4
+                        no cuenta como amplia por la vía de la valía (sí por
+                        el ítem 18, así amplia ⊇ k₁₈ ⊇ estricta).
+    Si no, las filas salen con las cifras en blanco.
     """
     if dn is None or dn.empty:
         return pd.DataFrame(columns=COLUMNAS_SENSIBILIDAD)
     filas: list[dict] = []
     for alerta in claves_del_nivel(dn, nivel):
-        variantes = [(v, col, etq, vig) for v, (a, col, etq, vig) in VARIANTES.items()
-                     if a == alerta and col in dn.columns]
-        X = dn[[col for _, col, _, _ in variantes]].dropna()
-        n = len(X)
+        base = dn[dn[COLUMNAS[alerta]].notna()]
+        n = len(base)
         if n < cat.MIN_GROUP_N:
             continue
-        ks = {v: int(X[col].sum()) for v, col, _, _ in variantes}
-        anidados = sorted(ks.values(), reverse=True)
-        partes = ([n - anidados[0]] + [anidados[i] - anidados[i + 1]
-                                       for i in range(len(anidados) - 1)] + [anidados[-1]])
-        ver = supresion.partes_publicables(partes)
+        variantes = [(v, col, etq, vig) for v, (a, col, etq, vig) in VARIANTES.items()
+                     if a == alerta and col in dn.columns]
+        ks = {v: int((base[col] == 1).sum()) for v, col, _, _ in variantes}
+        if alerta == ac.DESESPERANZA:
+            muerte = f"RCADS{ac.ITEM_MUERTE}"
+            k18 = base[muerte] >= ac.CON_FRECUENCIA
+            amplia = (base[COLUMNA_AMPLIA] == 1) if COLUMNA_AMPLIA in base else False
+            if "desesperanza_amplia" in ks:
+                ks["desesperanza_amplia"] = int((k18 | amplia).sum())
+            cadena = sorted([*ks.values(), int(k18.sum())], reverse=True)
+        else:
+            cadena = sorted(ks.values(), reverse=True)
+        partes = _cadena(n, cadena)
+        ver = (_publicada(publicadas, alerta) and min(partes) >= 0
+               and supresion.partes_publicables(partes))
         for v, _, etiqueta, vig in variantes:
             pct, ic_inf, ic_sup = wilson(ks[v], n) if ver else (None, None, None)
             filas.append(dict(alerta=alerta, variante=v, etiqueta=etiqueta, vigente=vig,

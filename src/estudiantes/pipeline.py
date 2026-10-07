@@ -191,7 +191,7 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     # Después de la supresión: la tabla plana solo lleva lo que quedó publicable
     # y el estado se calcula con esas cifras.
     a.alertas = alertas.tabla(a)
-    a.alertas_sensibilidad = alertas.sensibilidad(dn, nivel)
+    a.alertas_sensibilidad = alertas.sensibilidad(dn, nivel, a.cortes_alerta)
     a.alertas_items = alertas.distribucion_items(dn, nivel)
 
     if nivel == cat.NIVEL_PRIMARIA and cat.AVISO_PRIMARIA not in a.avisos:

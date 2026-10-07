@@ -305,16 +305,100 @@ def test_ordenar_es_estable_ante_filas_barajadas():
 
 
 # ── sensibilidad e ítems: solo el nivel, solo local ───────────────────────
-def test_sensibilidad_se_muestra_entera_o_no_se_muestra():
+def _publicadas(**pcts) -> pd.DataFrame:
+    """Tabla `cortes_alerta` del nivel YA suprimida: {alerta: pct o None}."""
+    return pd.DataFrame([dict(clave=k, n=100, pct=v) for k, v in pcts.items()])
+
+
+def test_sensibilidad_del_malestar_entera_o_nada_y_solo_si_la_vigente_se_publica():
     d = pd.DataFrame({"ALERTA_malestar_2": [1.0] * 20 + [0.0] * 80,
                       "ALERTA_malestar": [1.0] * 10 + [0.0] * 90,
                       "ALERTA_malestar_4": [1.0] * 9 + [0.0] * 91})
-    s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA).set_index("variante")
-    assert s["pct"].isna().all()                  # 3 − 4 deja 1 estudiante: nada
+    s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA, _publicadas(malestar=10.0))
+    assert s.set_index("variante")["pct"].isna().all()   # 3 − 4 deja 1 estudiante: nada
     d["ALERTA_malestar_4"] = [1.0] * 5 + [0.0] * 95
-    s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA).set_index("variante")
+    s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA, _publicadas(malestar=10.0)).set_index("variante")
     assert s.loc["malestar_3", "pct"] == 10.0 and s.loc["malestar_4", "pct"] == 5.0
     assert (s["n"] == 100).all() and "casos" not in s.columns
+    # mismo reparto, pero la cifra vigente quedó suprimida en el nivel: nada
+    for publicadas in (_publicadas(malestar=None), None):
+        s = al.sensibilidad(d, cat.NIVEL_SECUNDARIA, publicadas)
+        assert s["pct"].isna().all() and s["ic_inf"].isna().all()
+
+
+def _dn_desesperanza(estrictas, muerte_sin_valia, amplia_extra, sin_items_amplia=0, n=100):
+    """Ítems codificados → `marcar`. Las filas sin ítems 1 y 4 llevan valía alta."""
+    filas = []
+    for i in range(n):
+        f = {f"SDQ{j}": 0 for j in ITEMS_MALESTAR}
+        f.update(RCADS1=0, RCADS4=0, RCADS16=0, RCADS18=0)
+        if i < estrictas:
+            f.update(RCADS18=ac.CON_FRECUENCIA, RCADS16=ac.CON_FRECUENCIA)
+        elif i < estrictas + muerte_sin_valia:
+            f.update(RCADS18=ac.CON_FRECUENCIA)
+        elif i < estrictas + muerte_sin_valia + amplia_extra:
+            f.update(RCADS16=ac.CON_FRECUENCIA, RCADS4=ac.CON_FRECUENCIA)
+        elif i < estrictas + muerte_sin_valia + amplia_extra + sin_items_amplia:
+            f.update(RCADS16=ac.CON_FRECUENCIA, RCADS1=np.nan, RCADS4=np.nan)
+        filas.append(f)
+    return al.marcar(pd.DataFrame(filas), cat.NIVEL_SECUNDARIA)
+
+
+def _des(s):
+    return s[s["alerta"] == ac.DESESPERANZA].set_index("variante")
+
+
+def test_sensibilidad_de_la_desesperanza_con_la_cadena_de_cuatro_partes():
+    dn = _dn_desesperanza(estrictas=10, muerte_sin_valia=5, amplia_extra=10)
+    s = _des(al.sensibilidad(dn, cat.NIVEL_SECUNDARIA, _publicadas(desesperanza=10.0)))
+    assert s.loc["desesperanza_estricta", "pct"] == 10.0
+    assert s.loc["desesperanza_amplia", "pct"] == 25.0
+    assert (s["n"] == 100).all()
+
+
+def test_sensibilidad_de_la_desesperanza_oculta_si_la_vigente_no_se_publica():
+    """Escenario leak1: la estricta suprimida no puede salir por la sensibilidad."""
+    dn = _dn_desesperanza(estrictas=10, muerte_sin_valia=5, amplia_extra=10)
+    for publicadas in (_publicadas(desesperanza=None), None):
+        s = _des(al.sensibilidad(dn, cat.NIVEL_SECUNDARIA, publicadas))
+        assert s["pct"].isna().all()
+
+
+def test_sensibilidad_de_la_desesperanza_oculta_si_el_item_18_deja_un_hueco():
+    """k₁₈ − k_estricta = 1: con el corte del ítem 18 publicado, se deduciría."""
+    dn = _dn_desesperanza(estrictas=10, muerte_sin_valia=1, amplia_extra=10)
+    s = _des(al.sensibilidad(dn, cat.NIVEL_SECUNDARIA, _publicadas(desesperanza=10.0)))
+    assert s["pct"].isna().all()
+
+
+def test_sensibilidad_de_la_desesperanza_usa_la_base_publicada():
+    """Sin ítems 1 o 4 la fila sigue en la base (16 y 18 respondidos) y no es amplia."""
+    dn = _dn_desesperanza(estrictas=10, muerte_sin_valia=5, amplia_extra=10,
+                          sin_items_amplia=5)
+    s = _des(al.sensibilidad(dn, cat.NIVEL_SECUNDARIA, _publicadas(desesperanza=10.0)))
+    assert (s["n"] == 100).all()
+    assert s.loc["desesperanza_amplia", "pct"] == 25.0
+
+
+def test_sensibilidad_escenario_leak1_por_el_pipeline():
+    filas = []
+    for i in range(100):
+        f = dict(Colegio="A" if i < 50 else "B", Grado="Sexto",
+                 Sexo="Mujer" if i % 2 else "Hombre", Edad=13, nivel=cat.NIVEL_SECUNDARIA)
+        f.update({f"SDQ{j}": 0 for j in ITEMS_MALESTAR})
+        f.update(RCADS1=0, RCADS4=0, RCADS16=0, RCADS18=0)
+        if i % 10 == 0:
+            f.update(RCADS18=2, RCADS16=2)
+        if i == 1:
+            f.update(RCADS18=2)
+        if i in (3, 4, 5, 53, 54, 55, 56, 57, 58, 59):
+            f.update(RCADS16=2, RCADS4=2)
+        filas.append(f)
+    a = pipeline.analizar(pd.DataFrame(filas), cat.NIVEL_SECUNDARIA, n_boot=5)
+    t = a.alertas
+    assert t[(t["alerta"] == ac.DESESPERANZA) & (t["agrupacion"] == al.TOTAL)]["pct"].isna().all()
+    assert _des(a.alertas_sensibilidad)["pct"].isna().all()
+    assert supresion.auditar(a) == []
 
 
 def test_distribucion_de_items_oculta_el_item_con_una_respuesta_rara():
