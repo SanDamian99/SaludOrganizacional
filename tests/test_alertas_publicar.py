@@ -165,3 +165,62 @@ def test_una_corrida_anterior_sin_alertas_se_sigue_leyendo(analisis):
     filas = [f for f in _filas(analisis) if not f["tipo"].startswith("alerta")]
     viejo = lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas)
     assert viejo.alertas.empty and list(viejo.alertas.columns) == al.COLUMNAS_TABLA
+
+
+# ══ Alertas sin aprobar: --publicar-ya no las sube; --ensayo avisa ══════════
+from tests.test_estudiantes_publicar import _Cliente  # noqa: E402
+
+
+def _subidas(cli) -> list[dict]:
+    return [f for p in cli.registro if p[0] == "insert" and p[1] == "resultados"
+            for f in p[2]]
+
+
+def _aprobar(monkeypatch, textos: bool, rutas: bool):
+    from src.estudiantes import alertas_catalogo as ac
+    monkeypatch.setattr(ac, "TEXTOS_APROBADOS", textos)
+    monkeypatch.setattr(ac, "RUTAS_VALIDADAS", rutas)
+
+
+@pytest.mark.parametrize("textos,rutas", [(False, False), (True, False), (False, True)])
+def test_publicar_ya_sin_aprobacion_no_sube_alertas(analisis, monkeypatch, capsys,
+                                                     textos, rutas):
+    _aprobar(monkeypatch, textos, rutas)
+    cli = _Cliente()
+    r = publicar.publicar({cat.NIVEL_SECUNDARIA: analisis}, publicar_ya=True, cliente=cli)
+    subidas = _subidas(cli)
+    assert subidas and not [f for f in subidas if f["tipo"] in publicar.TIPOS_ALERTA]
+    assert r["publicada"] is True and r["alertas_omitidas"] > 0
+    assert publicar.AVISO_ALERTAS_NO_APROBADAS in capsys.readouterr().err
+
+
+def test_publicar_ya_con_aprobacion_sube_alertas(analisis, monkeypatch, capsys):
+    _aprobar(monkeypatch, True, True)
+    cli = _Cliente()
+    r = publicar.publicar({cat.NIVEL_SECUNDARIA: analisis}, publicar_ya=True, cliente=cli)
+    tipos = {f["tipo"] for f in _subidas(cli)}
+    assert {"alerta", "alerta_grupo"} <= tipos and r["alertas_omitidas"] == 0
+    assert publicar.AVISO_ALERTAS_NO_APROBADAS not in capsys.readouterr().err
+
+
+def test_el_ensayo_conserva_las_alertas_y_avisa(analisis, monkeypatch, capsys, tmp_path):
+    import json
+    _aprobar(monkeypatch, False, False)
+    monkeypatch.setattr(publicar.pipeline, "cargar_y_analizar",
+                        lambda base=None: ({cat.NIVEL_SECUNDARIA: analisis}, []))
+    salida = tmp_path / "lote.json"
+    assert publicar.main(["--ensayo", "--salida", str(salida)]) == 0
+    tipos = {f["tipo"] for f in json.loads(salida.read_text())["filas"]}
+    assert {"alerta", "alerta_grupo"} <= tipos
+    assert publicar.AVISO_ALERTAS_NO_APROBADAS in capsys.readouterr().out
+
+
+def test_la_corrida_oculta_conserva_las_alertas_y_avisa_que_no_se_abra(analisis, monkeypatch,
+                                                                       capsys):
+    _aprobar(monkeypatch, False, False)
+    cli = _Cliente()
+    r = publicar.publicar({cat.NIVEL_SECUNDARIA: analisis}, publicar_ya=False, cliente=cli)
+    assert {"alerta", "alerta_grupo"} <= {f["tipo"] for f in _subidas(cli)}
+    assert r["publicada"] is False and r["alertas_omitidas"] == 0
+    err = capsys.readouterr().err
+    assert publicar.AVISO_ALERTAS_NO_APROBADAS in err and "--publicar-ya" in err

@@ -82,6 +82,14 @@ o, si se quiere revisar antes, aprobar **esa misma corrida nueva** en el SQL
 Editor (`UPDATE obs360.corridas SET publicada = true WHERE id = <id de la
 corrida recién creada>;`).
 
+**Alertas de grupo.** Mientras el equipo no apruebe textos y rutas
+(`alertas_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS`, que solo se ponen en
+`True` después de esa aprobación), `--publicar-ya` no sube las filas `alerta`
+ni `alerta_grupo`: avisa y publica el resto, y el panel no aparece en público.
+`--ensayo` las deja en el JSON con un aviso. Una corrida subida sin
+`--publicar-ya` sí las guarda: **no aprobarla a mano** con el `UPDATE` de arriba
+antes de esa aprobación; volver a publicar con `--publicar-ya`.
+
 > **Atención: nunca aprobar una corrida vieja.** Las corridas anteriores a la
 > fase 1 (la 2 incluida) se generaron **sin** la base publicable por
 > colegio×grado ni el enmascaramiento todo-o-nada por columna: sus cifras
