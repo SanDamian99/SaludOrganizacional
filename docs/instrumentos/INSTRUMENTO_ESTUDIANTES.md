@@ -333,3 +333,37 @@ Se aplican **en este orden**, que importa:
 Secundaria: 15-may a 17-sep-2026, olas 20-25 jul (471) y 31-ago a 4-sep (302). Primaria: 15-may a
 17-sep, más repartida. Se conserva la marca temporal por si se analiza efecto de ola.
 
+
+## Alertas de grupo («Señales para actuar a tiempo»)
+
+Señales de **grupo**, nunca de estudiante. Son proporciones como cualquier otro corte.
+Textos, umbrales y rutas son **provisionales** hasta que el equipo los apruebe
+(`alertas_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS`).
+
+**Las dos reglas** (tomadas de `alertas_catalogo.ALERTAS[*].regla`):
+
+- **Señales de malestar** (secundaria y primaria, SDQ): «Muy cierto» en 3 o más de estos 6 ítems
+  del SDQ: 5 (me enojo y pierdo el control), 6 (solitario), 8 (preocupado), 13 (triste o con ganas
+  de llorar), 19 (se burlan de mí) y 24 (muchos miedos). Se calcula con los 6 ítems respondidos.
+- **Señales de desesperanza y pensamientos de muerte** (solo secundaria, RCADS): RCADS 18
+  («Pienso acerca de la muerte») en «Siempre», o RCADS 18 en «Con frecuencia» o más junto con
+  RCADS 16 («Me siento que no valgo nada») en «Con frecuencia» o más. Se calcula con los ítems 16
+  y 18 respondidos.
+
+**Regla de faltantes:** si falta cualquiera de los ítems que usa la regla, la señal de esa persona
+queda como faltante y no entra ni al numerador ni al denominador (no se imputa).
+
+**Supresión:** son proporciones y pasan por la misma supresión que el resto (3 ≤ casos ≤ n − 3,
+supresión complementaria y auditoría de restas). Hay porcentaje también por grado y por celda
+colegio × grado cuando la supresión lo permite; donde no, no se publica cifra.
+
+**Anidamiento de la desesperanza:** su porcentaje está anidado en el corte del ítem 18 (la tarjeta
+de pensamientos de muerte que ya se publicaba). Usa la misma base y las mismas supresiones, de
+modo que ninguna celda de la alerta puede revelar, por diferencia, lo que el corte del ítem 18
+ya ocultó. Si las bases no coinciden en algún grupo, la alerta falla cerrada: no se publica.
+
+**Estado:** «Prioridad» compara el grupo con el resto del nivel; se asigna solo donde hay
+porcentaje y solo con cifras publicadas. Donde no hay porcentaje, el estado es «Sin estado».
+
+**Sensibilidad y distribución de ítems:** la regla amplia (RCADS 4 o RCADS 1) y la distribución
+por ítem se ven solo en la vista local de investigadores; no se publican.

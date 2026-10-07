@@ -188,6 +188,21 @@ publica.
 **Después de fusionar a `main`, haz siempre *Manage app → Reboot app*.** Si no,
 la aplicación puede quedar con módulos viejos en memoria.
 
+## Publicar alertas
+
+Mientras no se publique una corrida nueva, el despliegue sigue con la tarjeta de
+muerte y sin panel de alertas.
+
+1. El equipo aprueba textos, umbrales y rutas: `alertas_catalogo.TEXTOS_APROBADOS`
+   y `RUTAS_VALIDADAS`.
+2. Correr la migración `2026-10-07c` (SQL Editor → Run).
+3. `python -m src.estudiantes.publicar --ensayo` y revisar (tiene que salir con
+   código 0).
+4. Publicar con `--publicar-ya`.
+5. «Reboot app».
+6. Los mensajes por rol de las alertas se suben a `obs360.mensajes` en un paso
+   aparte, cuando el equipo apruebe los textos.
+
 ## Qué esperar del arranque
 
 La primera carga tarda unos segundos: lee la corrida completa y rearma las

@@ -219,6 +219,19 @@ Archivo: `supabase/migraciones/2026-10-07-modulo-y-ultima-corrida.sql`.
   `modulo = 'estudiantes'` usa una columna que ya existe. Sin ella, simplemente no
   hay aislamiento entre módulos en el lado de la base.
 
+## Migración: alertas sin conteo de casos (7 oct 2026, c)
+
+Archivo: `supabase/migraciones/2026-10-07c-alertas-sin-casos.sql`.
+
+- **Qué hace:** ninguna fila nueva puede guardar un conteo de casos (`casos`,
+  `k_bajo`, `k_alto`) en `detalle`, y el estado de una alerta solo existe donde
+  hay porcentaje.
+- **`NOT VALID`:** las corridas viejas todavía guardan `casos` en las filas
+  «corte»; no se validan ni se tocan. La restricción rige para toda fila nueva.
+- **Opcional pero recomendada:** publicar funciona sin ella, porque
+  `publicar.verificar` ya rechaza esos campos en Python; la migración es la
+  última barrera en la base.
+
 ## Lo que falta
 
 1. **Correr la migración y publicar una corrida nueva** de la fase 1
