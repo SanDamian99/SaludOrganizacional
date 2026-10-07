@@ -95,7 +95,6 @@ def test_los_datos_del_analisis_ya_estan_enmascarados(analisis):
     assert isinstance(analisis.muestra["suprimidos"], dict)
 
 
-@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
 def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publicado):
     colegio = _colegio_grande(analisis)
     f = {"colegio": colegio}
@@ -117,7 +116,6 @@ def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publ
     assert vc.bandas_sdq_total(publicado, g)["n"] == vc.bandas_sdq_total(analisis, g)["n"]
 
 
-@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
 def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
     indicador = next(k for k in vc.INDICADORES if vc.prevalencia(analisis, k, {}))
     for filtros in ({}, {"colegio": "LauV"}):
@@ -129,7 +127,6 @@ def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
         assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
 
 
-@pytest.mark.xfail(reason="se completa en la Task 8 (vista comunidad)", strict=True)
 def test_el_cruce_publicado_da_las_mismas_cifras_que_el_recalculo(analisis, publicado):
     f = {"colegio": "LauV", "grado": "Octavo"}
     assert vc.bandas_sdq_total(publicado, f)["n"] == vc.bandas_sdq_total(analisis, f)["n"] == 31
@@ -195,3 +192,13 @@ def test_el_cci_se_publica_con_el_n_del_nivel(analisis):
              if f["tipo"] == "icc"]
     assert filas
     assert all(f["n"] == len(analisis.base.nivel) == 62 for f in filas)
+
+
+def test_los_grupos_publicables_son_los_mismos_desde_el_despliegue(analisis, publicado):
+    for columna, otra in (("Grado", "LauV"), ("Grado", vc.TODOS),
+                          ("Colegio", vc.TODOS), ("Colegio", "Octavo")):
+        assert vc.grupos_publicables(publicado, columna, otra) == \
+            vc.grupos_publicables(analisis, columna, otra)
+    assert vc.grupos_publicables(publicado, "Grado", "LauV") == ["Séptimo", "Octavo"]
+    # el despliegue recibe «<10» en vez del número y lo dice igual
+    assert vc.nota_base(publicado)

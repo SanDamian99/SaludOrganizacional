@@ -343,3 +343,46 @@ def test_bandas_e_items_respetan_el_filtro():
         informe = vc.informe_markdown(a, "colegio", f)
         assert "%" not in informe.split("Si un estudiante")[0].split("menos de")[0]
         assert f"menos de {cat.MIN_GROUP_N} estudiantes" in informe
+
+
+# ══ Grupos, filtros y comparaciones sobre la base publicable ════════════════
+def test_grupos_publicables_por_colegio(analisis):
+    assert vc.grupos_publicables(analisis, "Grado", "LauV") == ["Séptimo", "Octavo"]
+    assert vc.grupos_publicables(analisis, "Colegio") == ["LauV"]
+    assert vc.grupos_publicables(analisis, "Grado", COLEGIO_PEQUENO) == []
+
+
+def test_la_comparacion_por_grado_dentro_de_un_colegio(analisis):
+    tabla = vc.prevalencia_por(analisis, "sdq_alto", "Grado", {"colegio": "LauV"})
+    assert list(tabla["grupo"]) == ["Séptimo", "Octavo"]
+    assert (tabla["n"] == 31).all()
+
+
+def test_el_colegio_no_incluye_su_grado_pequeno(analisis):
+    assert vc.bandas_sdq_total(analisis, {"colegio": "LauV"})["n"] == 62
+
+
+def test_la_nota_de_base_cuenta_lo_que_queda_fuera(analisis):
+    assert vc.nota_base(analisis) and "8" in vc.nota_base(analisis)
+
+
+def test_la_comparacion_por_sexo_tambien_va_sobre_la_base(analisis):
+    # el nivel publicado son las 62 respuestas de las celdas: ni el colegio
+    # pequeño ni el grado pequeño entran por la puerta del sexo
+    for filtros in ({}, {"colegio": "LauV"}):
+        tabla = vc.prevalencia_por(analisis, "emocional", "Sexo", filtros)
+        assert not tabla.empty and tabla["n"].sum() <= 62
+    assert vc.prevalencia_por(analisis, "emocional", "Sexo",
+                              {"colegio": "LauV", "grado": GRADO_PEQUENO}).empty
+
+
+def test_la_nota_de_base_acepta_el_valor_enmascarado_y_el_cero():
+    class Falso:
+        def __init__(self, fuera):
+            self.muestra = {"base": {"n_fuera_de_celdas": fuera}}
+
+    assert "menos de 10" in vc.nota_base(Falso("<10"))
+    assert "25" in vc.nota_base(Falso(25))
+    for vacio in (0, "0", None):
+        assert vc.nota_base(Falso(vacio)) == ""
+    assert vc.nota_base(None) == ""
