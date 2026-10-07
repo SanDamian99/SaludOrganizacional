@@ -113,8 +113,12 @@ def test_el_flujo_de_exclusiones_sobrevive(analisis_local, reconstruido):
     for nivel, il in por_nivel_l.items():
         ir = por_nivel_r[nivel]
         for campo in ("filas_archivo", "sin_consentimiento", "excluidas_prueba",
-                      "duplicados_eliminados", "filas_validas", "erq_invalidado"):
+                      "duplicados_eliminados", "filas_validas"):
             assert getattr(ir, campo, None) == getattr(il, campo, None), campo
+        # el ERQ invalidado se publica enmascarado si es de 1 a 9
+        erq = int(getattr(il, "erq_invalidado", 0) or 0)
+        esperado = f"<{cat.MIN_GROUP_N}" if 0 < erq < cat.MIN_GROUP_N else erq
+        assert (getattr(ir, "erq_invalidado", 0) or 0) == esperado
 
 
 # ══ Lo que NO se reconstruye, y es lo importante ════════════════════════════

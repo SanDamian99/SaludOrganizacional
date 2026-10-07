@@ -272,3 +272,12 @@ def test_tabla_colegio_grado_reconcilia_validas_y_respuestas():
     assert fila["Válidas"] == "91" and fila["Respuestas"] == "93"
     pequena = t[t.Grado == "Décimo"].iloc[0]
     assert pequena["Válidas"] == "<10" and pequena["Respuestas"] == "<10"
+
+
+def test_flujo_de_exclusiones_acepta_el_erq_enmascarado_de_la_corrida_publicada():
+    """La corrida publicada trae «<10» en vez del número exacto: no debe romper."""
+    from src.estudiantes import lectura
+    leido = lectura.InformeLeido("secundaria", dict(filas_archivo=100, filas_validas=90,
+                                                    erq_invalidado="<10"))
+    md = vista.flujo_exclusiones_md([leido])
+    assert "<10 respuesta(s)" in md

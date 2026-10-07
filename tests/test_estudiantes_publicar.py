@@ -375,3 +375,37 @@ def test_un_conteo_cero_no_se_enmascara():
     # un cero no identifica a nadie y la vista necesita distinguirlo de «<10»
     assert publicar._enmascarar_conteos({"a": 0, "b": 3, "c": 12}) == \
         {"a": 0, "b": "<10", "c": 12}
+
+
+def test_la_ingesta_publicada_enmascara_los_conteos_por_categoria():
+    """Edades fuera de rango y ERQ invalidado: de 1 a 9 se publican como «<10».
+
+    Los totales de exclusión (sin consentimiento, prueba, duplicados…) se quedan
+    como número: son pasos del diagrama de la muestra de todo el nivel.
+    """
+    class Inf:
+        nivel = "secundaria"
+        filas_validas = 300
+        sin_consentimiento = 4
+        duplicados_eliminados = 2
+        edades_fuera_de_rango = {"RCADS": 3, "SDQ": 25}
+        erq_invalidado = 7
+        avisos = ["ERQ-CA: 7 respuestas con «Nada parecido a mi» en los 10 ítems "
+                  "se marcan como faltantes.", "Otro aviso con 7 cosas."]
+    ing = publicar.aplanar_ingesta([Inf()])[0]["detalle"]["ingesta"]
+    assert ing["edades_fuera_de_rango"] == {"RCADS": "<10", "SDQ": 25}
+    assert ing["erq_invalidado"] == "<10"
+    assert ing["avisos"][0].startswith("ERQ-CA: <10 respuestas")
+    assert ing["avisos"][1] == "Otro aviso con 7 cosas."
+    assert ing["sin_consentimiento"] == 4 and ing["duplicados_eliminados"] == 2
+
+
+def test_un_erq_invalidado_grande_se_publica_tal_cual():
+    class Inf:
+        nivel = "secundaria"
+        filas_validas = 300
+        erq_invalidado = 42
+        avisos = ["ERQ-CA: 42 respuestas con «x» en los 10 ítems se marcan."]
+    ing = publicar.aplanar_ingesta([Inf()])[0]["detalle"]["ingesta"]
+    assert ing["erq_invalidado"] == 42
+    assert ing["avisos"][0].startswith("ERQ-CA: 42 respuestas")

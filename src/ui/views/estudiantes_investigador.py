@@ -311,7 +311,7 @@ def flujo_exclusiones_md(informes: list | None) -> str:
             lineas.append(f"| − {etiqueta} | {quitadas} | {restantes} |")
         validas = int(getattr(inf, "filas_validas", restantes) or restantes)
         lineas += [f"| **Respuestas válidas analizadas** | | **{validas}** |", ""]
-        erq = int(getattr(inf, "erq_invalidado", 0) or 0)
+        erq = _erq_invalidado(inf)
         if erq:
             lineas += [f"Además, {erq} respuesta(s) conservan la fila pero pierden el bloque "
                        "de regulación emocional (ERQ-CA): responder el mínimo en los diez "
@@ -544,6 +544,12 @@ def _tabla_conteos(pares, etiqueta: str) -> pd.DataFrame:
     return pd.DataFrame(filas, columns=[etiqueta, "n"])
 
 
+def _erq_invalidado(informe):
+    """Bloques ERQ-CA invalidados: un entero, o «<10» si viene enmascarado de la corrida."""
+    valor = getattr(informe, "erq_invalidado", 0) or 0
+    return valor if isinstance(valor, str) else int(valor)
+
+
 def _conteo(valor) -> float:
     """Conteo como número para poder ordenar.
 
@@ -650,7 +656,7 @@ def _tab_muestra(a, informe, nivel: str) -> None:
         filas.append({"Paso": "Respuestas válidas analizadas", "Casos": None,
                       "Quedan": int(getattr(informe, "filas_validas", restantes) or restantes)})
         st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
-        erq = int(getattr(informe, "erq_invalidado", 0) or 0)
+        erq = _erq_invalidado(informe)
         if erq:
             st.warning(f"{erq} respuesta(s) conservan la fila pero pierden el bloque de "
                        "regulación emocional (ERQ-CA) por responder el mínimo en los diez "
@@ -938,7 +944,7 @@ def _tab_calidad(a, informe) -> None:
             else:
                 st.success("Todas las etiquetas del formulario se mapearon a número.")
             st.metric("Bloques ERQ-CA invalidados",
-                      int(getattr(informe, "erq_invalidado", 0) or 0),
+                      _erq_invalidado(informe),
                       help="Respuestas con el valor mínimo en los diez ítems: artefacto de "
                            "aplicación, no resultado.")
             st.markdown("**Escalas**")

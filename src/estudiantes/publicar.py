@@ -339,6 +339,15 @@ CAMPOS_INGESTA = ("filas_archivo", "sin_consentimiento", "excluidas_prueba",
                   "colegios_enmascarados", "crudo_colegio_grado", "avisos")
 
 
+# Conteos por categoría (colegio×grado, escala, bloque) que pueden ser de 1 a
+# MIN_GROUP_N − 1 y señalar a pocos estudiantes de un grupo concreto: se publican
+# enmascarados («<10»). `erq_invalidado` es un escalar, pero en la práctica es un
+# conteo de un colegio (el artefacto apareció en uno solo). Los totales de
+# exclusión del flujo (sin consentimiento, prueba, colegio único, duplicados) se
+# publican como número: son pasos del diagrama de la muestra de todo el nivel.
+CAMPOS_CONTEO_INGESTA = ("crudo_colegio_grado", "edades_fuera_de_rango", "erq_invalidado")
+
+
 def aplanar_ingesta(informes: list) -> list[dict]:
     """El flujo de exclusiones, que es el diagrama de la muestra del artículo."""
     filas = []
@@ -348,8 +357,15 @@ def aplanar_ingesta(informes: list) -> list[dict]:
             valor = getattr(inf, campo, None)
             if valor in (None, [], {}):
                 continue
-            detalle[campo] = (_enmascarar_conteos(valor)
-                              if campo == "crudo_colegio_grado" else valor)
+            if campo in CAMPOS_CONTEO_INGESTA:
+                valor = (_enmascarar_conteos(valor) if isinstance(valor, dict)
+                         else _enmascarar_conteos({campo: valor})[campo])
+            detalle[campo] = valor
+        erq = detalle.get("erq_invalidado")
+        if isinstance(erq, str) and detalle.get("avisos"):
+            # el aviso del ERQ repite la cifra exacta: se enmascara igual
+            detalle["avisos"] = [re.sub(r"^ERQ-CA: \d+", f"ERQ-CA: {erq}", str(av))
+                                 for av in detalle["avisos"]]
         colegios = getattr(inf, "colegios", None)
         if colegios:
             detalle["colegios"] = _enmascarar_conteos(colegios)
