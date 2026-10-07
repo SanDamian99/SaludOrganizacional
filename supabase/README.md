@@ -236,6 +236,10 @@ Archivo: `supabase/migraciones/2026-10-07c-alertas-sin-casos.sql`.
   hay porcentaje.
 - **`NOT VALID`:** las corridas viejas todavía guardan `casos` en las filas
   «corte»; no se validan ni se tocan. La restricción rige para toda fila nueva.
+  Por eso `ALTER TABLE … VALIDATE CONSTRAINT` fallará mientras queden filas
+  viejas con `casos`: primero hay que borrar esas corridas viejas (sus filas de
+  `resultados` y la corrida). Nunca hacer `UPDATE` sobre filas viejas de
+  `resultados` para que pasen.
 - **Opcional pero recomendada:** publicar funciona sin ella, porque
   `publicar.verificar` ya rechaza esos campos en Python; la migración es la
   última barrera en la base.
