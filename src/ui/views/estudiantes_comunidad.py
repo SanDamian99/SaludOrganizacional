@@ -14,7 +14,10 @@ Reglas no negociables que este archivo respeta:
     así el equipo que procesa y el despliegue ven las mismas cifras.
   · Nunca se muestra una fila individual ni una tabla de respuestas.
   · Todos los textos que lee el usuario vienen de `catalog` (MENSAJES, ROLES,
-    RUTA_ATENCION, avisos). Esta vista elige y formatea; no redacta.
+    avisos) y de `alertas_catalogo` (alertas y la ruta por rol, `ruta`). Esta
+    vista elige y formatea; no redacta.
+  · El panel de alertas (estudiantes_alertas) va arriba de las tarjetas y, para
+    colegio y municipio, reemplaza la tarjeta de muerte (spec §5.4).
   · Aquí no se calcula estadística nueva: las cifras salen del objeto `Analisis`
     o, si hay filtro activo, de `stats.prevalencia_por_grupo` y
     `stats.contraste_protector`.
@@ -170,6 +173,83 @@ def accion_para_rol(mensaje: cat.Mensaje, rol: str) -> str:
 def ve_colegios(rol: str) -> bool:
     """El rol familia no ve desagregación por colegio."""
     return rol != "familia"
+
+
+def _alertas_vista():
+    """Módulo del panel de alertas, o None.
+
+    Si faltara o fallara al importarse (un despliegue a medias), la página sigue
+    como antes de la fase 3.
+    """
+    try:
+        from src.ui.views import estudiantes_alertas as va
+        return va
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def panel_reemplaza_muerte(analisis, rol: str) -> bool:
+    """¿El panel de alertas sustituye la tarjeta «Pensamientos sobre la muerte»?
+
+    Solo para colegio y municipio, y solo si la corrida trae la alerta de
+    desesperanza (spec §5.4, «Unificación»): si no, serían dos cifras sobre el
+    mismo ítem. Con una corrida anterior a la fase 3 la tarjeta sigue igual.
+    """
+    if rol not in ("colegio", "municipio"):
+        return False
+    va = _alertas_vista()
+    try:
+        return bool(va and va.hay_alerta(analisis, "desesperanza"))
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
+def indicadores_comparables(analisis, rol: str) -> list[str]:
+    """Indicadores del selector «Comparar entre grupos» para este rol.
+
+    Familia nunca ve el de la muerte (spec §6). Colegio y municipio tampoco
+    cuando el panel de alertas la reemplaza.
+    """
+    opciones = [k for k in INDICADORES if prevalencia(analisis, k, {})]
+    if rol == "familia" or panel_reemplaza_muerte(analisis, rol):
+        opciones = [k for k in opciones if k != "ideacion"]
+    return opciones or ["sdq_alto"]
+
+
+def ruta_para_rol(rol: str) -> list[tuple[str, str]]:
+    """Ruta de atención para estudiantes del rol (alertas_catalogo.RUTAS)."""
+    try:
+        from src.estudiantes import alertas_catalogo as ac
+        return ac.ruta(rol, "estudiante")
+    except Exception:                                      # noqa: BLE001
+        return list(cat.RUTA_ATENCION)
+
+
+def aviso_ruta_pendiente() -> str:
+    """Aviso interno «ruta pendiente de validación»: solo en el modo completo.
+
+    Nunca sale en el despliegue público ni en los informes, que se comparten.
+    """
+    try:
+        from src.core import modo as modo_app
+        from src.estudiantes import alertas_catalogo as ac
+    except Exception:                                      # noqa: BLE001
+        return ""
+    if ac.RUTAS_VALIDADAS:
+        return ""
+    return ac.RUTA_PENDIENTE if modo_app.modo() == modo_app.COMPLETO else ""
+
+
+def _panel_alertas(a, rol: str, filtros: dict) -> None:
+    """Dibuja el panel; si algo falla, la página sigue sin él."""
+    va = _alertas_vista()
+    if va is None:
+        return
+    try:
+        va.render_panel(a, rol, filtros)
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("No se pudo dibujar el panel de alertas")
 
 
 def enunciado_pssm(item: str, orientado: bool = False) -> str:
@@ -836,6 +916,8 @@ def tarjetas(analisis, rol: str, filtros: dict | None = None) -> list[Tarjeta]:
         accion = accion_para_rol(mensaje, rol)
         if not accion:
             continue
+        if clave == "ideacion" and panel_reemplaza_muerte(analisis, rol):
+            continue
         cifra, detalle = "", ""
         if clave in INDICADORES:
             p = prevalencia(analisis, clave, filtros)
@@ -951,7 +1033,7 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
         lineas.append("")
 
     lineas.append("## Si un estudiante necesita ayuda")
-    for nombre, detalle in cat.RUTA_ATENCION:
+    for nombre, detalle in ruta_para_rol(rol):
         lineas.append(f"- **{nombre}** — {detalle}")
     lineas += ["", "---", cat.AVISO_TAMIZAJE]
     if analisis.nivel == cat.NIVEL_PRIMARIA:
@@ -1129,6 +1211,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         st.info("Este grupo no tiene suficientes respuestas para mostrar la "
                 "distribución por niveles.", icon="ℹ️")
 
+    # ── 1b. señales para actuar a tiempo (alertas de grupo, spec §5.4)
+    _panel_alertas(a, rol, filtros)
+
     # ── 2. tarjetas
     fichas = tarjetas(a, rol, filtros)
     if fichas:
@@ -1155,9 +1240,7 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         dimension = st.radio("Comparar por", dimensiones, horizontal=True,
                              key="est_com_dimension")
     with col_der:
-        opciones = [k for k in INDICADORES if prevalencia(a, k, {})]
-        if not opciones:
-            opciones = ["sdq_alto"]
+        opciones = indicadores_comparables(a, rol)
         indicador = st.selectbox(
             "Indicador", opciones,
             format_func=lambda k: INDICADORES[k]["etiqueta"].capitalize(),
@@ -1191,8 +1274,11 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     # ── 5. ruta de atención, siempre visible
     with st.container(border=True):
         st.markdown("#### 🆘 Si un estudiante necesita ayuda")
-        for nombre, detalle in cat.RUTA_ATENCION:
+        for nombre, detalle in ruta_para_rol(rol):
             st.markdown(f"- **{nombre}** — {detalle}")
+        aviso = aviso_ruta_pendiente()
+        if aviso:
+            st.caption(f"⚠️ {aviso}")
 
     # ── 6. avisos
     st.warning(cat.AVISO_TAMIZAJE, icon="⚠️")

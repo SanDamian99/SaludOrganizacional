@@ -160,3 +160,63 @@ def test_el_color_maximo_es_naranja_nunca_rojo():
     assert _hls(va.COLOR_PRESENTE)[2] < 0.2 and _hls(va.COLOR_SIN_ESTADO)[2] < 0.2
     for css in (va.CSS_INFORME, va.CSS_PAGINA):
         assert "#C0392B" not in css.upper() and va.COLOR_PRIORIDAD in css
+
+
+# ══ Vista comunidad ═════════════════════════════════════════════════════════
+from src.estudiantes import ingest, lectura, pipeline, publicar, scoring  # noqa: E402
+from src.ui.views import estudiantes_comunidad as vc  # noqa: E402
+from tests.test_estudiantes_comunidad import _formulario  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def analisis():
+    bruto, _ = ingest.cargar(_formulario())
+    return pipeline.analizar(scoring.puntuar(bruto), cat.NIVEL_SECUNDARIA, n_boot=20)
+
+
+def test_el_panel_reemplaza_la_tarjeta_de_muerte_para_colegio_y_municipio(analisis):
+    for rol in ("colegio", "municipio"):
+        assert vc.panel_reemplaza_muerte(analisis, rol)
+        assert "ideacion" not in {t.clave for t in vc.tarjetas(analisis, rol)}
+    assert not vc.panel_reemplaza_muerte(analisis, "familia")
+
+
+def test_sin_alertas_la_tarjeta_de_muerte_vuelve(analisis):
+    viejo = dataclasses.replace(analisis, alertas=pd.DataFrame())
+    assert "ideacion" in {t.clave for t in vc.tarjetas(viejo, "colegio")}
+    assert va.senales(viejo, "colegio", {}) == []
+
+
+def test_una_corrida_publicada_sin_alertas_vuelve_a_la_tarjeta(analisis):
+    filas = [f for f in publicar.aplanar({cat.NIVEL_SECUNDARIA: analisis})
+             if not f["tipo"].startswith("alerta")]
+    viejo = lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas)
+    assert va.senales(viejo, "colegio", {}) == []
+    assert "ideacion" in {t.clave for t in vc.tarjetas(viejo, "colegio")}
+
+
+def test_comparar_entre_grupos_sin_muerte_para_familia_ni_con_panel(analisis):
+    assert "ideacion" not in vc.indicadores_comparables(analisis, "familia")
+    assert "ideacion" not in vc.indicadores_comparables(analisis, "colegio")
+    viejo = dataclasses.replace(analisis, alertas=pd.DataFrame())
+    assert "ideacion" in vc.indicadores_comparables(viejo, "colegio")
+    assert "ideacion" not in vc.indicadores_comparables(viejo, "familia")
+
+
+def test_la_ruta_por_rol_es_la_vigente():
+    for rol in cat.ROLES:
+        assert vc.ruta_para_rol(rol) == list(cat.RUTA_ATENCION)
+
+
+@pytest.mark.parametrize("modo,ve", [("completo", True), ("comunidad", False),
+                                     ("investigador", False)])
+def test_el_aviso_de_ruta_pendiente_solo_en_el_modo_completo(monkeypatch, modo, ve):
+    monkeypatch.setenv("OBS360_MODO", modo)
+    assert (vc.aviso_ruta_pendiente() == ac.RUTA_PENDIENTE) is ve
+
+
+def test_si_el_panel_falla_la_pagina_sigue(monkeypatch, analisis):
+    def falla(*a, **k):
+        raise RuntimeError("módulo viejo")
+    monkeypatch.setattr(va, "render_panel", falla)
+    vc._panel_alertas(analisis, "colegio", {})          # no lanza
