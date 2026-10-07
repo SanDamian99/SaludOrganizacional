@@ -26,66 +26,14 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from src.core.colegios import nombre as nombre_colegio          # noqa: F401
+from src.core.colegios import normalizar as normalizar_colegio  # noqa: F401
+from src.core.texto import norm_txt                              # noqa: F401
 from src.estudiantes import catalog as cat
 
 # ── Normalización de texto ──────────────────────────────────────────────────
-def norm_txt(s) -> str:
-    """Minúsculas, sin tildes, sin puntuación, espacios colapsados."""
-    if s is None or (isinstance(s, float) and np.isnan(s)):
-        return ""
-    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
-    s = s.replace("\xa0", " ").lower()
-    return " ".join(re.sub(r"[^a-z0-9 ]", " ", s).split())
-
-
 def _hash_id(nombre_normalizado: str) -> str:
     return "E" + hashlib.sha1(nombre_normalizado.encode()).hexdigest()[:8]
-
-
-# ── Colegios: 14 etiquetas crudas → 6 códigos + sede ────────────────────────
-_COLEGIOS = [
-    (("laura", "vicuna"), "LauV", "Laura Vicuña"),
-    (("joaquin",), "JJC", "José Joaquín Casas"),
-    (("balsa",), "LaBalsa", "La Balsa"),
-    (("josemaria",), "SJMEB", "San Josemaría Escrivá de Balaguer"),
-    (("escriva",), "SJMEB", "San Josemaría Escrivá de Balaguer"),
-    (("cerca",), "CdP", "Cerca de Piedra"),
-    (("diosa",), "DiosCh", "Diosa Chía"),
-    (("bojaca",), "Bojacá", "Bojacá"),
-    (("fagua",), "Fagua", "Fagua"),
-    (("fonquet",), "Fonquetá", "Fonquetá"),
-    (("fusca",), "Fusca", "Fusca"),
-    (("tiquiza",), "Tiquiza", "Tiquiza"),
-]
-_SEDES = ["samaria", "principal", "preescolar", "calahorra", "polideportivo", "tiquiza",
-          "mercedes", "santa lucia"]
-
-
-def nombre_colegio(codigo: str) -> str:
-    """Nombre legible de un código de colegio; el propio código si no se conoce."""
-    for _, cod, nombre in _COLEGIOS:
-        if cod == codigo:
-            return nombre
-    return str(codigo)
-
-
-def normalizar_colegio(raw) -> tuple[str, str, str]:
-    """(código, nombre legible, sede). ('OTRO', texto crudo, '') si no se reconoce."""
-    s = norm_txt(raw)
-    if not s:
-        return "SIN_DATO", "Sin dato", ""
-    sede = ""
-    for k in _SEDES:
-        if k in s:
-            sede = {"samaria": "Samaria", "principal": "Principal", "preescolar": "Preescolar",
-                    "calahorra": "Mercedes de Calahorra", "mercedes": "Mercedes de Calahorra",
-                    "polideportivo": "Polideportivo", "tiquiza": "Tiquiza",
-                    "santa lucia": "Santa Lucía"}[k]
-            break
-    for claves, codigo, nombre in _COLEGIOS:
-        if any(c in s for c in claves):
-            return codigo, nombre, sede
-    return "OTRO", str(raw).strip(), sede
 
 
 # ── Detección de bloques de ítems en los encabezados crudos ─────────────────
