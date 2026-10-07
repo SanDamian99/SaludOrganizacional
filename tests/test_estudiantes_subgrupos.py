@@ -61,8 +61,10 @@ def test_publicar_y_leer_conserva_los_subgrupos(analisis, publicado):
     original = analisis.subgrupos["Colegio"][colegio]
     leido = publicado.subgrupos["Colegio"][colegio]
     assert leido.n == original.n
+    # el número de casos no se publica (supresion.py): se compara sin él
     pd.testing.assert_frame_equal(
-        leido.cortes.reset_index(drop=True), original.cortes.reset_index(drop=True),
+        leido.cortes.reset_index(drop=True),
+        original.cortes.drop(columns=["casos"]).reset_index(drop=True),
         check_dtype=False)
 
 
@@ -113,7 +115,8 @@ def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publ
 
     grado = next(iter(analisis.subgrupos["Grado"]))
     g = {"grado": grado}
-    assert vc.bandas_sdq_total(publicado, g)["n"] == vc.bandas_sdq_total(analisis, g)["n"]
+    assert vc.bandas_sdq_total(publicado, g) == vc.bandas_sdq_total(analisis, g)
+    assert vc.n_bandas(publicado, g) == vc.n_bandas(analisis, g) > 0
 
 
 def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
@@ -121,15 +124,20 @@ def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
     for filtros in ({}, {"colegio": "LauV"}):
         crudo = vc.prevalencia_por(analisis, indicador, "Grado", filtros)
         desp = vc.prevalencia_por(publicado, indicador, "Grado", filtros)
-        assert list(desp.columns) == ["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"]
-        assert set(desp["grupo"]) == set(crudo["grupo"]) and not desp.empty
+        assert list(desp.columns) == ["grupo", "n", "pct", "ic_inf", "ic_sup"]
+        ocultos = vc.grupos_sin_cifra(publicado, indicador, "Grado", filtros)
+        assert ocultos == vc.grupos_sin_cifra(analisis, indicador, "Grado", filtros)
+        assert set(desp["grupo"]) == set(crudo["grupo"])
+        assert not desp.empty or ocultos
         fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
-        assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
+        if not fusion.empty:
+            assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
 
 
 def test_el_cruce_publicado_da_las_mismas_cifras_que_el_recalculo(analisis, publicado):
     f = {"colegio": "LauV", "grado": "Octavo"}
-    assert vc.bandas_sdq_total(publicado, f)["n"] == vc.bandas_sdq_total(analisis, f)["n"] == 31
+    assert vc.n_bandas(publicado, f) == vc.n_bandas(analisis, f) == 31
+    assert vc.bandas_sdq_total(publicado, f) == vc.bandas_sdq_total(analisis, f)
     for indicador in vc.INDICADORES:
         assert vc.prevalencia(publicado, indicador, f) == pytest.approx(
             vc.prevalencia(analisis, indicador, f), abs=0.01)
@@ -202,3 +210,53 @@ def test_los_grupos_publicables_son_los_mismos_desde_el_despliegue(analisis, pub
     assert vc.grupos_publicables(publicado, "Grado", "LauV") == ["Séptimo", "Octavo"]
     # el despliegue recibe «<10» en vez del número y lo dice igual
     assert vc.nota_base(publicado)
+
+
+# ── datos donde todo se publica: las comparaciones no pueden pasar en vacío ─
+@pytest.fixture(scope="module")
+def sano():
+    """2 colegios × 2 grados, 32 por celda: bandas y cortes cumplen 3..n−3 en todo."""
+    from src.estudiantes import supresion
+    valores = [5, 16, 18, 25]                     # una puntuación por banda del SDQ
+    filas = []
+    for c in ("A", "B"):
+        for g in ("Sexto", "Séptimo"):
+            for i in range(32):
+                sdq = valores[i % 4]
+                filas.append(dict(Colegio=c, Grado=g, Sexo="Mujer" if i % 2 else "Hombre",
+                                  Edad=12 + i % 3, nivel=cat.NIVEL_SECUNDARIA,
+                                  SDQ_Total=sdq, MSPSS_Fam=1 + (i * 7 % 17) / 4,
+                                  banda_SDQ_Total=cat.banda_de(sdq, "SDQ_Total"),
+                                  RCADS18=3 if i % 5 == 0 else 0))
+    local = pipeline.analizar(pd.DataFrame(filas), cat.NIVEL_SECUNDARIA, n_boot=5)
+    assert supresion.auditar(local) == []
+    filas_pub = publicar.aplanar({cat.NIVEL_SECUNDARIA: local})
+    publicar.verificar(filas_pub)
+    return local, lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas_pub)
+
+
+@pytest.mark.parametrize("indicador", ["sdq_alto", "ideacion"])
+@pytest.mark.parametrize("columna,filtros,grupos", [
+    ("Grado", {}, ["Sexto", "Séptimo"]),
+    ("Grado", {"colegio": "A"}, ["Sexto", "Séptimo"]),
+    ("Colegio", {}, ["A", "B"]),
+    ("Colegio", {"grado": "Sexto"}, ["A", "B"]),
+])
+def test_con_todo_publicado_las_comparaciones_coinciden(sano, indicador, columna,
+                                                        filtros, grupos):
+    local, publicado = sano
+    crudo = vc.prevalencia_por(local, indicador, columna, filtros)
+    desp = vc.prevalencia_por(publicado, indicador, columna, filtros)
+    assert sorted(crudo["grupo"]) == sorted(desp["grupo"]) == grupos
+    assert vc.grupos_sin_cifra(local, indicador, columna, filtros) == []
+    fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
+    assert len(fusion) == len(grupos)
+    assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
+
+
+def test_con_todo_publicado_las_bandas_de_cada_grupo_salen(sano):
+    local, publicado = sano
+    for f in ({"colegio": "A"}, {"grado": "Sexto"}, {"colegio": "B", "grado": "Séptimo"}):
+        b = vc.bandas_sdq_total(local, f)
+        assert b and b == vc.bandas_sdq_total(publicado, f)
+        assert b["n"] == vc.n_bandas(publicado, f)

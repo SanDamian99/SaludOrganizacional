@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import ingest, privacidad, scoring, stats
+from src.estudiantes import ingest, privacidad, scoring, stats, supresion
 
 # Fragmentos con los que se reconocen los dos formularios en disco. Se comparan
 # sobre el nombre normalizado porque macOS guarda los acentos descompuestos
@@ -168,6 +168,11 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     a.contrastes = _contrastes(dn, claves)
     a.items_pssm = stats.medias_items(dn, "PSSM")
     a.subgrupos = subanalizar(dm, nivel, claves, base)
+    # Cifras que no delatan (spec §5.4): ninguna proporción del nivel ni de sus
+    # subgrupos con menos de supresion.MIN_CASOS casos o no casos, ni deducible
+    # por resta. Se aplica aquí, antes de publicar y de mostrar, para que la
+    # vista local y la corrida publicada vean lo mismo.
+    supresion.aplicar(a)
 
     if nivel == cat.NIVEL_PRIMARIA and cat.AVISO_PRIMARIA not in a.avisos:
         a.avisos.append(cat.AVISO_PRIMARIA)

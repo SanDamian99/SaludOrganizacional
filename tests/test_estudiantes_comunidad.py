@@ -328,11 +328,16 @@ def test_bandas_e_items_respetan_el_filtro():
     visibles, pequenos = vc.grupos_visibles(a, "Colegio")
     assert visibles, "hacen falta colegios visibles para la prueba"
 
-    # un colegio concreto tiene su propio N y su propia distribución
-    uno = vc.bandas_sdq_total(a, {"colegio": visibles[-1]})
+    # un colegio concreto tiene su propio N y su propia distribución. Se toma
+    # el último colegio cuyas bandas se publican: las de algún colegio pueden
+    # estar suprimidas por pocos casos en una banda (supresion.py).
+    con_bandas = [c for c in visibles if vc.bandas_sdq_total(a, {"colegio": c})]
+    assert con_bandas, "hace falta un colegio con bandas publicadas"
+    elegido = con_bandas[-1]
+    uno = vc.bandas_sdq_total(a, {"colegio": elegido})
     assert uno and uno["n"] < total["n"]
     assert uno["pct"] != total["pct"]
-    items_uno = vc.items_pertenencia_bajos(a, 4, {"colegio": visibles[-1]})
+    items_uno = vc.items_pertenencia_bajos(a, 4, {"colegio": elegido})
     assert items_uno and all(i["n"] <= uno["n"] for i in items_uno)
 
     # un grupo por debajo del mínimo no devuelve nada, y el informe lo explica
@@ -354,7 +359,10 @@ def test_grupos_publicables_por_colegio(analisis):
 
 def test_la_comparacion_por_grado_dentro_de_un_colegio(analisis):
     tabla = vc.prevalencia_por(analisis, "sdq_alto", "Grado", {"colegio": "LauV"})
-    assert list(tabla["grupo"]) == ["Séptimo", "Octavo"]
+    ocultos = vc.grupos_sin_cifra(analisis, "sdq_alto", "Grado", {"colegio": "LauV"})
+    # En el formulario sintético las bandas del SDQ de las dos celdas no cumplen
+    # la regla de cifras que no delatan: los grados salen como «sin cifra».
+    assert sorted(list(tabla["grupo"]) + ocultos) == sorted(["Séptimo", "Octavo"])
     assert (tabla["n"] == 31).all()
 
 
@@ -477,18 +485,20 @@ def _con_sexo_residual(analisis, valor, k=3):
 
 
 def test_el_corte_por_sexo_sale_si_los_sexos_cubren_el_grupo(analisis):
-    tabla = vc.prevalencia_por_sexo(analisis, {"colegio": "LauV"})
+    # Solo en el total del nivel (supresion: un colegio menos su celda delataría
+    # a la otra celda); con filtro de colegio ya no sale.
+    tabla = vc.prevalencia_por_sexo(analisis, {})
     assert len(tabla) == 2
-    assert "emocional_sexo" in [t.clave for t in vc.tarjetas(analisis, "colegio",
-                                                              {"colegio": "LauV"})]
+    assert "emocional_sexo" in [t.clave for t in vc.tarjetas(analisis, "colegio", {})]
+    assert vc.prevalencia_por_sexo(analisis, {"colegio": "LauV"}).empty
 
 
 @pytest.mark.parametrize("valor", ["Otro", None])
 def test_el_corte_por_sexo_se_quita_si_queda_un_resto(analisis, valor):
     """Grupo − Mujer − Hombre aislaría a 3 estudiantes: la tarjeta no sale."""
     a = _con_sexo_residual(analisis, valor)
-    assert vc.prevalencia_por_sexo(a, {"colegio": "LauV"}).empty
-    claves = [t.clave for t in vc.tarjetas(a, "colegio", {"colegio": "LauV"})]
+    assert vc.prevalencia_por_sexo(a, {}).empty
+    claves = [t.clave for t in vc.tarjetas(a, "colegio", {})]
     assert "emocional_sexo" not in claves
 
 

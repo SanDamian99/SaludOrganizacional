@@ -29,7 +29,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import privacidad, scoring, stats
+from src.estudiantes import privacidad, scoring, stats, supresion
 from src.ui import estado
 
 # Colores del semáforo para las cuatro bandas del SDQ (verde → rojo).
@@ -133,6 +133,9 @@ class Tarjeta:
     significa: str
     accion: str
     detalle: str = ""
+    # True si la cifra del grupo se suprimió por pocos casos (supresion.py): la
+    # tarjeta sale con el texto fijo y sin porcentaje, porque la ruta sigue aplicando.
+    suprimida: bool = False
 
 
 # ══ Funciones puras (sin Streamlit): son las que prueban los tests ══════════
@@ -458,14 +461,21 @@ def subanalisis(analisis, filtros: dict | None):
 def _resuelto(analisis, filtros: dict | None):
     """(análisis sobre el que leer, filtros que aún hay que aplicar).
 
-    Con datos crudos se filtra recalculando. Sin ellos, se cambia al subgrupo
-    publicado y ya no queda filtro que aplicar; si no hay subgrupo, no hay
-    cifra: devuelve (None, {}).
+    Si el grupo tiene subgrupo calculado (pipeline.subanalizar o la corrida
+    publicada), se cambia a él y ya no queda filtro que aplicar: así la vista
+    local y el despliegue leen las mismas cifras, ya suprimidas. Sin subgrupo,
+    con datos crudos se filtra recalculando; sin ellos, no hay cifra: (None, {}).
     """
-    if not hay_filtro(filtros or {}) or hay_datos_crudos(analisis):
+    if not hay_filtro(filtros or {}):
         return analisis, (filtros or {})
     sub = subanalisis(analisis, filtros)
-    return (sub, {}) if sub is not None else (None, {})
+    if sub is not None:
+        # También con datos crudos: el subgrupo ya trae la supresión de cifras
+        # que delatan (supresion.aplicar), y recalcular la saltaría.
+        return sub, {}
+    if hay_datos_crudos(analisis):
+        return analisis, (filtros or {})
+    return None, {}
 
 
 def etiqueta_filtro(analisis, filtros: dict) -> str:
@@ -501,8 +511,8 @@ def prevalencia(analisis, indicador: str, filtros: dict | None = None) -> dict:
         if fila.empty:
             return {}
         f = fila.iloc[0]
-        if int(f["n"]) < cat.MIN_GROUP_N:
-            return {}
+        if int(f["n"]) < cat.MIN_GROUP_N or pd.isna(f["pct"]):
+            return {}               # pct vacío = suprimido por pocos casos
         return dict(pct=float(f["pct"]), ic_inf=float(f["ic_inf"]),
                     ic_sup=float(f["ic_sup"]), n=int(f["n"]))
     d = subconjunto(analisis, filtros or {})
@@ -514,8 +524,33 @@ def prevalencia(analisis, indicador: str, filtros: dict | None = None) -> dict:
     if tabla.empty:
         return {}
     f = tabla.iloc[0]
+    if not supresion.proporcion_publicable(f["casos"], f["n"]):
+        return {}                   # recalculada en local: misma regla que lo publicado
     return dict(pct=float(f["pct"]), ic_inf=float(f["ic_inf"]),
                 ic_sup=float(f["ic_sup"]), n=int(f["n"]))
+
+
+def cifra_suprimida(analisis, indicador: str, filtros: dict | None = None) -> bool:
+    """True si el grupo tiene el indicador pero su cifra se suprimió por pocos casos.
+
+    Distingue «no hay base» (sin fila o n < MIN_GROUP_N) de «hay base pero la
+    proporción delataría» (supresion.py): solo en el segundo caso se muestra
+    el texto fijo `cat.CIFRAS_PEQUENAS`.
+    """
+    cfg = INDICADORES.get(indicador)
+    analisis, filtros = _resuelto(analisis, filtros)
+    if cfg is None or analisis is None or hay_filtro(filtros or {}):
+        return False
+    tabla = getattr(analisis, "cortes", None)
+    if tabla is None or tabla.empty or "clave" not in tabla.columns:
+        return False
+    fila = tabla[tabla["clave"] == cfg["clave"]]
+    if "indicador_cortes" in cfg:
+        fila = fila[fila["indicador"] == cfg["indicador_cortes"]]
+    if fila.empty:
+        return False
+    f = fila.iloc[0]
+    return int(f["n"]) >= cat.MIN_GROUP_N and pd.isna(f["pct"])
 
 
 def prevalencia_por(analisis, indicador: str, columna: str,
@@ -531,7 +566,10 @@ def prevalencia_por(analisis, indicador: str, columna: str,
     if cfg is None or analisis is None:
         return pd.DataFrame()
     filtros = filtros or {}
-    if not hay_datos_crudos(analisis):
+    if not hay_datos_crudos(analisis) or (
+            columna in ("Colegio", "Grado") and getattr(analisis, "subgrupos", None)):
+        # Con subgrupos calculados se leen siempre de ahí (ya suprimidos), también
+        # con datos crudos: la vista local y el despliegue comparan lo mismo.
         return _prevalencia_por_publicada(analisis, indicador, columna, filtros)
     base = getattr(analisis, "base", None)
     if base is not None and columna in ("Colegio", "Grado"):
@@ -553,7 +591,7 @@ def prevalencia_por(analisis, indicador: str, columna: str,
         d = pd.concat(partes)
         mask = _mascara(d, cfg)
         return pd.DataFrame() if mask is None else \
-            stats.prevalencia_por_grupo(d, mask, "_grupo", grupos)
+            _sin_casos(stats.prevalencia_por_grupo(d, mask, "_grupo", grupos))
     d = subconjunto(analisis, filtros)
     if columna not in d.columns:
         return pd.DataFrame()
@@ -564,12 +602,49 @@ def prevalencia_por(analisis, indicador: str, columna: str,
     if columna == "Grado":
         orden = (cat.ORDEN_GRADOS_SEC if analisis.nivel == cat.NIVEL_SECUNDARIA
                  else cat.ORDEN_GRADOS_PRI)
-    return stats.prevalencia_por_grupo(d, mask, columna, orden)
+    tabla = stats.prevalencia_por_grupo(d, mask, columna, orden)
+    if columna not in ("Colegio", "Grado") and not tabla.empty:
+        # Grupos que no son de la base (p. ej. sexo): solo se calculan en local.
+        # Regla de cifras que no delatan, todo o nada: si un grupo no cumple, la
+        # comparación entera no sale (el resto se deduciría restando del total).
+        if not all(supresion.proporcion_publicable(k, n)
+                   for k, n in zip(tabla["casos"], tabla["n"])):
+            return pd.DataFrame()
+    return _sin_casos(tabla)
+
+
+def _sin_casos(tabla: pd.DataFrame) -> pd.DataFrame:
+    """La tabla sin la columna de casos: el número de casos nunca se muestra."""
+    return tabla.drop(columns=["casos"], errors="ignore")
+
+
+def grupos_sin_cifra(analisis, indicador: str, columna: str,
+                     filtros: dict | None = None) -> list[str]:
+    """Grupos de la comparación cuya cifra se suprimió por pocos casos."""
+    if columna not in ("Colegio", "Grado") or analisis is None:
+        return []
+    activos = _filtros_activos(filtros or {})
+    otra = "Grado" if columna == "Colegio" else "Colegio"
+    salida = []
+    for g in grupos_publicables(analisis, columna, activos.get(otra, TODOS)):
+        if columna in activos and g != str(activos[columna]):
+            continue
+        pedido = {columna.lower(): g}
+        if otra in activos:
+            pedido[otra.lower()] = activos[otra]
+        if cifra_suprimida(analisis, indicador, pedido):
+            salida.append(g)
+    return salida
 
 
 def prevalencia_por_sexo(analisis, filtros: dict | None = None,
                          indicador: str = "emocional") -> pd.DataFrame:
-    """Prevalencia por sexo del grupo elegido, o vacío si el corte no es seguro.
+    """Prevalencia por sexo del total del nivel, o vacío si el corte no es seguro.
+
+    Solo sin filtro de colegio ni de grado: el sexo no es parte de la base
+    publicable, y el corte por sexo de un colegio menos el de una de sus celdas
+    daría el de la otra celda. Además cada sexo cumple la regla de cifras que
+    no delatan (de MIN_CASOS a n − MIN_CASOS casos).
 
     Solo se muestra si los grupos de sexo (cada uno con ≥ MIN_GROUP_N) cubren
     TODAS las filas del grupo y todas sus respuestas válidas del indicador. Si
@@ -577,8 +652,13 @@ def prevalencia_por_sexo(analisis, filtros: dict | None = None,
     Hombre de la cifra del grupo, que también se publica, lo aislaría: la
     tarjeta no sale.
     """
+    if hay_filtro(filtros or {}):
+        return pd.DataFrame()
     tabla = prevalencia_por(analisis, indicador, "Sexo", filtros)
     if tabla.empty or len(tabla) < 2:
+        return pd.DataFrame()
+    if cifra_suprimida(analisis, indicador, filtros):
+        # con la cifra del grupo oculta, sumar Mujer y Hombre la destaparía
         return pd.DataFrame()
     cfg = INDICADORES.get(indicador)
     d = subconjunto(analisis, filtros or {})
@@ -623,9 +703,9 @@ def _prevalencia_por_publicada(analisis, indicador: str, columna: str,
     for g, s in pares:
         p = prevalencia(s, indicador, {}) if s is not None else {}
         if p:
-            filas.append(dict(grupo=g, n=p["n"], casos=round(p["n"] * p["pct"] / 100),
-                              pct=p["pct"], ic_inf=p["ic_inf"], ic_sup=p["ic_sup"]))
-    return pd.DataFrame(filas, columns=["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"])
+            filas.append(dict(grupo=g, n=p["n"], pct=p["pct"],
+                              ic_inf=p["ic_inf"], ic_sup=p["ic_sup"]))
+    return pd.DataFrame(filas, columns=["grupo", "n", "pct", "ic_inf", "ic_sup"])
 
 
 def contraste(analisis, clave: str, filtros: dict | None = None) -> dict:
@@ -637,14 +717,17 @@ def contraste(analisis, clave: str, filtros: dict | None = None) -> dict:
     if not hay_filtro(filtros or {}):
         for res in cfg["resultados"]:
             for c in analisis.contrastes or []:
-                if c.get("protector") == cfg["protector"] and c.get("resultado") == res:
+                if (c.get("protector") == cfg["protector"] and c.get("resultado") == res
+                        and not c.get("suprimido")
+                        and c.get("pct_tercil_alto") is not None
+                        and c.get("pct_tercil_bajo") is not None):
                     return c
         return {}
     d = subconjunto(analisis, filtros or {})
     for res in cfg["resultados"]:
         if res in d.columns and cfg["protector"] in d.columns:
             c = stats.contraste_protector(d, res, cfg["protector"])
-            if c:
+            if c and supresion.contraste_publicable(c):
                 return c
     return {}
 
@@ -701,9 +784,43 @@ def bandas_sdq_total(analisis, filtros: dict | None = None) -> dict:
     f = fila.iloc[0]
     if int(f["n"]) < cat.MIN_GROUP_N:
         return {}
+    if any(pd.isna(f[f"pct_b{i}"]) for i in range(4)):
+        return {}                   # suprimidas por pocos casos (todo o nada)
+    if hay_filtro(filtros or {}) and not all(
+            supresion.proporcion_publicable(f[f"n_b{i}"], f["n"]) for i in range(4)):
+        return {}                   # recalculadas en local: misma regla
     return dict(n=int(f["n"]),
                 pct=[float(f[f"pct_b{i}"]) for i in range(4)],
                 etiquetas=list(f.get("etiquetas") or cat.BANDAS_LABELS))
+
+
+def _fila_bandas_suprimida(analisis, filtros: dict | None):
+    """La fila del SDQ total del grupo si existe y se suprimió por pocos casos."""
+    analisis, filtros = _resuelto(analisis, filtros)
+    if analisis is None or hay_filtro(filtros or {}):
+        return None
+    tabla = getattr(analisis, "bandas", None)
+    if tabla is None or tabla.empty or "clave" not in tabla.columns:
+        return None
+    fila = tabla[tabla["clave"] == "SDQ_Total"]
+    if fila.empty or int(fila.iloc[0]["n"]) < cat.MIN_GROUP_N:
+        return None
+    f = fila.iloc[0]
+    return f if any(pd.isna(f[f"pct_b{i}"]) for i in range(4)) else None
+
+
+def bandas_suprimidas(analisis, filtros: dict | None = None) -> bool:
+    """True si el grupo tiene bandas del SDQ total pero se suprimieron por pocos casos."""
+    return _fila_bandas_suprimida(analisis, filtros) is not None
+
+
+def n_bandas(analisis, filtros: dict | None = None) -> int:
+    """Respuestas válidas del SDQ total del grupo, se muestren o no sus bandas."""
+    b = bandas_sdq_total(analisis, filtros)
+    if b:
+        return b["n"]
+    f = _fila_bandas_suprimida(analisis, filtros)
+    return int(f["n"]) if f is not None else 0
 
 
 def tarjetas(analisis, rol: str, filtros: dict | None = None) -> list[Tarjeta]:
@@ -722,6 +839,14 @@ def tarjetas(analisis, rol: str, filtros: dict | None = None) -> list[Tarjeta]:
         cifra, detalle = "", ""
         if clave in INDICADORES:
             p = prevalencia(analisis, clave, filtros)
+            if not p and cifra_suprimida(analisis, clave, filtros):
+                salida.append(Tarjeta(clave=clave, cifra=cat.CIFRA_SUPRIMIDA,
+                                      etiqueta=INDICADORES[clave]["etiqueta"],
+                                      significa=mensaje.significa, accion=accion,
+                                      detalle=cat.CIFRAS_PEQUENAS, suprimida=True))
+                if len(salida) == MAX_TARJETAS:
+                    break
+                continue
             if not p:
                 continue
             cifra = uno_de_cada(p["pct"])
@@ -996,6 +1121,8 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
                         key="est_com_bandas")
         if hay_filtro(filtros) and nota_base(a):
             st.caption(nota_base(a))
+    elif bandas_suprimidas(a, filtros):
+        st.info(cat.CIFRAS_PEQUENAS, icon="ℹ️")
     elif hay_filtro(filtros) and not hay_datos_crudos(a) and subanalisis(a, filtros) is None:
         st.info(SIN_SUBGRUPO_PUBLICADO, icon="ℹ️")
     else:
@@ -1044,6 +1171,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
             width="stretch", key="est_com_comparativa")
         st.caption("Las líneas verticales son el margen de error (intervalo de "
                    "Wilson al 95 %). Se compara, no se ranquea.")
+    sin_cifra = grupos_sin_cifra(a, indicador, dimension, filtros)
+    if sin_cifra:
+        st.caption(f"Sin cifra: {', '.join(sin_cifra)}. {cat.CIFRAS_PEQUENAS}")
     ocultos = texto_ocultos(a, colegio, con_colegios=ve_colegios(rol))
     if ocultos:
         st.caption(ocultos)

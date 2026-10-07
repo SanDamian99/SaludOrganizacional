@@ -281,3 +281,17 @@ def test_flujo_de_exclusiones_acepta_el_erq_enmascarado_de_la_corrida_publicada(
                                                     erq_invalidado="<10"))
     md = vista.flujo_exclusiones_md([leido])
     assert "<10 respuesta(s)" in md
+
+
+def test_la_figura_de_bandas_no_muestra_casos_ni_falla_con_bandas_suprimidas():
+    """Cifras que no delatan: el número de casos no se muestra; una banda vacía no rompe."""
+    import numpy as np
+    from src.ui.views import estudiantes_investigador as vi
+    bandas = pd.DataFrame([dict(clave="SDQ_Total", escala="SDQ total", n=40,
+                                **{f"pct_b{i}": np.nan for i in range(4)},
+                                **{f"n_b{i}": np.nan for i in range(4)},
+                                pct_alto_o_muy_alto=np.nan,
+                                etiquetas=list(cat.BANDAS_LABELS))])
+    fig = vi.figura_bandas(bandas)
+    textos = " ".join(str(t.hovertemplate) for t in fig.data)
+    assert "casos" not in textos and "None" not in textos
