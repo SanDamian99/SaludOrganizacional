@@ -8,6 +8,8 @@ las sube y el lector las rearma. Estas pruebas cierran ese circuito y comprueban
 que las cifras que ve el despliegue son las mismas que recalcula la máquina que
 procesa los archivos.
 """
+import dataclasses
+
 import pandas as pd
 import pytest
 
@@ -155,3 +157,41 @@ def test_una_corrida_antigua_sin_subgrupos_sigue_leyendose(analisis):
     assert viejo.subgrupos == {}
     assert vc.bandas_sdq_total(viejo, {}) == vc.bandas_sdq_total(analisis, {})
     assert vc.bandas_sdq_total(viejo, {"colegio": _colegio_grande(analisis)}) == {}
+
+
+def test_los_grupos_fuera_de_la_base_se_informan_como_enmascarados(analisis):
+    assert "DiosCh" in analisis.enmascarados["Colegio"]
+    assert "LauV" not in analisis.enmascarados["Colegio"]
+    assert analisis.enmascarados["Grado"] == [GRADO_PEQUENO]
+
+
+def test_subanalizar_sin_base_tambien_enmascara():
+    bruto, _ = ingest.cargar(_formulario())
+    d = scoring.puntuar(bruto)
+    d = d[d["nivel"] == cat.NIVEL_SECUNDARIA].reset_index(drop=True)
+    base = privacidad.base_publicable(d)
+    # la celda LauV|Octavo queda con 3 respuestas válidas de SDQ_Total
+    celda = base.celdas["LauV|Octavo"]
+    d.loc[celda[3:], "SDQ_Total"] = float("nan")
+    claves = [k for k in pipeline.CLAVES_PRINCIPALES if k in d.columns]
+    dm, suprimidos = privacidad.aplicar_todo_o_nada(d, base)
+    assert suprimidos["SDQ_Total"] == 3
+
+    def bandas(sub):
+        return sub["Colegio×Grado"]["LauV|Octavo"].bandas.reset_index(drop=True)
+
+    sin_base = pipeline.subanalizar(d, cat.NIVEL_SECUNDARIA, claves)
+    enmascarado = pipeline.subanalizar(dm, cat.NIVEL_SECUNDARIA, claves, base)
+    crudo = pipeline.subanalizar(d, cat.NIVEL_SECUNDARIA, claves, base)
+    pd.testing.assert_frame_equal(bandas(sin_base), bandas(enmascarado))
+    assert not bandas(crudo).equals(bandas(enmascarado))
+
+
+def test_el_cci_se_publica_con_el_n_del_nivel(analisis):
+    # en el formulario sintético solo LauV entra al nivel y el CCI no se define;
+    # se fija uno para comprobar con qué n sale la fila
+    con_cci = dataclasses.replace(analisis, icc={"SDQ_Total": 0.05})
+    filas = [f for f in publicar.aplanar({cat.NIVEL_SECUNDARIA: con_cci})
+             if f["tipo"] == "icc"]
+    assert filas
+    assert all(f["n"] == len(analisis.base.nivel) == 62 for f in filas)

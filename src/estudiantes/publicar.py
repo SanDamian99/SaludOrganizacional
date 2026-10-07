@@ -192,10 +192,11 @@ def aplanar(analisis: dict) -> list[dict]:
                                    R2=m["R2"], clusters=m["clusters"],
                                    aviso=m.get("aviso") or None))
 
-        # CCI
+        # CCI: se calcula sobre el nivel publicado, que puede ser menor que a.n
+        n_nivel = ((a.muestra or {}).get("base") or {}).get("n_nivel", a.n)
         for clave, valor in (a.icc or {}).items():
             if valor is not None and valor == valor:
-                filas.append(_fila(nivel, "icc", clave, a.n, valor,
+                filas.append(_fila(nivel, "icc", clave, n_nivel, valor,
                                    nota="Proporción de varianza entre colegios"))
 
         # contrastes por tercil

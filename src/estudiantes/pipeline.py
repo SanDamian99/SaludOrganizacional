@@ -94,8 +94,10 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
                     else cat.ORDEN_GRADOS_PRI)
 
     # Toda cifra publicada sale de la copia enmascarada (todo o nada por
-    # indicador) y de la misma base; los tamaños de muestra, en cambio, se
-    # cuentan sobre los datos crudos porque no son sensibles.
+    # indicador) y de la misma base. `muestra` es lo único que se cuenta sobre
+    # los datos crudos: tamaños (sexo, edad, grado, colegio, celdas), media y
+    # DE de la edad y rango de fechas. Son columnas de identificación, no
+    # indicadores, y el todo o nada no las toca.
     base = privacidad.base_publicable(d)
     dm, suprimidos = privacidad.aplicar_todo_o_nada(d, base)
     dn = dm.loc[base.nivel]           # lo que se publica a nivel de todo el nivel
@@ -135,9 +137,17 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     a.por_sexo = stats.comparar_por_sexo(dn, claves)
     en_grados = dm.loc[privacidad._union(base.grados.values())]
     en_colegios = dm.loc[privacidad._union(base.colegios.values())]
-    a.por_grado, enm_g = stats.comparar_por_grupo(en_grados, claves, "Grado", orden_grados)
-    a.por_colegio, enm_c = stats.comparar_por_grupo(en_colegios, claves, "Colegio")
-    a.enmascarados = {"Grado": enm_g, "Colegio": enm_c}
+    a.por_grado, _ = stats.comparar_por_grupo(en_grados, claves, "Grado", orden_grados)
+    a.por_colegio, _ = stats.comparar_por_grupo(en_colegios, claves, "Colegio")
+    # Enmascarados: los colegios y grados presentes que la base no publica.
+    # comparar_por_grupo ya no los ve porque solo recibe filas de la base.
+    colegios_fuera = set(map(str, d["Colegio"].dropna().unique())) - set(base.colegios)
+    grados_fuera = set(map(str, d["Grado"].dropna().unique())) - set(base.grados)
+    a.enmascarados = {
+        "Grado": ([g for g in orden_grados if g in grados_fuera]
+                  + sorted(grados_fuera - set(orden_grados))),
+        "Colegio": sorted(colegios_fuera),
+    }
     a.por_edad = stats.correlacion_con_edad(dn, claves)
 
     objetivos = [k for k in ("RCADS_Dep", "RCADS_Anx", "SDQ_Total", "ARI_Total") if k in claves]
@@ -181,9 +191,13 @@ def subanalizar(d: pd.DataFrame, nivel: str, claves: list[str], base=None) -> di
     de pertenencia). Cada grupo se calcula sobre la base publicable
     (privacidad.base_publicable): así ninguna resta entre un colegio, un grado
     y sus celdas deja un grupo pequeño. `analizar` le pasa los datos ya
-    enmascarados con todo o nada.
+    enmascarados con todo o nada y su base. Sin `base`, la función la arma y
+    enmascara `d` ella misma (privacidad.aplicar_todo_o_nada) antes de
+    calcular; con `base`, supone que `d` ya viene enmascarado con ella.
     """
-    base = base or privacidad.base_publicable(d)
+    if base is None:
+        base = privacidad.base_publicable(d)
+        d, _ = privacidad.aplicar_todo_o_nada(d, base)
     salida: dict = {}
     for columna, grupos in (("Colegio", base.colegios), ("Grado", base.grados),
                             (privacidad.AGRUPACION_CRUCE, base.celdas)):

@@ -324,6 +324,17 @@ def analisis_real():
     return res, informes
 
 
+@pytest.fixture(scope="module")
+def puntuado_real():
+    """Los mismos formularios del 18-sep, puntuados y sin enmascarar."""
+    base = os.path.join(carpeta_datos("otros"), "archivo", "estudiantes_2026-09-18")
+    rutas = pipeline.localizar_formularios(base)
+    if len(rutas) < 2:
+        pytest.skip("Falta la instantánea de referencia del 18-sep")
+    bruto, _ = ingest.cargar_varios(rutas)
+    return scoring.puntuar(bruto)
+
+
 def test_regresion_n_valido(analisis_real, referencia):
     res, _ = analisis_real
     assert res[cat.NIVEL_SECUNDARIA].n == referencia["n_final"]["secundaria"]
@@ -403,7 +414,7 @@ def test_regresion_correlaciones(analisis_real, referencia, a, b):
     assert fila["rho"].iloc[0] == pytest.approx(esp["rho"], abs=0.01)
 
 
-def test_regresion_modelo_depresion(analisis_real, referencia):
+def test_regresion_modelo_depresion(analisis_real, puntuado_real, referencia):
     res, _ = analisis_real
     a = res[cat.NIVEL_SECUNDARIA]
     m = [x for x in a.modelos if x["y"] == "RCADS_Dep"]
@@ -411,11 +422,15 @@ def test_regresion_modelo_depresion(analisis_real, referencia):
     m = m[0]
     esp = referencia["modelos"]["dep_protectores"]
     # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
-    # las 4 respuestas de ERQ del resto de colegios pequeños.
-    variables = ["RCADS_Dep", *[c["predictor"] for c in m["coeficientes"]]]
-    suprimidos = max([a.muestra["suprimidos"].get(v, 0) for v in variables])
-    assert suprimidos <= 10
-    assert m["n"] == esp["n"] - suprimidos
+    # las 4 respuestas de ERQ del resto de colegios pequeños. El n esperado es el
+    # de referencia menos los casos completos que perdió el modelo al enmascarar.
+    variables = (["RCADS_Dep"] + [p for p in pipeline.PROTECTORES if p in a.datos.columns]
+                 + ["Colegio", "Sexo", "Edad"])
+    crudo = puntuado_real.loc[a.base.nivel, variables].dropna()
+    enmascarado = a.datos.loc[a.base.nivel, variables].dropna()
+    perdidos = len(crudo) - len(enmascarado)
+    assert 0 <= perdidos <= 10
+    assert m["n"] == esp["n"] - perdidos
     assert m["R2"] == pytest.approx(esp["R2"], abs=0.01)
     obt = {c["predictor"]: c["beta"] for c in m["coeficientes"]}
     for pred in ("MSPSS_Fam", "PSSM_Total", "ERQ_Sup"):
