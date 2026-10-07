@@ -161,3 +161,10 @@ def test_la_vista_ya_no_ofrece_markdown():
     from src.ui.views import estudiantes_comunidad as vc
     fuente_vista = inspect.getsource(vc._boton_una_pagina) + inspect.getsource(vc.render_comunidad)
     assert "text/markdown" not in fuente_vista
+
+
+def test_el_informe_del_colegio_trae_sus_grados_tambien_publicado(fuente):
+    html = inf.informe_colegio_html(fuente, COLEGIO)
+    assert "Por grado en el colegio" in html
+    assert "Séptimo" in html and "Octavo" in html
+    assert GRADO_PEQUENO not in html

@@ -75,18 +75,10 @@ def fecha_larga(d: date | None = None) -> str:
 
 
 def colegios_del_nivel(analisis) -> list[str]:
-    """Colegios del nivel con cifras que se pueden mostrar.
-
-    Con datos crudos basta llegar a `MIN_GROUP_N`. Sin ellos, además tiene que
-    existir el subgrupo publicado, porque es de ahí de donde salen las cifras.
-    """
+    """Colegios del nivel con cifras publicables (base o subgrupos publicados)."""
     if analisis is None:
         return []
-    visibles, _ = vc.grupos_visibles(analisis, "Colegio")
-    if not vc.hay_datos_crudos(analisis):
-        publicados = (getattr(analisis, "subgrupos", None) or {}).get("Colegio") or {}
-        visibles = [g for g in visibles if g in publicados]
-    return [g for g in visibles if g not in EXCLUIDOS]
+    return [g for g in vc.grupos_publicables(analisis, "Colegio") if g not in EXCLUIDOS]
 
 
 def colegios_con_informe(analisis: dict) -> list[str]:
@@ -271,8 +263,8 @@ def _bloque_ruta() -> str:
     return f'<section class="ruta"><h2>Si un estudiante necesita ayuda</h2><ul>{filas}</ul></section>'
 
 
-def _avisos(niveles: list[str]) -> str:
-    textos = [cat.AVISO_TAMIZAJE, NOTA_COMPARACION]
+def _avisos(niveles: list[str], notas: list[str] | None = None) -> str:
+    textos = [cat.AVISO_TAMIZAJE, NOTA_COMPARACION, *[n for n in (notas or []) if n]]
     if cat.NIVEL_PRIMARIA in niveles:
         textos.append(cat.AVISO_PRIMARIA)
     textos.append(cat.AVISO_NORMAS)
@@ -431,12 +423,10 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
                 comparaciones.append((cat.MENSAJES[t.clave].titulo, comp,
                                       vc.prevalencia(a, t.clave, filtros),
                                       vc.prevalencia(a, t.clave, {})))
-        grados = ""
-        if vc.hay_datos_crudos(a):
-            grados = _tabla_comparativa(
-                a, "Grado", COLUMNAS_GRADO_COLEGIO, filtros, "Por grado en el colegio",
-                lambda g: g, nota="Los grados con menos de "
-                f"{cat.MIN_GROUP_N} estudiantes no se muestran.")
+        grados = _tabla_comparativa(
+            a, "Grado", COLUMNAS_GRADO_COLEGIO, filtros, "Por grado en el colegio",
+            lambda g: g, nota="Los grados con menos de "
+            f"{cat.MIN_GROUP_N} estudiantes no se muestran.")
         secciones.append(
             f'<section class="nivel"><h2 class="titulo-nivel">'
             f'{_e(vc.NIVELES_LABEL.get(nivel, nivel))}</h2>'
@@ -455,7 +445,8 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
               + '<p class="leer">Cada resultado trae la cifra del colegio, cómo se compara '
                 "con el total del municipio y qué puede hacer el colegio. Son cifras del "
                 "grupo: ningún dato corresponde a un estudiante.</p>"
-              + "".join(secciones) + _bloque_ruta() + _avisos(niveles))
+              + "".join(secciones) + _bloque_ruta()
+              + _avisos(niveles, [vc.nota_base(analisis[n]) for n in niveles]))
     return _documento(f"Informe Estudiantes 360 · {nombre}", cuerpo)
 
 
@@ -465,6 +456,7 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
     if not niveles:
         raise ValueError("No hay resultados de estudiantes con base suficiente.")
     secciones = []
+    notas_base: list[str] = []
     total = 0
     colegios = set()
     for nivel in niveles:
@@ -475,11 +467,10 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
         tarjetas_html = [_tarjeta_html(t, _cuerpo_tarjeta(a, t, {}, "Municipio",
                                                           con_municipio=False)[0])
                          for t in fichas]
-        _, peq_col = vc.grupos_visibles(a, "Colegio")
-        _, peq_gra = vc.grupos_visibles(a, "Grado")
-        pequenos = len(peq_col) + len(peq_gra)
-        nota_peq = (f"{pequenos} grupos con menos de {cat.MIN_GROUP_N} estudiantes no se "
-                    "muestran; sus respuestas sí cuentan en el total." if pequenos else "")
+        nota_peq = vc.texto_ocultos(a)
+        base = vc.nota_base(a)
+        if base and base not in nota_peq:
+            notas_base.append(base)
         secciones.append(
             f'<section class="nivel"><h2 class="titulo-nivel">'
             f'{_e(vc.NIVELES_LABEL.get(nivel, nivel))} · {a.n} estudiantes</h2>'
@@ -498,7 +489,7 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
               + '<p class="leer">Primero el total del municipio y qué hacer desde la política '
                 "pública; después, cómo se ubica cada colegio y cada grado frente a ese "
                 "total. Son cifras de grupo: ningún dato corresponde a un estudiante.</p>"
-              + "".join(secciones) + _bloque_ruta() + _avisos(niveles))
+              + "".join(secciones) + _bloque_ruta() + _avisos(niveles, notas_base))
     return _documento("Informe Estudiantes 360 · Secretaría", cuerpo)
 
 
