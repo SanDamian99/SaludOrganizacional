@@ -61,3 +61,19 @@ def test_pagina_inicial_por_modo():
 
 def test_un_modo_desconocido_se_trata_como_comunidad():
     assert nav.menu("cualquier-cosa") == nav.menu(COMUNIDAD)
+
+
+def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
+    """Arranca main.py de verdad en modo comunidad, sin datos ni Supabase."""
+    import sys
+    from streamlit.testing.v1 import AppTest
+    monkeypatch.setenv("OBS360_MODO", "comunidad")
+    monkeypatch.setenv("OBS360_DATOS_DIR", "/ruta/que/no/existe")
+    for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
+              "src.ui.views.estudiantes_investigador"):
+        sys.modules.pop(m, None)
+    at = AppTest.from_file("main.py", default_timeout=60).run()
+    assert not at.exception
+    for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
+              "src.ui.views.estudiantes_investigador"):
+        assert m not in sys.modules, f"{m} se importó en modo comunidad"

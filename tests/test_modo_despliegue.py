@@ -100,6 +100,10 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
         assert modulo not in antes, f"{modulo} se importa antes del corte público"
         assert modulo in despues, f"{modulo} ya no aparece en main.py"
 
+    # lo que llega en fases futuras tampoco puede importarse antes del corte
+    for modulo in ("triangulacion", "cuidadores_investigador"):
+        assert modulo not in antes, f"{modulo} se importa antes del corte público"
+
 
 def test_el_panel_tecnico_queda_despues_del_corte():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
@@ -109,9 +113,16 @@ def test_el_panel_tecnico_queda_despues_del_corte():
 
 def test_la_navegacion_se_filtra_por_modo():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "paginas_permitidas()" in fuente
-    # el radio ya no recibe la lista completa escrita a mano
-    assert not re.search(r'st\.radio\("Ir a:", \[\s*"Dashboard"', fuente)
+    assert "nav.menu(_MODO)" in fuente
+    # ningún nombre de página escrito a mano: todos salen de navegacion
+    for nombre in ('"Dashboard"', '"Docentes"', '"Estudiantes 360"', '"Chat con IA"',
+                   '"Cargar Datos"', '"Reportes"'):
+        assert nombre not in fuente, f"{nombre} está escrito a mano en main.py"
+
+
+def test_el_titulo_publico_es_de_comunidad():
+    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
+    assert "Observatorio 360 · Comunidad" in fuente
 
 
 def test_el_enlace_por_colegio_ignora_codigos_invalidos():
@@ -197,7 +208,7 @@ def test_la_pagina_inicial_depende_del_modo(con_modo):
 
 def test_el_punto_de_entrada_usa_la_pagina_inicial_del_modo():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "pagina_por_defecto" in fuente
+    assert "nav.pagina_inicial(_MODO)" in fuente
     assert "index=_indice" in fuente
 
 
@@ -209,10 +220,9 @@ def test_el_arranque_sobrevive_a_un_modulo_rancio():
     aplicación entera caía con AttributeError. Ninguna página vale eso.
     """
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert 'getattr(modo_app, "pagina_por_defecto"' in fuente, \
-        "la página inicial debe pedirse con alternativa"
-    assert "modo_app.pagina_por_defecto()" not in fuente, \
-        "no debe llamarse directamente: un módulo rancio tumba el arranque"
+    assert "from src.core import navegacion as nav" in fuente, \
+        "el menú debe venir de un módulo nuevo, que nunca está rancio"
+    assert "modo_app.pagina_por_defecto" not in fuente
 
     despachador = open(os.path.join(RAIZ, "src", "ui", "estudiantes.py"),
                        encoding="utf-8").read()
