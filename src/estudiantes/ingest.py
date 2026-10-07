@@ -61,6 +61,14 @@ _SEDES = ["samaria", "principal", "preescolar", "calahorra", "polideportivo", "t
           "mercedes", "santa lucia"]
 
 
+def nombre_colegio(codigo: str) -> str:
+    """Nombre legible de un código de colegio; el propio código si no se conoce."""
+    for _, cod, nombre in _COLEGIOS:
+        if cod == codigo:
+            return nombre
+    return str(codigo)
+
+
 def normalizar_colegio(raw) -> tuple[str, str, str]:
     """(código, nombre legible, sede). ('OTRO', texto crudo, '') si no se reconoce."""
     s = norm_txt(raw)

@@ -7,6 +7,9 @@ matplotlib>=3.8.0
 seaborn>=0.12.0
 google-generativeai>=0.8.0
 reportlab>=4.0.0
+# HTML → PDF del resumen de una página de estudiantes; sus librerías de
+# sistema (Pango) están en packages.txt para Streamlit Cloud.
+weasyprint>=62.0
 chromadb>=0.5.0
 supabase>=2.0.0
 openpyxl>=3.1.0

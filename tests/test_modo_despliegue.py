@@ -144,6 +144,13 @@ def test_el_enlace_por_colegio_ignora_codigos_invalidos():
         assert disp.colegio_de_la_url(analisis) is None
         st.query_params = ParamsFalsos({})
         assert disp.colegio_de_la_url(analisis) is None
+        # la corrida publicada no trae filas: el enlace se resuelve con `muestra`
+        publicado = Falso({})
+        publicado.muestra = {"colegio": {"LauV": 50, "CdP": "<10"}}
+        st.query_params = ParamsFalsos({"colegio": "lauv"})
+        assert disp.colegio_de_la_url({"secundaria": publicado}) == "LauV"
+        st.query_params = ParamsFalsos({"colegio": "CdP"})
+        assert disp.colegio_de_la_url({"secundaria": publicado}) is None
     finally:
         st.query_params = original
     assert cat.MIN_GROUP_N == 10
