@@ -112,8 +112,12 @@ def _mapear_bloque(df: pd.DataFrame, idx: list[int], escala: cat.Escala,
     for k, col_i in enumerate(idx, start=1):
         serie = df.iloc[:, col_i]
         nombre = f"{escala.prefijo}{k}"
-        if escala.mapa and serie.dtype == object:
-            conv = serie.map(lambda x: escala.mapa.get(norm_txt(x)) if pd.notna(x) else np.nan)
+        # «No numérico» y no `dtype == object`: con pandas 3 el texto llega como
+        # `str` y la comparación vieja dejaba todas las respuestas en blanco.
+        if escala.mapa and not pd.api.types.is_numeric_dtype(serie):
+            conv = pd.to_numeric(serie.map(
+                lambda x: escala.mapa.get(norm_txt(x)) if pd.notna(x) else np.nan),
+                errors="coerce")
             malas = serie[conv.isna() & serie.notna()].unique()
             no_mapeadas.update(str(m) for m in malas)
             out[nombre] = conv

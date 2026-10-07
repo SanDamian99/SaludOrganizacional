@@ -1,6 +1,8 @@
 """
 Pruebas del menú: nombres, orden, qué páginas existen y cuáles ve cada modo.
 """
+import os
+
 from src.core import navegacion as nav
 from src.core.modo import COMPLETO, COMUNIDAD, INVESTIGADOR
 
@@ -72,7 +74,8 @@ def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
     for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
               "src.ui.views.estudiantes_investigador"):
         sys.modules.pop(m, None)
-    at = AppTest.from_file("main.py", default_timeout=60).run()
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=60).run()
     assert not at.exception
     for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
               "src.ui.views.estudiantes_investigador"):
