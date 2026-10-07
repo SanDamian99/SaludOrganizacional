@@ -975,7 +975,9 @@ def _tab_alertas(a) -> None:
     else:
         st.dataframe(it.drop(columns=["nivel"]), hide_index=True, width="stretch")
         st.caption("Un ítem sin cifras tiene alguna respuesta con menos de 3 estudiantes o con "
-                   "todos menos 2.")
+                   "todos menos 2. Los ítems de la regla de una alerta publicada en el nivel "
+                   "no llevan cifras (columna «nota»): combinados con la alerta podrían "
+                   "identificar a alguien.")
     st.divider()
     st.subheader("Sensibilidad · umbrales y reglas (solo local)")
     s = sensibilidad_tabla(a)

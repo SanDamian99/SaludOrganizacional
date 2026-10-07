@@ -192,7 +192,7 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     # y el estado se calcula con esas cifras.
     a.alertas = alertas.tabla(a)
     a.alertas_sensibilidad = alertas.sensibilidad(dn, nivel, a.cortes_alerta)
-    a.alertas_items = alertas.distribucion_items(dn, nivel)
+    a.alertas_items = alertas.distribucion_items(dn, nivel, a.cortes_alerta)
 
     if nivel == cat.NIVEL_PRIMARIA and cat.AVISO_PRIMARIA not in a.avisos:
         a.avisos.append(cat.AVISO_PRIMARIA)

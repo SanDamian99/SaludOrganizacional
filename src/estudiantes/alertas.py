@@ -85,7 +85,9 @@ COLUMNAS_CORTES = ["clave", "indicador", "anidada_en", "n", "casos", "pct", "ic_
 COLUMNAS_TABLA = ["alerta", "agrupacion", "grupo", "n", "pct", "ic_inf", "ic_sup", "estado"]
 COLUMNAS_SENSIBILIDAD = ["alerta", "variante", "etiqueta", "vigente", "n", "pct",
                          "ic_inf", "ic_sup"]
-COLUMNAS_ITEMS = ["alerta", "item", "enunciado", "respuesta", "n", "pct"]
+COLUMNAS_ITEMS = ["alerta", "item", "enunciado", "respuesta", "n", "pct", "nota"]
+OMITIDA_POR_ALERTA = ("Se omite: combinada con la alerta publicada podría identificar a "
+                      "alguien")
 
 ETIQUETAS_RESPUESTA = {
     "SDQ": ("No es cierto", "Algo cierto", "Muy cierto"),
@@ -363,12 +365,24 @@ def sensibilidad(dn: pd.DataFrame, nivel: str, publicadas=None) -> pd.DataFrame:
     return pd.DataFrame(filas, columns=COLUMNAS_SENSIBILIDAD)
 
 
-def distribucion_items(dn: pd.DataFrame, nivel: str) -> pd.DataFrame:
+def _componentes(alerta: str) -> tuple[int, ...]:
+    """Ítems que entran en la regla vigente de la alerta."""
+    return (ac.ALERTAS[alerta].items if alerta == ac.MALESTAR else ac.ITEMS_REGLA_ESTRICTA)
+
+
+def distribucion_items(dn: pd.DataFrame, nivel: str, publicadas=None) -> pd.DataFrame:
     """% de cada respuesta en los ítems de las alertas, en el nivel. Solo local.
 
-    El reparto de respuestas de un ítem se muestra entero o no se muestra
+    Base: las filas de la alerta (las que tienen su señal vigente). El reparto
+    de respuestas de un ítem se muestra entero o no se muestra
     (`supresion.partes_publicables`): con una respuesta oculta, se deduciría
     restando las demás de n.
+
+    Los ítems de la regla vigente (los 6 del malestar; 16 y 18 de la
+    desesperanza) se omiten siempre que la cifra de la alerta en el nivel esté
+    publicada (`publicadas`, la tabla `cortes_alerta` ya suprimida; sin ella,
+    se omiten): cruzados con esa cifra dejarían ver un subconjunto pequeño, p.
+    ej. «Con frecuencia» en el 18 con valía alta. Llevan `OMITIDA_POR_ALERTA`.
     """
     if dn is None or dn.empty:
         return pd.DataFrame(columns=COLUMNAS_ITEMS)
@@ -377,19 +391,24 @@ def distribucion_items(dn: pd.DataFrame, nivel: str) -> pd.DataFrame:
         a = ac.ALERTAS[alerta]
         items = a.items if alerta == ac.MALESTAR else ac.ITEMS_REGLA_AMPLIA
         etiquetas = ETIQUETAS_RESPUESTA[a.escala]
+        base = dn[dn[COLUMNAS[alerta]].notna()]
+        alerta_publicada = (not isinstance(publicadas, pd.DataFrame)
+                            or _publicada(publicadas, alerta))
         for i in items:
             col = f"{a.escala}{i}"
-            if col not in dn.columns:
+            if col not in base.columns:
                 continue
-            v = dn[col].dropna()
+            v = base[col].dropna()
             n = len(v)
             if n < cat.MIN_GROUP_N:
                 continue
+            omitida = alerta_publicada and i in _componentes(alerta)
             conteos = [int((v == codigo).sum()) for codigo in range(len(etiquetas))]
-            ver = supresion.partes_publicables(conteos)
+            ver = not omitida and supresion.partes_publicables(conteos)
             for etiqueta, c in zip(etiquetas, conteos):
                 filas.append(dict(alerta=alerta, item=col,
                                   enunciado=ac.ENUNCIADOS_ITEMS.get(col, col),
                                   respuesta=etiqueta, n=n,
-                                  pct=round(100 * c / n, 1) if ver else None))
+                                  pct=round(100 * c / n, 1) if ver else None,
+                                  nota=OMITIDA_POR_ALERTA if omitida else ""))
     return pd.DataFrame(filas, columns=COLUMNAS_ITEMS)

@@ -405,12 +405,59 @@ def test_distribucion_de_items_oculta_el_item_con_una_respuesta_rara():
     d = pd.DataFrame({"ALERTA_malestar": 0.0,
                       "SDQ5": [0] * 90 + [1] * 8 + [2] * 2,
                       "SDQ6": [0] * 60 + [1] * 30 + [2] * 10})
-    t = al.distribucion_items(d, cat.NIVEL_SECUNDARIA)
+    t = al.distribucion_items(d, cat.NIVEL_SECUNDARIA, _publicadas(malestar=None))
     assert t[t["item"] == "SDQ5"]["pct"].isna().all()
     sdq6 = t[t["item"] == "SDQ6"]
     assert sdq6["pct"].tolist() == [60.0, 30.0, 10.0]
     assert sdq6["respuesta"].tolist() == ["No es cierto", "Algo cierto", "Muy cierto"]
     assert list(t.columns) == al.COLUMNAS_ITEMS
+
+
+def test_distribucion_de_items_usa_la_base_de_la_alerta():
+    d = pd.DataFrame({"ALERTA_malestar": [0.0] * 100 + [np.nan] * 10,
+                      "SDQ6": [0] * 60 + [1] * 30 + [2] * 10 + [2] * 10})
+    t = al.distribucion_items(d, cat.NIVEL_SECUNDARIA, _publicadas(malestar=None))
+    sdq6 = t[t["item"] == "SDQ6"]
+    assert (sdq6["n"] == 100).all() and sdq6["pct"].tolist() == [60.0, 30.0, 10.0]
+
+
+def test_distribucion_de_items_omite_los_de_la_alerta_publicada():
+    d = pd.DataFrame({"ALERTA_malestar": 0.0,
+                      "SDQ6": [0] * 60 + [1] * 30 + [2] * 10})
+    for publicadas in (_publicadas(malestar=4.0), None):
+        sdq6 = al.distribucion_items(d, cat.NIVEL_SECUNDARIA, publicadas)
+        sdq6 = sdq6[sdq6["item"] == "SDQ6"]
+        assert sdq6["pct"].isna().all()
+        assert (sdq6["nota"] == al.OMITIDA_POR_ALERTA).all()
+    assert al.OMITIDA_POR_ALERTA == ("Se omite: combinada con la alerta publicada podría "
+                                     "identificar a alguien")
+
+
+def test_distribucion_de_items_escenario_leak3():
+    """Desesperanza publicada (6 %) + reparto del ítem 18 → «frecuente con valía» = 1."""
+    filas = []
+    for i in range(100):
+        f = dict(Colegio="A" if i < 50 else "B", Grado="Sexto",
+                 Sexo="Mujer" if i % 2 else "Hombre", Edad=13, nivel=cat.NIVEL_SECUNDARIA)
+        f.update({f"SDQ{j}": 0 for j in ITEMS_MALESTAR})
+        f.update(RCADS1=0, RCADS4=0, RCADS16=1 if i % 3 else 0, RCADS18=1 if i % 4 == 0 else 0)
+        if i in (0, 10, 20, 60, 70):
+            f["RCADS18"] = 3
+        if i == 30:
+            f.update(RCADS18=2, RCADS16=2)
+        if i in (40, 80, 90):
+            f.update(RCADS18=2, RCADS16=0)
+        if i in (1, 2, 51):
+            f["RCADS16"] = 2
+        filas.append(f)
+    a = pipeline.analizar(pd.DataFrame(filas), cat.NIVEL_SECUNDARIA, n_boot=5)
+    t = a.alertas
+    total = t[(t["alerta"] == ac.DESESPERANZA) & (t["agrupacion"] == al.TOTAL)]
+    assert not total["pct"].isna().any()                 # la alerta sí se publica
+    it = a.alertas_items
+    componentes = it[it["item"].isin(["RCADS16", "RCADS18"])]
+    assert len(componentes) and componentes["pct"].isna().all()
+    assert (componentes["nota"] == al.OMITIDA_POR_ALERTA).all()
 
 
 # ══ Cifras de las alertas: la supresión general ═════════════════════════════
