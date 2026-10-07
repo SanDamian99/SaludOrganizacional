@@ -230,23 +230,6 @@ def test_el_arranque_sobrevive_a_un_modulo_rancio():
     assert "modo_app.audiencia_por_defecto()" not in despachador
 
 
-def test_la_alternativa_devuelve_una_pagina_valida():
-    """Sin la función, se abre en la primera página permitida, no en un error."""
-    class ModuloRancio:
-        COMPLETO = "completo"
-        COMUNIDAD = "comunidad"
-
-        @staticmethod
-        def paginas_permitidas():
-            return None
-
-    opciones = ["Docentes", "Estudiantes 360", "Chat con IA"]
-    pagina_inicial = getattr(ModuloRancio, "pagina_por_defecto", None)
-    inicial = pagina_inicial() if callable(pagina_inicial) else opciones[0]
-    assert inicial == "Docentes"
-    assert opciones.index(inicial) == 0
-
-
 def test_modo_y_navegacion_coinciden(con_modo):
     from src.core import navegacion as nav
     for valor in (None, "investigador", "comunidad"):
@@ -254,3 +237,36 @@ def test_modo_y_navegacion_coinciden(con_modo):
         assert m.pagina_por_defecto() == nav.pagina_inicial(m.modo())
     m = con_modo("comunidad")
     assert m.paginas_permitidas() == nav.menu(m.COMUNIDAD)
+
+
+@pytest.mark.parametrize("modo_env", ["comunidad", "completo"])
+def test_main_arranca_con_un_modo_rancio_de_la_version_anterior(monkeypatch, modo_env):
+    """Guardia real: `src.core.modo` en memoria solo tiene la API vieja.
+
+    Es lo que pasa tras un despliegue sin reinicio: main.py nuevo, módulo viejo.
+    """
+    import sys
+    from types import ModuleType
+    from streamlit.testing.v1 import AppTest
+    import src.core
+
+    rancio = ModuleType("src.core.modo")
+    rancio.COMPLETO, rancio.COMUNIDAD, rancio.INVESTIGADOR = (
+        "completo", "comunidad", "investigador")
+    rancio.VALIDOS = (rancio.COMPLETO, rancio.COMUNIDAD, rancio.INVESTIGADOR)
+    rancio.modo = lambda: modo_env
+    rancio.es_publico = lambda: modo_env == "comunidad"
+    rancio.audiencias_permitidas = (
+        lambda: ["comunidad"] if modo_env == "comunidad" else None)
+    rancio.audiencia_por_defecto = (
+        lambda: "comunidad" if modo_env == "comunidad" else "investigador")
+    monkeypatch.setitem(sys.modules, "src.core.modo", rancio)
+    monkeypatch.setattr(src.core, "modo", rancio, raising=False)
+    # que el despachador de estudiantes se importe de nuevo y vea el módulo rancio
+    monkeypatch.delitem(sys.modules, "src.ui.estudiantes", raising=False)
+    monkeypatch.setenv("OBS360_MODO", modo_env)
+    monkeypatch.setenv("OBS360_DATOS_DIR", "/ruta/que/no/existe")
+
+    at = AppTest.from_file(os.path.join(RAIZ, "main.py"), default_timeout=90).run()
+    assert not at.exception
+    assert not hasattr(sys.modules["src.core.modo"], "pagina_por_defecto")
