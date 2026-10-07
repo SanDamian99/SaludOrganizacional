@@ -77,3 +77,18 @@ def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
     for m in ("src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
               "src.ui.views.estudiantes_investigador"):
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
+
+
+def test_no_queda_dashboard_visible_en_la_interfaz():
+    """Lo que ve la persona dice «Docentes». Los comentarios técnicos no cuentan."""
+    import pathlib
+    import re
+    raiz = pathlib.Path(__file__).resolve().parents[1]
+    culpables = []
+    for f in [raiz / "main.py", *(raiz / "src" / "ui").rglob("*.py"),
+              raiz / "src" / "core" / "state.py"]:
+        texto = f.read_text(encoding="utf-8")
+        # cadenas entre comillas que contienen la palabra
+        for m in re.finditer(r'"[^"\n]*Dashboard[^"\n]*"', texto):
+            culpables.append(f"{f.relative_to(raiz)}: {m.group(0)}")
+    assert not culpables, culpables

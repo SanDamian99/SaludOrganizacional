@@ -16,12 +16,12 @@ def render_reports_page():
     st.sidebar.subheader("Configuración del Informe")
     data_source = st.sidebar.radio(
         "Fuente de Datos",
-        ["Datos Cargados (Dashboard)", "Archivo Nuevo"]
+        ["Datos Cargados (Docentes)", "Archivo Nuevo"]
     )
 
     df_report = None
 
-    if data_source == "Datos Cargados (Dashboard)":
+    if data_source == "Datos Cargados (Docentes)":
         if 'df' in st.session_state and st.session_state.df is not None:
             df_report = st.session_state.df
             st.success(f"✅ Usando datos activos: **{len(df_report):,} registros.**")

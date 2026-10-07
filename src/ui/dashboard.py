@@ -1,5 +1,5 @@
 """
-Dashboard dual — Observatorio de Salud Organizacional.
+Docentes — dashboard dual del Observatorio de Salud Organizacional.
 
 Vista EJECUTIVA (KPIs, semáforo, alertas, fortalezas/riesgos) para directivos y
 vista ACADÉMICA (α de Cronbach, tablas, correlación entre dimensiones, comparativas
@@ -556,7 +556,7 @@ def render_dashboard():
         st.info("⚠️ No hay datos cargados. Ve a 'Cargar Datos' para comenzar.")
         return
 
-    st.markdown("## 📊 Dashboard de Salud Organizacional")
+    st.markdown("## 📊 Docentes · Salud Organizacional")
     label = st.session_state.get("current_dataset")
     if label:
         st.caption(f"Dataset activo: **{label}** · {len(df):,} registros")
