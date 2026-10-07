@@ -182,3 +182,36 @@ def test_marcar_agrega_las_columnas_del_nivel_y_no_toca_nada_mas():
 def test_las_columnas_de_senal_pasan_por_el_todo_o_nada():
     d = pd.DataFrame(columns=["Colegio", "Grado", "ALERTA_malestar"])
     assert "ALERTA_malestar" in privacidad.columnas_de_analisis(d)
+
+
+# ══ Ítems con «*»: una sola regla, la de ingest ═════════════════════════════
+@pytest.mark.parametrize("encabezado,marcado", [
+    ("*SDQ [x]", True), ("SDQ [x] *", True), (" *SDQ [x]", True),
+    ("SDQ [x]", False), ("SDQ [x*y]", False)])
+def test_tiene_asterisco(encabezado, marcado):
+    assert ingest.tiene_asterisco(encabezado) is marcado
+
+
+def test_items_marcados_al_principio_o_al_final():
+    raw = _formulario_sintetico(n=12)
+    cols = [c for c in raw.columns if c.startswith("SDQ")]
+    raw = raw.rename(columns={cols[4]: "*" + cols[4], cols[5]: cols[5] + " *"})
+    assert al.items_marcados_por_escala(raw.columns) == {"SDQ": {5, 6}}
+    _, inf = ingest.cargar(raw)                     # ingest usa la misma regla
+    assert len(inf.items_marcados) == 2
+
+
+def test_los_items_esperados_salen_del_catalogo():
+    assert ac.items_marcados_esperados(cat.NIVEL_PRIMARIA) == {"SDQ": {5, 6, 8, 13, 19, 24}}
+    assert ac.items_marcados_esperados(cat.NIVEL_SECUNDARIA) == {}   # hoy sin marcar
+
+
+def test_un_formulario_marcado_como_el_catalogo_coincide_y_se_carga():
+    raw = _formulario_sintetico(n=12)
+    cols = [c for c in raw.columns if c.startswith("SDQ")]
+    raw = raw.rename(columns={cols[i - 1]: "*" + cols[i - 1]
+                              for i in ac.ALERTAS[ac.MALESTAR].items})
+    assert al.items_marcados_por_escala(raw.columns) == \
+        ac.items_marcados_esperados(cat.NIVEL_PRIMARIA)
+    d, inf = ingest.cargar(raw)                     # el «*» no rompe la carga
+    assert len(inf.items_marcados) == 6 and "SDQ5" in d.columns

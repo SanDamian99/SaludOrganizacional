@@ -150,3 +150,23 @@ def claves_del_nivel(d: pd.DataFrame, nivel: str) -> list[str]:
     """Alertas que aplican al nivel y tienen alguna señal válida en `d`."""
     return [k for k, x in ac.ALERTAS.items()
             if nivel in x.niveles and COLUMNAS[k] in d.columns and d[COLUMNAS[k]].notna().any()]
+
+
+# ── Ítems con «*» en el formulario ───────────────────────────────────────────
+def items_marcados_por_escala(columnas) -> dict[str, set[int]]:
+    """{escala: números de ítem} de los encabezados con «*» (spec §5.4).
+
+    Localiza cada bloque igual que `ingest` (por el prefijo normalizado), numera
+    dentro del bloque y reconoce el «*» con `ingest.tiene_asterisco`, la misma
+    regla que llena `InformeIngesta.items_marcados`.
+    """
+    from src.estudiantes.ingest import _PREFIJOS, _bloque, norm_txt, tiene_asterisco
+    crudas = list(columnas)
+    normalizadas = [norm_txt(c) for c in crudas]
+    salida: dict[str, set[int]] = {}
+    for escala, prefijo in _PREFIJOS.items():
+        indices = _bloque(normalizadas, prefijo)
+        marcados = {i for i, col in enumerate(indices, start=1) if tiene_asterisco(crudas[col])}
+        if marcados:
+            salida[escala] = marcados
+    return salida
