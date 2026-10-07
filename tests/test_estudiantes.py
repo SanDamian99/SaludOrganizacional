@@ -314,11 +314,25 @@ def referencia():
 
 @pytest.fixture(scope="module")
 def analisis_real():
-    rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
+    # La referencia se calculó sobre los formularios del 18-sep-2026. Los datos
+    # vigentes cambian con cada exportación; la regresión no debe moverse con ellos.
+    base = os.path.join(carpeta_datos("otros"), "archivo", "estudiantes_2026-09-18")
+    rutas = pipeline.localizar_formularios(base)
     if len(rutas) < 2:
-        pytest.skip("Los CSV originales no están en el directorio de trabajo")
+        pytest.skip("Falta la instantánea de referencia del 18-sep")
     res, informes = pipeline.cargar_y_analizar(rutas, n_boot=60)
     return res, informes
+
+
+@pytest.fixture(scope="module")
+def puntuado_real():
+    """Los mismos formularios del 18-sep, puntuados y sin enmascarar."""
+    base = os.path.join(carpeta_datos("otros"), "archivo", "estudiantes_2026-09-18")
+    rutas = pipeline.localizar_formularios(base)
+    if len(rutas) < 2:
+        pytest.skip("Falta la instantánea de referencia del 18-sep")
+    bruto, _ = ingest.cargar_varios(rutas)
+    return scoring.puntuar(bruto)
 
 
 def test_regresion_n_valido(analisis_real, referencia):
@@ -343,9 +357,14 @@ def test_regresion_exclusiones(analisis_real, referencia):
                                     "ERQ_Reap", "ERQ_Sup", "TD_Total"])
 def test_regresion_descriptivos(analisis_real, referencia, clave):
     res, _ = analisis_real
-    obt = res[cat.NIVEL_SECUNDARIA].descriptivos.set_index("clave")
+    a = res[cat.NIVEL_SECUNDARIA]
+    obt = a.descriptivos.set_index("clave")
     esp = referencia["descriptivos"]["secundaria"][clave]
-    assert obt.loc[clave, "n"] == esp["n"]
+    # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
+    # las 4 respuestas de ERQ del resto de colegios pequeños.
+    suprimidos = a.muestra["suprimidos"].get(clave, 0)
+    assert suprimidos <= 10
+    assert obt.loc[clave, "n"] == esp["n"] - suprimidos
     assert obt.loc[clave, "M"] == pytest.approx(esp["M"], abs=0.01)
     assert obt.loc[clave, "DE"] == pytest.approx(esp["DE"], abs=0.01)
 
@@ -354,10 +373,15 @@ def test_regresion_descriptivos(analisis_real, referencia, clave):
                                     "PSSM_Total", "ERQ_Reap"])
 def test_regresion_alfa(analisis_real, referencia, clave):
     res, _ = analisis_real
-    obt = res[cat.NIVEL_SECUNDARIA].fiabilidad.set_index("clave")
+    a = res[cat.NIVEL_SECUNDARIA]
+    obt = a.fiabilidad.set_index("clave")
     esp = referencia["alfa"]["secundaria"][clave]
     assert obt.loc[clave, "alpha"] == pytest.approx(esp["alpha"], abs=0.01)
-    assert obt.loc[clave, "n"] == esp["n"]
+    # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
+    # las 4 respuestas de ERQ del resto de colegios pequeños.
+    suprimidos = a.muestra["suprimidos"].get(clave, 0)
+    assert suprimidos <= 10
+    assert obt.loc[clave, "n"] == esp["n"] - suprimidos
 
 
 def test_regresion_bandas_sdq(analisis_real, referencia):
@@ -390,13 +414,23 @@ def test_regresion_correlaciones(analisis_real, referencia, a, b):
     assert fila["rho"].iloc[0] == pytest.approx(esp["rho"], abs=0.01)
 
 
-def test_regresion_modelo_depresion(analisis_real, referencia):
+def test_regresion_modelo_depresion(analisis_real, puntuado_real, referencia):
     res, _ = analisis_real
-    m = [x for x in res[cat.NIVEL_SECUNDARIA].modelos if x["y"] == "RCADS_Dep"]
+    a = res[cat.NIVEL_SECUNDARIA]
+    m = [x for x in a.modelos if x["y"] == "RCADS_Dep"]
     assert m, "falta el modelo de depresión"
     m = m[0]
     esp = referencia["modelos"]["dep_protectores"]
-    assert m["n"] == esp["n"]
+    # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
+    # las 4 respuestas de ERQ del resto de colegios pequeños. El n esperado es el
+    # de referencia menos los casos completos que perdió el modelo al enmascarar.
+    variables = (["RCADS_Dep"] + [p for p in pipeline.PROTECTORES if p in a.datos.columns]
+                 + ["Colegio", "Sexo", "Edad"])
+    crudo = puntuado_real.loc[a.base.nivel, variables].dropna()
+    enmascarado = a.datos.loc[a.base.nivel, variables].dropna()
+    perdidos = len(crudo) - len(enmascarado)
+    assert 0 <= perdidos <= 10
+    assert m["n"] == esp["n"] - perdidos
     assert m["R2"] == pytest.approx(esp["R2"], abs=0.01)
     obt = {c["predictor"]: c["beta"] for c in m["coeficientes"]}
     for pred in ("MSPSS_Fam", "PSSM_Total", "ERQ_Sup"):
@@ -408,3 +442,24 @@ def test_no_hay_columnas_identificables_en_el_analisis(analisis_real):
     for a in res.values():
         assert not any("nombre" in c.lower() for c in a.datos.columns
                        if c != "Colegio_nombre")
+
+
+def test_localizar_se_queda_con_el_archivo_mas_reciente(tmp_path):
+    import time
+    viejo = tmp_path / "¡Cuéntanos sobre tus emociones! (respuestas) - Respuestas de formulario 1.csv"
+    nuevo = tmp_path / "¡Cuéntanos sobre tus emociones! (respuestas).xlsx"
+    viejo.write_text("x")
+    time.sleep(0.01)
+    nuevo.write_text("x")
+    rutas = pipeline.localizar_formularios(str(tmp_path))
+    assert rutas == [str(nuevo)]
+
+
+def test_la_ingesta_guarda_conteos_crudos_e_items_marcados():
+    raw = _formulario_sintetico(30)
+    col = next(c for c in raw.columns if c.startswith("SDQ"))
+    raw = raw.rename(columns={col: "*" + col})
+    d, inf = ingest.cargar(raw)
+    assert sum(inf.crudo_colegio_grado.values()) == len(raw)
+    assert all("|" in k for k in inf.crudo_colegio_grado)
+    assert len(inf.items_marcados) == 1 and inf.items_marcados[0].startswith("sdq")

@@ -161,3 +161,27 @@ def test_la_vista_ya_no_ofrece_markdown():
     from src.ui.views import estudiantes_comunidad as vc
     fuente_vista = inspect.getsource(vc._boton_una_pagina) + inspect.getsource(vc.render_comunidad)
     assert "text/markdown" not in fuente_vista
+
+
+def test_el_informe_del_colegio_trae_sus_grados_tambien_publicado(fuente):
+    html = inf.informe_colegio_html(fuente, COLEGIO)
+    assert "Por grado en el colegio" in html
+    assert "Séptimo" in html and "Octavo" in html
+    assert GRADO_PEQUENO not in html
+
+
+# ══ Encabezado de la Secretaría: respuestas en las cifras de cuántas hubo ════
+def test_secretaria_dice_cuantas_respuestas_entran_de_cuantas_hubo(fuente):
+    """El fixture tiene 70 respuestas y 62 en el nivel publicado: «62 de 70»."""
+    html = inf.informe_secretaria_html(fuente, fecha=date(2026, 10, 7))
+    assert "62 de 70 respuestas" in html
+    assert "70 estudiantes ·" not in html
+
+
+def test_secretaria_deja_el_numero_simple_si_entran_todas(analisis):
+    import copy
+    a = copy.copy(analisis[cat.NIVEL_SECUNDARIA])
+    a.muestra = dict(a.muestra, base=dict(a.muestra["base"], n_nivel=a.n, n_total=a.n))
+    html = inf.informe_secretaria_html({cat.NIVEL_SECUNDARIA: a}, fecha=date(2026, 10, 7))
+    assert f"{a.n} estudiantes" in html
+    assert f"de {a.n} respuestas" not in html

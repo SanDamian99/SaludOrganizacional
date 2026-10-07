@@ -311,7 +311,7 @@ def flujo_exclusiones_md(informes: list | None) -> str:
             lineas.append(f"| − {etiqueta} | {quitadas} | {restantes} |")
         validas = int(getattr(inf, "filas_validas", restantes) or restantes)
         lineas += [f"| **Respuestas válidas analizadas** | | **{validas}** |", ""]
-        erq = int(getattr(inf, "erq_invalidado", 0) or 0)
+        erq = _erq_invalidado(inf)
         if erq:
             lineas += [f"Además, {erq} respuesta(s) conservan la fila pero pierden el bloque "
                        "de regulación emocional (ERQ-CA): responder el mínimo en los diez "
@@ -544,6 +544,12 @@ def _tabla_conteos(pares, etiqueta: str) -> pd.DataFrame:
     return pd.DataFrame(filas, columns=[etiqueta, "n"])
 
 
+def _erq_invalidado(informe):
+    """Bloques ERQ-CA invalidados: un entero, o «<10» si viene enmascarado de la corrida."""
+    valor = getattr(informe, "erq_invalidado", 0) or 0
+    return valor if isinstance(valor, str) else int(valor)
+
+
 def _conteo(valor) -> float:
     """Conteo como número para poder ordenar.
 
@@ -555,6 +561,36 @@ def _conteo(valor) -> float:
         return float(valor)
     except (TypeError, ValueError):
         return -1.0
+
+
+def tabla_colegio_grado(validas: dict, crudas: dict, orden_grados: list[str]) -> pd.DataFrame:
+    """Colegio × grado: válidas (entran al análisis) y respuestas (filas del formulario).
+
+    Los conteos por debajo del mínimo se muestran como «<10» en las dos columnas,
+    aunque la corrida local tenga la cifra exacta: esta tabla se ve igual en
+    local y en el despliegue.
+    """
+    from src.core.colegios import nombre
+    from src.estudiantes.privacidad import partir_celda
+
+    def texto(v):
+        try:
+            return str(int(v)) if float(v) >= cat.MIN_GROUP_N else f"<{cat.MIN_GROUP_N}"
+        except (TypeError, ValueError):
+            return f"<{cat.MIN_GROUP_N}"
+
+    def orden(clave):
+        colegio, grado = partir_celda(clave)
+        return (nombre(colegio),
+                orden_grados.index(grado) if grado in orden_grados else len(orden_grados))
+
+    filas = []
+    for k in sorted(set(validas) | set(crudas), key=orden):
+        colegio, grado = partir_celda(k)
+        filas.append({"Colegio": nombre(colegio), "Grado": grado,
+                      "Válidas": texto(validas[k]) if k in validas else "0",
+                      "Respuestas": texto(crudas[k]) if k in crudas else "—"})
+    return pd.DataFrame(filas, columns=["Colegio", "Grado", "Válidas", "Respuestas"])
 
 
 def _tab_muestra(a, informe, nivel: str) -> None:
@@ -595,6 +631,15 @@ def _tab_muestra(a, informe, nivel: str) -> None:
                      hide_index=True, width="stretch")
         st.caption(f"Los colegios con menos de {cat.MIN_GROUP_N} estudiantes entran en el "
                    "total pero no se muestran desagregados en ninguna otra pestaña.")
+        cg = m.get("colegio_grado") or {}
+        if cg:
+            crudas = getattr(informe, "crudo_colegio_grado", None) or {}
+            st.markdown("**Colegio × grado**")
+            st.dataframe(tabla_colegio_grado(cg, crudas, orden),
+                         hide_index=True, width="stretch")
+            st.caption("«Válidas» entran al análisis; «Respuestas» son las filas del "
+                       "formulario antes de limpiar (consentimiento, pruebas y duplicados). "
+                       "La sede no separa grupos: San Josemaría suma sus sedes.")
 
     st.divider()
     st.subheader("Flujo de exclusiones")
@@ -611,7 +656,7 @@ def _tab_muestra(a, informe, nivel: str) -> None:
         filas.append({"Paso": "Respuestas válidas analizadas", "Casos": None,
                       "Quedan": int(getattr(informe, "filas_validas", restantes) or restantes)})
         st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
-        erq = int(getattr(informe, "erq_invalidado", 0) or 0)
+        erq = _erq_invalidado(informe)
         if erq:
             st.warning(f"{erq} respuesta(s) conservan la fila pero pierden el bloque de "
                        "regulación emocional (ERQ-CA) por responder el mínimo en los diez "
@@ -899,7 +944,7 @@ def _tab_calidad(a, informe) -> None:
             else:
                 st.success("Todas las etiquetas del formulario se mapearon a número.")
             st.metric("Bloques ERQ-CA invalidados",
-                      int(getattr(informe, "erq_invalidado", 0) or 0),
+                      _erq_invalidado(informe),
                       help="Respuestas con el valor mínimo en los diez ítems: artefacto de "
                            "aplicación, no resultado.")
             st.markdown("**Escalas**")

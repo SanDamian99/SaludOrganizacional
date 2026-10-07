@@ -43,6 +43,23 @@ def test_rechaza_identificador_de_estudiante_como_grupo():
     assert "identificador de estudiante" in str(e.value)
 
 
+@pytest.mark.parametrize("ident", ["E1a2b3c4d", "C1a2b3c4d", "N1a2b3c4d",
+                                   "c00ff00aa", "nABCDEF12"])
+def test_rechaza_identificadores_e_c_n_como_en_la_base(ident):
+    """Misma regla que el CHECK de la base: ^[ECN][0-9a-f]{8}$, sin distinguir mayúsculas."""
+    with pytest.raises(publicar.PublicacionInsegura):
+        publicar.verificar([_fila_valida(agrupacion="ID", grupo=ident)])
+    with pytest.raises(publicar.PublicacionInsegura) as e:
+        publicar.verificar([_fila_valida(clave=ident)])
+    assert "clave" in str(e.value)
+
+
+@pytest.mark.parametrize("valor", ["LauV", "Sexto", "E1a2b3c4", "E1a2b3c4d5",
+                                   "X1a2b3c4d", "E1a2b3c4z", "LauV|Sexto"])
+def test_no_confunde_grupos_normales_con_identificadores(valor):
+    publicar.verificar([_fila_valida(agrupacion="Colegio", grupo=valor)])
+
+
 @pytest.mark.parametrize("prohibida", ["nombre", "id", "ts", "sede"])
 def test_rechaza_columnas_de_identificacion_en_el_detalle(prohibida):
     with pytest.raises(publicar.PublicacionInsegura):
@@ -188,3 +205,232 @@ def test_las_credenciales_de_escritura_salen_del_archivo_local_si_no_estan_en_el
     # sin archivo y sin entorno, nada
     monkeypatch.delenv("SUPABASE_URL"); monkeypatch.delenv("SUPABASE_SERVICE_KEY")
     assert publicar.credenciales_escritura(str(tmp_path / "no_existe.toml")) == (None, None)
+
+
+# ══ Auditoría de restas, enmascarado y despublicación ═══════════════════════
+from tests.test_estudiantes_comunidad import _formulario  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def analisis_sintetico():
+    from src.estudiantes import ingest, scoring
+    bruto, _ = ingest.cargar(_formulario())
+    return {cat.NIVEL_SECUNDARIA: pipeline.analizar(scoring.puntuar(bruto),
+                                                    cat.NIVEL_SECUNDARIA, n_boot=20)}
+
+
+def test_la_auditoria_de_restas_pasa_con_la_base(analisis_sintetico):
+    assert publicar.verificar_restas(analisis_sintetico) == []
+
+
+def test_la_auditoria_bloquea_una_base_manipulada(analisis_sintetico):
+    import copy
+    a = copy.copy(analisis_sintetico[cat.NIVEL_SECUNDARIA])
+    b = copy.copy(a.base)
+    b.colegios = dict(b.colegios)
+    b.colegios["LauV"] = a.datos.index[a.datos["Colegio"] == "LauV"]   # incluye Noveno (4)
+    a.base = b
+    assert publicar.verificar_restas({cat.NIVEL_SECUNDARIA: a})
+
+
+class _Tabla:
+    def __init__(self, registro, nombre):
+        self.r, self.n = registro, nombre
+
+    def insert(self, filas):
+        self.r.append(("insert", self.n, filas)); return self
+
+    def update(self, valores):
+        self.r.append(("update", self.n, valores)); return self
+
+    def eq(self, k, v):
+        self.r.append(("eq", self.n, (k, v))); return self
+
+    def neq(self, k, v):
+        self.r.append(("neq", self.n, (k, v))); return self
+
+    def execute(self):
+        class R:
+            data = [{"id": 7}]
+        return R()
+
+
+class _Cliente:
+    def __init__(self):
+        self.registro = []
+        cliente = self
+
+        class _Schema:
+            def table(self, nombre): return _Tabla(cliente.registro, nombre)
+
+        class _Postgrest:
+            def schema(self, _): return _Schema()
+        self.postgrest = _Postgrest()
+
+
+def test_publicar_ya_inserta_oculta_y_publica_al_final(analisis_sintetico):
+    cli = _Cliente()
+    publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
+    pasos = cli.registro
+    ins = [p for p in pasos if p[0] == "insert"]
+    assert ins[0][1] == "corridas" and ins[0][2]["publicada"] is False
+    assert all(p[1] == "resultados" for p in ins[1:]) and len(ins) > 1
+    ult_insert = max(i for i, p in enumerate(pasos) if p[0] == "insert")
+    i_true = pasos.index(("update", "corridas", {"publicada": True}))
+    i_false = pasos.index(("update", "corridas", {"publicada": False}))
+    assert ult_insert < i_true < i_false
+    assert ("eq", "corridas", ("id", 7)) in pasos[i_true:i_false]
+    assert ("eq", "corridas", ("modulo", "estudiantes")) in pasos[i_false:]
+    assert ("neq", "corridas", ("id", 7)) in pasos[i_false:]
+
+
+def test_publicar_ya_devuelve_publicada_true(analisis_sintetico):
+    r = publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=_Cliente())
+    assert r["publicada"] is True
+
+
+def test_si_falla_el_insert_de_resultados_no_se_publica(analisis_sintetico):
+    cli = _Cliente()
+    original = _Tabla.execute
+
+    def execute(self):
+        if self.n == "resultados":
+            raise RuntimeError("red caída")
+        return original(self)
+    _Tabla.execute = execute
+    try:
+        with pytest.raises(RuntimeError):
+            publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
+    finally:
+        _Tabla.execute = original
+    assert not any(p[0] == "update" and p[2] == {"publicada": True}
+                   for p in cli.registro)
+
+
+def test_sin_publicar_ya_no_toca_otras_corridas(analisis_sintetico):
+    cli = _Cliente()
+    publicar.publicar(analisis_sintetico, publicar_ya=False, cliente=cli)
+    assert not any(p[0] == "update" for p in cli.registro)
+
+
+def test_auditoria_fallida_no_llama_al_cliente(analisis_sintetico, monkeypatch):
+    monkeypatch.setattr(publicar, "verificar_restas", lambda a: ["x"])
+    cli = _Cliente()
+    with pytest.raises(publicar.PublicacionInsegura):
+        publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=cli)
+    assert cli.registro == []
+
+
+def test_verificar_restas_vacio_y_sin_base():
+    from src.estudiantes.pipeline import Analisis
+    import pandas as pd
+    assert publicar.verificar_restas({}) == []
+    a = Analisis(nivel="secundaria", n=50, datos=pd.DataFrame())
+    assert getattr(a, "base", None) is None
+    assert publicar.verificar_restas({"secundaria": a, "primaria": None}) == []
+
+
+def test_main_devuelve_2_si_publicar_es_inseguro(analisis_sintetico, monkeypatch, capsys):
+    monkeypatch.setattr(publicar.pipeline, "cargar_y_analizar",
+                        lambda base=None: (analisis_sintetico, []))
+    def falla(*a, **k):
+        raise publicar.PublicacionInsegura("resta")
+    monkeypatch.setattr(publicar, "publicar", falla)
+    assert publicar.main([]) == 2
+
+
+def test_ensayo_con_restas_escribe_json_y_devuelve_2(analisis_sintetico, monkeypatch, tmp_path):
+    monkeypatch.setattr(publicar.pipeline, "cargar_y_analizar",
+                        lambda base=None: (analisis_sintetico, []))
+    monkeypatch.setattr(publicar, "verificar_restas", lambda a: ["x"])
+    salida = tmp_path / "l.json"
+    assert publicar.main(["--ensayo", "--salida", str(salida)]) == 2
+    assert salida.exists()
+
+
+def test_los_conteos_crudos_se_enmascaran_al_publicar():
+    class Inf:
+        nivel = "secundaria"
+        crudo_colegio_grado = {"LauV|Sexto": 95, "CdP|Décimo": 6}
+    filas = publicar.aplanar_ingesta([Inf()])
+    crudo = filas[0]["detalle"]["ingesta"]["crudo_colegio_grado"]
+    assert crudo["LauV|Sexto"] == 95 and crudo["CdP|Décimo"] == "<10"
+
+
+def test_la_fila_muestra_enmascara_celdas_y_suprimidos_pequenos(analisis_sintetico):
+    import copy
+    a = copy.copy(analisis_sintetico[cat.NIVEL_SECUNDARIA])
+    m = dict(a.muestra)
+    m["colegio_grado"] = {"LauV|Sexto": 95, "LauV|Noveno": 4}
+    m["suprimidos"] = {"SDQ_Total": 3, "PSSM": 25}
+    a.muestra = m
+    fila = next(f for f in publicar.aplanar({cat.NIVEL_SECUNDARIA: a})
+                if f["tipo"] == "muestra")
+    pub = fila["detalle"]["muestra"]
+    assert pub["colegio_grado"] == {"LauV|Sexto": 95, "LauV|Noveno": "<10"}
+    assert pub["suprimidos"] == {"SDQ_Total": "<10", "PSSM": 25}
+
+
+def test_un_conteo_cero_no_se_enmascara():
+    # un cero no identifica a nadie y la vista necesita distinguirlo de «<10»
+    assert publicar._enmascarar_conteos({"a": 0, "b": 3, "c": 12}) == \
+        {"a": 0, "b": "<10", "c": 12}
+
+
+def test_la_ingesta_publicada_enmascara_los_conteos_por_categoria():
+    """Edades fuera de rango y ERQ invalidado: de 1 a 9 se publican como «<10».
+
+    Los totales de exclusión (sin consentimiento, prueba, duplicados…) se quedan
+    como número: son pasos del diagrama de la muestra de todo el nivel.
+    """
+    class Inf:
+        nivel = "secundaria"
+        filas_validas = 300
+        sin_consentimiento = 4
+        duplicados_eliminados = 2
+        edades_fuera_de_rango = {"RCADS": 3, "SDQ": 25}
+        erq_invalidado = 7
+        avisos = ["ERQ-CA: 7 respuestas con «Nada parecido a mi» en los 10 ítems "
+                  "se marcan como faltantes.", "Otro aviso con 7 cosas."]
+    ing = publicar.aplanar_ingesta([Inf()])[0]["detalle"]["ingesta"]
+    assert ing["edades_fuera_de_rango"] == {"RCADS": "<10", "SDQ": 25}
+    assert ing["erq_invalidado"] == "<10"
+    assert ing["avisos"][0].startswith("ERQ-CA: <10 respuestas")
+    assert ing["avisos"][1] == "Otro aviso con 7 cosas."
+    assert ing["sin_consentimiento"] == 4 and ing["duplicados_eliminados"] == 2
+
+
+def test_un_erq_invalidado_grande_se_publica_tal_cual():
+    class Inf:
+        nivel = "secundaria"
+        filas_validas = 300
+        erq_invalidado = 42
+        avisos = ["ERQ-CA: 42 respuestas con «x» en los 10 ítems se marcan."]
+    ing = publicar.aplanar_ingesta([Inf()])[0]["detalle"]["ingesta"]
+    assert ing["erq_invalidado"] == 42
+    assert ing["avisos"][0].startswith("ERQ-CA: 42 respuestas")
+
+
+def test_si_falla_despublicar_las_otras_avisa_y_devuelve_el_resultado(
+        analisis_sintetico, capsys):
+    """La corrida nueva ya está abierta: no se pierde el resultado, se avisa."""
+    original = _Tabla.execute
+
+    def execute(self):
+        if ("neq", "corridas", ("id", 7)) in self.r:
+            raise RuntimeError("permiso denegado")
+        return original(self)
+    _Tabla.execute = execute
+    try:
+        r = publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=_Cliente())
+    finally:
+        _Tabla.execute = original
+    assert r["publicada"] is True and r["corrida_id"] == 7
+    assert r["otras_corridas_despublicadas"] is False
+    err = capsys.readouterr().err
+    assert "migración" in err and "despublic" in err.lower()
+
+
+def test_publicar_ya_informa_que_despublico_las_otras(analisis_sintetico):
+    r = publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=_Cliente())
+    assert r["otras_corridas_despublicadas"] is True

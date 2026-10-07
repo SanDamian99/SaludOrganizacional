@@ -129,7 +129,13 @@ def colegio_de_la_url(analisis) -> str | None:
         if a is None:
             continue
         datos = getattr(a, "datos", None)
-        if datos is not None and "Colegio" in datos.columns and not datos.empty:
+        if getattr(a, "base", None) is not None or \
+                (getattr(a, "subgrupos", None) or {}).get("Colegio"):
+            # Los mismos colegios que ofrece el selector: los de la base
+            # publicable (datos crudos) o los subgrupos publicados.
+            from src.ui.views.estudiantes_comunidad import grupos_publicables
+            cuenta = {c: cat.MIN_GROUP_N for c in grupos_publicables(a, "Colegio")}
+        elif datos is not None and "Colegio" in datos.columns and not datos.empty:
             cuenta = datos["Colegio"].value_counts().to_dict()
         else:
             # La corrida publicada no trae filas: los conteos vienen en `muestra`,

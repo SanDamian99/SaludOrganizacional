@@ -40,12 +40,12 @@ hacer ni con acceso total a la base.
 | Control | Estado |
 |---|---|
 | RLS activo en las tres tablas nuevas | sí |
-| Políticas de lectura para el rol anónimo | solo de corridas con `publicada = true` |
+| Políticas de lectura para el rol anónimo | solo la **última** corrida con `publicada = true` de cada módulo (función `obs360.es_ultima_publicada`, desde la migración 2026-10-07) |
 | Políticas de escritura para el rol anónimo | **ninguna** |
 | Concesiones `INSERT/UPDATE/DELETE` a `anon` en `public` y `obs360` | **ninguna** |
 | Tablas sin RLS en `public` y `obs360` | ninguna |
 | `CHECK` que rechaza filas con `n < 10` | probado: rechaza una fila con n = 3 |
-| `CHECK` que rechaza identificadores con forma `E########` | activo |
+| `CHECK` que rechaza identificadores con forma `E########`, `C########` o `N########` | activo |
 
 Escribir exige la clave `service_role`, que se queda en el equipo de quien
 publica y **nunca se despliega**.
@@ -70,11 +70,23 @@ export SUPABASE_SERVICE_KEY="$(python -c "import tomllib;print(tomllib.load(open
 python -m src.estudiantes.publicar --notas "primera carga"
 ```
 
-La corrida queda **oculta**. Para abrirla al público, en el SQL Editor:
+La corrida queda **oculta**. Para abrirla al público, lo seguro es publicarla
+directamente con `--publicar-ya` (se abre la nueva y se cierran las demás del
+módulo):
 
-```sql
-UPDATE obs360.corridas SET publicada = true WHERE id = <id de la corrida>;
+```bash
+python -m src.estudiantes.publicar --notas "fase 1" --publicar-ya
 ```
+
+o, si se quiere revisar antes, aprobar **esa misma corrida nueva** en el SQL
+Editor (`UPDATE obs360.corridas SET publicada = true WHERE id = <id de la
+corrida recién creada>;`).
+
+> **Atención: nunca aprobar una corrida vieja.** Las corridas anteriores a la
+> fase 1 (la 2 incluida) se generaron **sin** la base publicable por
+> colegio×grado ni el enmascaramiento todo-o-nada por columna: sus cifras
+> permiten restas entre grupos que pueden aislar a menos de 10 estudiantes.
+> Aprobar una de ellas reabre ese riesgo.
 
 El último ensayo dio **797 filas agregadas**, con un N mínimo de 15 en el lote
 frente a un umbral de 10.
@@ -122,14 +134,16 @@ verificó que la puerta funciona:
 | Clave pública intentando escribir | HTTP 401 |
 | Clave de servicio leyendo `resultados` | 797 filas |
 
-Para aprobarla, en el SQL Editor:
-
-```sql
-UPDATE obs360.corridas SET publicada = true WHERE id = 2;
-```
-
-Desde ese momento la clave pública ve las 797 filas, y solo esas: una corrida
-posterior vuelve a entrar oculta.
+> **Atención: la corrida 2 NO se debe aprobar.** Es anterior a la base
+> publicable y al enmascaramiento por columna de la fase 1. En su lugar:
+>
+> 1. Correr la migración `supabase/migraciones/2026-10-07-modulo-y-ultima-corrida.sql`
+>    (o re-ejecutar `estudiantes_schema.sql`, que ya la incluye).
+> 2. Publicar una corrida **nueva**:
+>    `python -m src.estudiantes.publicar --notas "fase 1" --publicar-ya`
+>    (o publicarla sin `--publicar-ya` y aprobar esa corrida nueva tras revisarla).
+>
+> Nunca aprobar corridas viejas.
 
 > El esquema `obs360` tuvo que añadirse a los esquemas expuestos de la API REST
 > (*Settings → API → Exposed schemas*), y el rol `service_role` necesitó permisos
@@ -190,9 +204,27 @@ YOUR_API_KEY = "clave-de-gemini"  # opcional; el modo comunidad no usa IA
 
 La clave `service_role` y el token de acceso **no** van ahí. Nunca.
 
+## Migración: corridas por módulo (7 oct 2026)
+
+Archivo: `supabase/migraciones/2026-10-07-modulo-y-ultima-corrida.sql`.
+
+- **Cuándo:** correrla en el SQL Editor **antes** de desplegar esta rama.
+- **Qué hace:** admite el nivel `cuidadores`, extiende el CHECK de identificadores
+  a `E`/`C`/`N`, y hace que el público (y las vistas `ultima_corrida` y
+  `resultados_vigentes`) vea solo la última corrida publicada **de cada módulo**,
+  no una sola global. Añade `modulo` a `mensajes`.
+- **Verificar:** `SELECT modulo, id, creada_en FROM obs360.ultima_corrida;` debe
+  dar una fila por módulo con corrida publicada (hoy, solo `estudiantes`).
+- **Compatibilidad:** el código funciona con o sin la migración, porque el filtro
+  `modulo = 'estudiantes'` usa una columna que ya existe. Sin ella, simplemente no
+  hay aislamiento entre módulos en el lado de la base.
+
 ## Lo que falta
 
-1. **Aprobar la corrida 2** (la línea de SQL de arriba). Es tu decisión en persona.
+1. **Correr la migración y publicar una corrida nueva** de la fase 1
+   (`python -m src.estudiantes.publicar --notas "fase 1" --publicar-ya`, o
+   aprobar esa corrida nueva tras revisarla). Es tu decisión en persona.
+   **No aprobar la corrida 2 ni ninguna corrida vieja.**
 2. **La ruta de derivación con los colegios.** El plan aprobado la puso como
    condición previa para abrir la vista de comunidad. Con un 25 % de estudiantes
    que reportan pensar en la muerte con frecuencia o siempre, encontrar casos sin

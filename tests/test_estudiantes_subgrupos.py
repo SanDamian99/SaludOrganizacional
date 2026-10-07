@@ -8,11 +8,13 @@ las sube y el lector las rearma. Estas pruebas cierran ese circuito y comprueban
 que las cifras que ve el despliegue son las mismas que recalcula la máquina que
 procesa los archivos.
 """
+import dataclasses
+
 import pandas as pd
 import pytest
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import ingest, lectura, pipeline, publicar, scoring
+from src.estudiantes import ingest, lectura, pipeline, privacidad, publicar, scoring
 from src.ui.views import estudiantes_comunidad as vc
 from tests.test_estudiantes_comunidad import _formulario, COLEGIO_PEQUENO, GRADO_PEQUENO
 
@@ -70,7 +72,27 @@ def test_las_filas_de_subgrupo_respetan_el_minimo(analisis):
     assert filas
     assert all(f["n"] >= cat.MIN_GROUP_N for f in filas)
     assert all(f["detalle"]["n_grupo"] >= cat.MIN_GROUP_N for f in filas)
-    assert {f["agrupacion"] for f in filas} <= {"Colegio", "Grado"}
+    assert {f["agrupacion"] for f in filas} <= {"Colegio", "Grado", "Colegio×Grado"}
+
+
+def test_el_pipeline_publica_el_cruce_colegio_grado(analisis):
+    cruce = analisis.subgrupos["Colegio×Grado"]
+    assert set(cruce) == {"LauV|Séptimo", "LauV|Octavo"}
+    assert all(s.n >= cat.MIN_GROUP_N for s in cruce.values())
+
+
+def test_el_colegio_excluye_su_grado_pequeno(analisis):
+    # LauV tiene 4 respuestas en Noveno: el colegio publicado son sus dos celdas
+    assert analisis.subgrupos["Colegio"]["LauV"].n == 62
+
+
+def test_los_datos_del_analisis_ya_estan_enmascarados(analisis):
+    # todo o nada es idempotente: sobre datos ya enmascarados no borra nada más
+    assert isinstance(analisis.base, privacidad.Base)
+    assert privacidad.aplicar_todo_o_nada(analisis.datos, analisis.base)[1] == {}
+    assert analisis.n == len(analisis.datos) == 70
+    assert analisis.muestra["base"]["n_nivel"] == len(analisis.base.nivel) == 62
+    assert isinstance(analisis.muestra["suprimidos"], dict)
 
 
 def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publicado):
@@ -96,28 +118,32 @@ def test_el_despliegue_muestra_las_mismas_cifras_que_el_recalculo(analisis, publ
 
 def test_la_comparacion_entre_grupos_sale_de_los_subgrupos(analisis, publicado):
     indicador = next(k for k in vc.INDICADORES if vc.prevalencia(analisis, k, {}))
-    crudo = vc.prevalencia_por(analisis, indicador, "Grado", {})
-    desp = vc.prevalencia_por(publicado, indicador, "Grado", {})
-    assert list(desp.columns) == ["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"]
-    assert set(desp["grupo"]) == set(crudo["grupo"])
-    fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
-    assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
-    # con un filtro en la otra dimensión no se puede cruzar
-    assert vc.prevalencia_por(publicado, indicador, "Grado",
-                              {"colegio": _colegio_grande(analisis)}).empty
+    for filtros in ({}, {"colegio": "LauV"}):
+        crudo = vc.prevalencia_por(analisis, indicador, "Grado", filtros)
+        desp = vc.prevalencia_por(publicado, indicador, "Grado", filtros)
+        assert list(desp.columns) == ["grupo", "n", "casos", "pct", "ic_inf", "ic_sup"]
+        assert set(desp["grupo"]) == set(crudo["grupo"]) and not desp.empty
+        fusion = crudo.merge(desp, on="grupo", suffixes=("_c", "_d"))
+        assert (fusion["pct_c"] - fusion["pct_d"]).abs().max() < 0.01
 
 
-def test_sin_subgrupo_publicado_no_hay_cifra_y_el_informe_lo_explica(analisis, publicado):
-    colegio = _colegio_grande(analisis)
-    grado = next(iter(analisis.subgrupos["Grado"]))
-    cruce = {"colegio": colegio, "grado": grado}
+def test_el_cruce_publicado_da_las_mismas_cifras_que_el_recalculo(analisis, publicado):
+    f = {"colegio": "LauV", "grado": "Octavo"}
+    assert vc.bandas_sdq_total(publicado, f)["n"] == vc.bandas_sdq_total(analisis, f)["n"] == 31
+    for indicador in vc.INDICADORES:
+        assert vc.prevalencia(publicado, indicador, f) == pytest.approx(
+            vc.prevalencia(analisis, indicador, f), abs=0.01)
+
+
+def test_un_cruce_pequeno_no_da_cifras_y_el_informe_lo_explica(analisis, publicado):
+    cruce = {"colegio": "LauV", "grado": GRADO_PEQUENO}
+    for a in (analisis, publicado):
+        assert vc.bandas_sdq_total(a, cruce) == {}
+        assert vc.items_pertenencia_bajos(a, 4, cruce) == []
+        assert vc.tarjetas(a, "colegio", cruce) == []
     assert vc.subanalisis(publicado, cruce) is None
-    assert vc.bandas_sdq_total(publicado, cruce) == {}
-    assert vc.items_pertenencia_bajos(publicado, 4, cruce) == []
-    assert vc.tarjetas(publicado, "colegio", cruce) == []
     informe = vc.informe_markdown(publicado, "colegio", cruce)
     assert "por colegio y por grado" in informe
-    # y un grupo pequeño tampoco aparece, publicado o no
     assert vc.bandas_sdq_total(publicado, {"grado": GRADO_PEQUENO}) == {}
 
 
@@ -128,3 +154,51 @@ def test_una_corrida_antigua_sin_subgrupos_sigue_leyendose(analisis):
     assert viejo.subgrupos == {}
     assert vc.bandas_sdq_total(viejo, {}) == vc.bandas_sdq_total(analisis, {})
     assert vc.bandas_sdq_total(viejo, {"colegio": _colegio_grande(analisis)}) == {}
+
+
+def test_los_grupos_fuera_de_la_base_se_informan_como_enmascarados(analisis):
+    assert "DiosCh" in analisis.enmascarados["Colegio"]
+    assert "LauV" not in analisis.enmascarados["Colegio"]
+    assert analisis.enmascarados["Grado"] == [GRADO_PEQUENO]
+
+
+def test_subanalizar_sin_base_tambien_enmascara():
+    bruto, _ = ingest.cargar(_formulario())
+    d = scoring.puntuar(bruto)
+    d = d[d["nivel"] == cat.NIVEL_SECUNDARIA].reset_index(drop=True)
+    base = privacidad.base_publicable(d)
+    # la celda LauV|Octavo queda con 3 respuestas válidas de SDQ_Total
+    celda = base.celdas["LauV|Octavo"]
+    d.loc[celda[3:], "SDQ_Total"] = float("nan")
+    claves = [k for k in pipeline.CLAVES_PRINCIPALES if k in d.columns]
+    dm, suprimidos = privacidad.aplicar_todo_o_nada(d, base)
+    assert suprimidos["SDQ_Total"] == 3
+
+    def bandas(sub):
+        return sub["Colegio×Grado"]["LauV|Octavo"].bandas.reset_index(drop=True)
+
+    sin_base = pipeline.subanalizar(d, cat.NIVEL_SECUNDARIA, claves)
+    enmascarado = pipeline.subanalizar(dm, cat.NIVEL_SECUNDARIA, claves, base)
+    crudo = pipeline.subanalizar(d, cat.NIVEL_SECUNDARIA, claves, base)
+    pd.testing.assert_frame_equal(bandas(sin_base), bandas(enmascarado))
+    assert not bandas(crudo).equals(bandas(enmascarado))
+
+
+def test_el_cci_se_publica_con_el_n_del_nivel(analisis):
+    # en el formulario sintético solo LauV entra al nivel y el CCI no se define;
+    # se fija uno para comprobar con qué n sale la fila
+    con_cci = dataclasses.replace(analisis, icc={"SDQ_Total": 0.05})
+    filas = [f for f in publicar.aplanar({cat.NIVEL_SECUNDARIA: con_cci})
+             if f["tipo"] == "icc"]
+    assert filas
+    assert all(f["n"] == len(analisis.base.nivel) == 62 for f in filas)
+
+
+def test_los_grupos_publicables_son_los_mismos_desde_el_despliegue(analisis, publicado):
+    for columna, otra in (("Grado", "LauV"), ("Grado", vc.TODOS),
+                          ("Colegio", vc.TODOS), ("Colegio", "Octavo")):
+        assert vc.grupos_publicables(publicado, columna, otra) == \
+            vc.grupos_publicables(analisis, columna, otra)
+    assert vc.grupos_publicables(publicado, "Grado", "LauV") == ["Séptimo", "Octavo"]
+    # el despliegue recibe «<10» en vez del número y lo dice igual
+    assert vc.nota_base(publicado)
