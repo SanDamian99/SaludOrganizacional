@@ -254,6 +254,11 @@ def test_toda_tabla_que_se_muestra_es_convertible_a_arrow(reconstruido):
         "colegio": vi._tabla_conteos(
             sorted((m.get("colegio") or {}).items(), key=lambda kv: -vi._conteo(kv[1])),
             "Colegio"),
+        "colegio_grado": vi.tabla_colegio_grado(
+            m.get("colegio_grado") or {},
+            next((getattr(i, "crudo_colegio_grado", None) or {} for i in informes
+                  if i.nivel == "secundaria"), {}),
+            list(vi.cat.ORDEN_GRADOS_SEC)),
         "tabla1": vi.tabla1(remoto),
         "bandas_y_cortes": vi.bandas_y_cortes(remoto),
         "correlaciones": vi.correlaciones_bh(remoto),

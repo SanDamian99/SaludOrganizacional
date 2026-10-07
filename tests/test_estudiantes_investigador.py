@@ -260,3 +260,15 @@ def test_render_con_analisis_vacio_no_lanza(monkeypatch):
     monkeypatch.setattr(vista.st, "info", lambda msg, *a, **k: mensajes.append(msg))
     vista.render_investigador({})
     assert len(mensajes) == 1 and "cargar" in mensajes[0].lower()
+
+
+def test_tabla_colegio_grado_reconcilia_validas_y_respuestas():
+    from src.ui.views import estudiantes_investigador as vi
+    t = vi.tabla_colegio_grado({"LauV|Octavo": 91, "CdP|Décimo": "<10"},
+                               {"LauV|Octavo": 93, "CdP|Décimo": 6},
+                               ["Sexto", "Octavo", "Décimo"])
+    assert list(t.columns) == ["Colegio", "Grado", "Válidas", "Respuestas"]
+    fila = t[(t.Colegio == "Laura Vicuña") & (t.Grado == "Octavo")].iloc[0]
+    assert fila["Válidas"] == "91" and fila["Respuestas"] == "93"
+    pequena = t[t.Grado == "Décimo"].iloc[0]
+    assert pequena["Válidas"] == "<10" and pequena["Respuestas"] == "<10"
