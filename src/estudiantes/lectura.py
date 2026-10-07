@@ -13,6 +13,11 @@ grado y por grado dentro de un colegio (Colegio×Grado) sí funciona: usa los
 subgrupos ya agregados que se publicaron (filas «_grupo», ver `_subgrupos`),
 calculados sobre la base publicable; no recalcula nada.
 
+También rearma la tabla de alertas de grupo (`Analisis.alertas`, filas
+`alerta` y `alerta_grupo`). Una corrida anterior a la fase 3 no las trae: la
+tabla queda vacía y la vista vuelve a la tarjeta de siempre. La sensibilidad y
+la distribución de ítems de las alertas no se publican: quedan vacías.
+
 Esa limitación es el diseño, no un defecto: un despliegue público no debería
 poder recalcular nada sobre individuos.
 
@@ -261,6 +266,7 @@ def _reconstruir(nivel: str, filas: list[dict]) -> Analisis:
     a.contrastes = _lista_contrastes(por_tipo.get("contraste", []))
     a.items_pssm = _tabla_items(por_tipo.get("item", []))
     a.subgrupos = _subgrupos(nivel, filas)
+    a.alertas = _tabla_alertas(nivel, filas)
     return a
 
 
@@ -311,6 +317,24 @@ def _tabla_items(filas: list[dict]) -> pd.DataFrame:
                             n=f["n"]) for f in filas],
                       key=lambda d: d["M"] if d["M"] is not None else 99),
                ["item", "M", "DE", "n"])
+
+
+def _tabla_alertas(nivel: str, filas: list[dict]) -> pd.DataFrame:
+    """`Analisis.alertas` desde las filas «alerta» y «alerta_grupo» (sin casos)."""
+    from src.estudiantes import alertas as al
+    from src.estudiantes import alertas_catalogo as ac
+    salida = []
+    for f in filas:
+        if f["tipo"] not in ("alerta", "alerta_grupo"):
+            continue
+        total = f["tipo"] == "alerta"
+        salida.append(dict(alerta=f["clave"],
+                           agrupacion=al.TOTAL if total else f["agrupacion"],
+                           grupo=al.TODOS if total else str(f["grupo"]),
+                           n=int(f["n"]), pct=f["valor"], ic_inf=f["ic_inf"],
+                           ic_sup=f["ic_sup"],
+                           estado=_det(f, "estado", ac.SIN_ESTADO) or ac.SIN_ESTADO))
+    return al.ordenar(_df(salida, al.COLUMNAS_TABLA), nivel)
 
 
 TIPOS_SUBGRUPO = ("banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo")

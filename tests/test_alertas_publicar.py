@@ -141,3 +141,27 @@ def test_la_migracion_de_alertas_y_el_esquema_dicen_lo_mismo():
     # la misma lista de campos que rechaza `verificar`
     assert publicar.CAMPOS_CONTEO_PROHIBIDOS == ("casos", "k_bajo", "k_alto")
     assert ac.SIN_ESTADO == "sin_estado"          # el literal del CHECK y de verificar
+
+
+# ══ Lectura ═════════════════════════════════════════════════════════════════
+def test_las_alertas_se_leen_igual_que_se_publicaron(config):
+    nivel, a = config
+    filas = _filas(a, nivel)
+    random.Random(5).shuffle(filas)                 # Supabase no garantiza orden
+    leido = lectura._reconstruir(nivel, filas)
+    pd.testing.assert_frame_equal(leido.alertas, a.alertas, check_dtype=False)
+    assert leido.alertas_sensibilidad.empty and leido.alertas_items.empty
+
+
+def test_el_estado_leido_se_reproduce_con_las_cifras_publicadas(config):
+    nivel, a = config
+    t = lectura._reconstruir(nivel, _filas(a, nivel)).alertas
+    for f in t[t["agrupacion"] != al.TOTAL].to_dict("records"):
+        ref = t[(t["alerta"] == f["alerta"]) & (t["agrupacion"] == al.TOTAL)].iloc[0]
+        assert f["estado"] == al.estado(f["pct"], f["n"], ref["pct"], ref["n"])
+
+
+def test_una_corrida_anterior_sin_alertas_se_sigue_leyendo(analisis):
+    filas = [f for f in _filas(analisis) if not f["tipo"].startswith("alerta")]
+    viejo = lectura._reconstruir(cat.NIVEL_SECUNDARIA, filas)
+    assert viejo.alertas.empty and list(viejo.alertas.columns) == al.COLUMNAS_TABLA
