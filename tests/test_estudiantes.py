@@ -346,9 +346,14 @@ def test_regresion_exclusiones(analisis_real, referencia):
                                     "ERQ_Reap", "ERQ_Sup", "TD_Total"])
 def test_regresion_descriptivos(analisis_real, referencia, clave):
     res, _ = analisis_real
-    obt = res[cat.NIVEL_SECUNDARIA].descriptivos.set_index("clave")
+    a = res[cat.NIVEL_SECUNDARIA]
+    obt = a.descriptivos.set_index("clave")
     esp = referencia["descriptivos"]["secundaria"][clave]
-    assert obt.loc[clave, "n"] == esp["n"]
+    # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
+    # las 4 respuestas de ERQ del resto de colegios pequeños.
+    suprimidos = a.muestra["suprimidos"].get(clave, 0)
+    assert suprimidos <= 10
+    assert obt.loc[clave, "n"] == esp["n"] - suprimidos
     assert obt.loc[clave, "M"] == pytest.approx(esp["M"], abs=0.01)
     assert obt.loc[clave, "DE"] == pytest.approx(esp["DE"], abs=0.01)
 
@@ -357,10 +362,15 @@ def test_regresion_descriptivos(analisis_real, referencia, clave):
                                     "PSSM_Total", "ERQ_Reap"])
 def test_regresion_alfa(analisis_real, referencia, clave):
     res, _ = analisis_real
-    obt = res[cat.NIVEL_SECUNDARIA].fiabilidad.set_index("clave")
+    a = res[cat.NIVEL_SECUNDARIA]
+    obt = a.fiabilidad.set_index("clave")
     esp = referencia["alfa"]["secundaria"][clave]
     assert obt.loc[clave, "alpha"] == pytest.approx(esp["alpha"], abs=0.01)
-    assert obt.loc[clave, "n"] == esp["n"]
+    # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
+    # las 4 respuestas de ERQ del resto de colegios pequeños.
+    suprimidos = a.muestra["suprimidos"].get(clave, 0)
+    assert suprimidos <= 10
+    assert obt.loc[clave, "n"] == esp["n"] - suprimidos
 
 
 def test_regresion_bandas_sdq(analisis_real, referencia):
@@ -395,11 +405,17 @@ def test_regresion_correlaciones(analisis_real, referencia, a, b):
 
 def test_regresion_modelo_depresion(analisis_real, referencia):
     res, _ = analisis_real
-    m = [x for x in res[cat.NIVEL_SECUNDARIA].modelos if x["y"] == "RCADS_Dep"]
+    a = res[cat.NIVEL_SECUNDARIA]
+    m = [x for x in a.modelos if x["y"] == "RCADS_Dep"]
     assert m, "falta el modelo de depresión"
     m = m[0]
     esp = referencia["modelos"]["dep_protectores"]
-    assert m["n"] == esp["n"]
+    # La referencia es anterior a la regla de todo o nada (spec §5.1), que borra
+    # las 4 respuestas de ERQ del resto de colegios pequeños.
+    variables = ["RCADS_Dep", *[c["predictor"] for c in m["coeficientes"]]]
+    suprimidos = max([a.muestra["suprimidos"].get(v, 0) for v in variables])
+    assert suprimidos <= 10
+    assert m["n"] == esp["n"] - suprimidos
     assert m["R2"] == pytest.approx(esp["R2"], abs=0.01)
     obt = {c["predictor"]: c["beta"] for c in m["coeficientes"]}
     for pred in ("MSPSS_Fam", "PSSM_Total", "ERQ_Sup"):
