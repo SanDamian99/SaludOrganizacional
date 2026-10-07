@@ -485,16 +485,18 @@ def _con_sexo_residual(analisis, valor, k=3):
 
 
 def test_el_corte_por_sexo_sale_si_los_sexos_cubren_el_grupo(analisis):
-    tabla = vc.prevalencia_por_sexo(analisis, {"colegio": "LauV"})
+    # Solo en el total del nivel (supresion: un colegio menos su celda delataría
+    # a la otra celda); con filtro de colegio ya no sale.
+    tabla = vc.prevalencia_por_sexo(analisis, {})
     assert len(tabla) == 2
-    assert "emocional_sexo" in [t.clave for t in vc.tarjetas(analisis, "colegio",
-                                                              {"colegio": "LauV"})]
+    assert "emocional_sexo" in [t.clave for t in vc.tarjetas(analisis, "colegio", {})]
+    assert vc.prevalencia_por_sexo(analisis, {"colegio": "LauV"}).empty
 
 
 @pytest.mark.parametrize("valor", ["Otro", None])
 def test_el_corte_por_sexo_se_quita_si_queda_un_resto(analisis, valor):
     """Grupo − Mujer − Hombre aislaría a 3 estudiantes: la tarjeta no sale."""
     a = _con_sexo_residual(analisis, valor)
-    assert vc.prevalencia_por_sexo(a, {"colegio": "LauV"}).empty
-    claves = [t.clave for t in vc.tarjetas(a, "colegio", {"colegio": "LauV"})]
+    assert vc.prevalencia_por_sexo(a, {}).empty
+    claves = [t.clave for t in vc.tarjetas(a, "colegio", {})]
     assert "emocional_sexo" not in claves

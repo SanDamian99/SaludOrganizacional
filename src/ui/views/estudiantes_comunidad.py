@@ -638,7 +638,12 @@ def grupos_sin_cifra(analisis, indicador: str, columna: str,
 
 def prevalencia_por_sexo(analisis, filtros: dict | None = None,
                          indicador: str = "emocional") -> pd.DataFrame:
-    """Prevalencia por sexo del grupo elegido, o vacío si el corte no es seguro.
+    """Prevalencia por sexo del total del nivel, o vacío si el corte no es seguro.
+
+    Solo sin filtro de colegio ni de grado: el sexo no es parte de la base
+    publicable, y el corte por sexo de un colegio menos el de una de sus celdas
+    daría el de la otra celda. Además cada sexo cumple la regla de cifras que
+    no delatan (de MIN_CASOS a n − MIN_CASOS casos).
 
     Solo se muestra si los grupos de sexo (cada uno con ≥ MIN_GROUP_N) cubren
     TODAS las filas del grupo y todas sus respuestas válidas del indicador. Si
@@ -646,6 +651,8 @@ def prevalencia_por_sexo(analisis, filtros: dict | None = None,
     Hombre de la cifra del grupo, que también se publica, lo aislaría: la
     tarjeta no sale.
     """
+    if hay_filtro(filtros or {}):
+        return pd.DataFrame()
     tabla = prevalencia_por(analisis, indicador, "Sexo", filtros)
     if tabla.empty or len(tabla) < 2:
         return pd.DataFrame()

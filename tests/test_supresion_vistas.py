@@ -81,3 +81,34 @@ def test_por_sexo_aplica_la_regla():
     d = pd.DataFrame(filas)
     a = pipeline.analizar(d, NIVEL, n_boot=5)
     assert vc.prevalencia_por_sexo(a, {}).empty
+
+
+# ── por sexo: solo en el total del nivel ───────────────────────────────────
+def _por_sexo():
+    """Dos colegios × dos grados, 10 mujeres y 10 hombres por celda (repro de la revisión).
+
+    Con el corte por sexo de un colegio y de una de sus celdas, la otra celda
+    sale por resta (A|Sexto hombres = A hombres − A|Séptimo hombres = 2 casos).
+    """
+    spec = {("A", "Sexto"): {"Mujer": (10, 5), "Hombre": (10, 2)},
+            ("A", "Séptimo"): {"Mujer": (10, 4), "Hombre": (10, 5)},
+            ("B", "Sexto"): {"Mujer": (10, 4), "Hombre": (10, 4)},
+            ("B", "Séptimo"): {"Mujer": (10, 3), "Hombre": (10, 6)}}
+    filas = []
+    for (c, g), sexos in spec.items():
+        for s, (n, k) in sexos.items():
+            for i in range(n):
+                filas.append(dict(Colegio=c, Grado=g, Sexo=s, Edad=13, nivel=NIVEL,
+                                  banda_SDQ_Emo=3 if i < k else 0))
+    return pipeline.analizar(pd.DataFrame(filas), NIVEL, n_boot=5)
+
+
+def test_por_sexo_solo_en_el_total_del_nivel():
+    a = _por_sexo()
+    assert not vc.prevalencia_por_sexo(a, {}).empty
+    for f in ({"colegio": "A"}, {"colegio": "A", "grado": "Séptimo"},
+              {"colegio": "A", "grado": "Sexto"}, {"grado": "Sexto"}, {"colegio": "B"}):
+        assert vc.prevalencia_por_sexo(a, f).empty, f
+        assert "emocional_sexo" not in [t.clave for t in vc.tarjetas(a, "colegio", f)]
+    html = inf.informe_colegio_html({NIVEL: a}, "A")
+    assert "por sexo" not in html
