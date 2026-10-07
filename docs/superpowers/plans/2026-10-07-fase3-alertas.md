@@ -2,6 +2,8 @@
 
 > **Para agentes:** SUB-SKILL OBLIGATORIA: usar superpowers:subagent-driven-development (recomendado) o superpowers:executing-plans para ejecutar este plan tarea por tarea. Los pasos usan casillas (`- [ ]`) para el seguimiento.
 
+> **⚠️ Estado: borrador NO ejecutable tal cual (revisión independiente del 7-oct-2026).** Antes de ejecutar hay que rehacer las Tasks 4, 5 y 7 sobre la supresión general de `fix/cortes-casos-pequenos` (ver «Revisión independiente» al final).
+
 **Objetivo:** el colegio, el municipio y la familia ven, arriba de las tarjetas, un panel de alertas **por grupo**. Hay dos alertas: «Señales de malestar» y «Señales de desesperanza y pensamientos de muerte». El panel tiene dos estados, «Para tener presente» y «Prioridad»; nunca muestra conteos de casos y su color máximo es naranja. Lleva qué hacer y la ruta. Las alertas también llegan a los informes, al PDF de una página, a la vista de investigadores y a Supabase.
 
 **Arquitectura.** Todo lo nuevo vive en **módulos nuevos**, que siempre se importan frescos aunque Streamlit Cloud conserve módulos viejos en memoria:
@@ -3381,3 +3383,35 @@ OBS360_MODO=comunidad OBS360_FUENTE=supabase .venv/bin/streamlit run main.py --s
 14. **Sensibilidad y distribución de ítems.** Hoy no entran en el ZIP; solo `alertas.csv`. ¿Se exportan también?
 15. **Mensajes por rol en Supabase.** `mensajes_alertas_para_subir` los deja en el JSON del ensayo; el publicador actual no inserta mensajes. ¿Se suben a `obs360.mensajes` (y cuándo, tras la aprobación)?
 
+
+
+---
+
+## Revisión independiente (7-oct-2026) y cambios obligatorios antes de ejecutar
+
+**Críticos**
+
+1. **El estado «Prioridad» de grados y celdas delata cotas de casos.** Un booleano «Prioridad» equivale a «k ≥ t», con t calculable desde cifras públicas (n del grupo, % y n del nivel). Combinado con los colegios, puede revelar que un grado hermano tiene ≤ 2 casos. «Para tener presente» delata la cota contraria.
+   **Decisión:** el estado se publica y se muestra **solo donde el porcentaje del grupo es publicable** bajo la supresión general (3 ≤ k ≤ n − 3 más supresión secundaria jerárquica). Así el estado no añade información. Donde el porcentaje se suprime, el estado es neutro: «Sin estado: cifras pequeñas», nunca «Para tener presente».
+2. **Reusar la supresión general** (`src/estudiantes/supresion.py`, rama `fix/cortes-casos-pequenos`) en vez de `colegios_visibles` / `_resto_cumple` y de la regla de árbol. Las alertas son una proporción más: pasan por el mismo mecanismo, y los grados pueden llevar porcentaje cuando la supresión lo permita (cumple la spec §5.4, «para cada grupo publicable»). La fase 3 se rebasa sobre ese arreglo antes de las Tasks 4, 5 y 7. Se cierra así la pregunta abierta 5. La 9 la resuelve el arreglo: `casos` deja de publicarse.
+
+**Importantes**
+
+1. `alerta_grupo` lleva `n_grupo` en `detalle`. `tests/test_estudiantes_subgrupos.py` va en la lista de pruebas de la Task 7.
+2. En `alertas.csv`, la columna `nombre` pasa a `alerta_nombre` (la prueba de exportables prohíbe `nombre`).
+3. La foto de regresión de la Task 0 redondea los flotantes (9 cifras significativas): pandas 3 cambia el último dígito.
+4. Tercer estado neutro (ver crítico 1). `QUE_ES_PRESENTE` solo se usa cuando la comparación se hizo.
+5. Módulos rancios:
+   - `getattr(vc, "ruta_para_rol", None)`, con alternativa `cat.RUTA_ATENCION`.
+   - `try/except` alrededor de `render_panel`, `panel_html` y `tabla_secretaria_html`.
+6. La auditoría cubre también `alertas_sensibilidad` y `alertas_items`. Si van a Supabase, se publican solo a nivel y con la regla 3..n − 3; si no, se quedan en local (para investigadores).
+7. Pruebas de alertas con las tres configuraciones reales de resta (diccionarios `PRIMARIA` y `CON_RESTO` de `test_estudiantes_comunidad.py`).
+8. Mensajes por rol en `obs360.mensajes`: se suben cuando el equipo apruebe los textos.
+
+**Menores:**
+- La Task 0 no crea la rama, que ya existe.
+- El venv de 3.14 está en el scratchpad (`venv314`).
+- Quitar `_sin_uso`.
+- Cambiar `_sin_conteos` por una prueba sobre las filas.
+- Quitar la prueba que inspecciona el código fuente del panel.
+- Unificar la detección del `*`.
