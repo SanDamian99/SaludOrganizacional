@@ -493,8 +493,11 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
     restas = verificar_restas(analisis)
     if restas:
         raise PublicacionInsegura(
-            "No se publicó nada: alguna resta entre cifras publicadas dejaría un grupo "
-            f"de menos de {cat.MIN_GROUP_N}:\n  - " + "\n  - ".join(restas[:20])
+            "No se publicó nada: la auditoría encontró cifras que delatan. Alguna resta "
+            f"entre cifras publicadas dejaría un grupo de menos de {cat.MIN_GROUP_N} "
+            f"respuestas, o alguna proporción publicada (directa o por resta) tendría "
+            f"menos de {supresion.MIN_CASOS} casos o menos de {supresion.MIN_CASOS} no "
+            "casos:\n  - " + "\n  - ".join(restas[:20])
             + ("\n  … y más" if len(restas) > 20 else ""))
     cli = cliente or _cliente()
     tabla = lambda t: cli.postgrest.schema(ESQUEMA).table(t)  # noqa: E731
@@ -567,7 +570,8 @@ def mensajes_para_subir() -> list[dict]:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--ensayo", action="store_true",
-                   help="no toca la red; deja el lote en un JSON")
+                   help="no toca la red; deja el lote en un JSON (se escribe aunque la "
+                        "auditoría falle, para revisarlo; en ese caso sale con código 2)")
     p.add_argument("--salida", default="lote_estudiantes.json",
                    help="ruta del JSON en modo ensayo")
     p.add_argument("--notas", default="", help="nota para la corrida")
@@ -600,7 +604,7 @@ def main(argv=None) -> int:
     if args.ensayo:
         restas = verificar_restas(analisis)
         if restas:
-            print("AVISO: la auditoría de restas encontró problemas:\n  - "
+            print("AVISO: la auditoría (restas y cifras que delatan) encontró problemas:\n  - "
                   + "\n  - ".join(restas))
         with open(args.salida, "w", encoding="utf-8") as fh:
             json.dump(dict(version=version_analisis(analisis),

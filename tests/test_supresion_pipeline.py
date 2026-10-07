@@ -265,3 +265,21 @@ def test_aplicar_dos_veces_no_cambia_nada(chico):
 def test_partes_por_familia_ignora_las_ya_suprimidas(chico):
     oculta = chico.subgrupos[CRUCE]["A|Sexto"]
     assert "RCADS18" not in supresion.partes_por_familia(oculta.cortes, oculta.bandas)
+
+
+def test_el_mensaje_de_rechazo_nombra_los_casos_pequenos(chico, monkeypatch):
+    monkeypatch.setattr(publicar, "verificar_restas", lambda analisis: ["x · y"])
+    with pytest.raises(publicar.PublicacionInsegura) as exc:
+        publicar.publicar({NIVEL: chico}, cliente=object())
+    texto = str(exc.value)
+    assert f"menos de {supresion.MIN_CASOS} casos" in texto
+    assert f"menos de {cat.MIN_GROUP_N}" in texto
+
+
+def test_la_ayuda_del_ensayo_dice_que_el_json_se_escribe_igual():
+    import io
+    from contextlib import redirect_stdout
+    salida = io.StringIO()
+    with redirect_stdout(salida), pytest.raises(SystemExit):
+        publicar.main(["--help"])
+    assert "aunque la auditoría falle" in " ".join(salida.getvalue().split())
