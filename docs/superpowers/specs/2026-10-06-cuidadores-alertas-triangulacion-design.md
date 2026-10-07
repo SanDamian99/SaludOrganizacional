@@ -1,346 +1,439 @@
 # Observatorio 360 · Cuidadores, alertas y triangulación — diseño
 
-**Fecha:** 6 de octubre de 2026 · **Estado:** aprobado en conversación, pendiente de revisión escrita
-**Rama:** `feature/360-cuidadores-alertas-triangulacion` (sale de `feature/informe-estudiantes-html`, PR #1)
+**Fecha:** 6 de octubre de 2026 · **Versión:** 2, tras una revisión independiente
+**Estado:** pendiente de revisión del usuario
+**Rama:** `feature/360-cuidadores-alertas-triangulacion`, que sale de `feature/informe-estudiantes-html` (PR #1)
 
-## 1. Qué se pide y por qué
+## 1. Qué se pide
 
-El equipo investigador (Tatiana, Diana) pidió, el 6 de octubre de 2026:
+El equipo investigador hizo cinco pedidos el 6 de octubre de 2026:
 
-1. Que los grados con 10 o más estudiantes **se vean** en el dashboard de estudiantes, también dentro de un colegio. Entregaron la lista de referencia (§3.1).
-2. **Alertas** en la vista del colegio (docente y rector) y en los informes, activadas por los ítems marcados con `*`, con recomendaciones de atención y rutas para familias, rector y municipio. La alerta no debe alarmar; debe **motivar la indagación y la acción oportuna**.
-3. Un **módulo de cuidadores** (formulario «Cuidando al Cuidador»), con vista de investigadores y vista de comunidad (colegio, familia, municipio) con la misma lógica que estudiantes.
-4. Una vista **solo para investigadores** que **triangule** docentes, cuidadores y estudiantes: patrones, puntos en común y tensiones.
-5. En la navegación, «Dashboard» pasa a **«Docentes»**: un dashboard por población más uno de triangulación.
+1. **Los grados con 10 o más estudiantes deben verse**, también dentro de un colegio. Entregaron una lista de referencia (§3.1).
+2. **Alertas** en la vista del colegio (docente y rector) y en los informes.
+   - Las activan los ítems marcados con `*`.
+   - Llevan recomendaciones de atención y rutas para familias, rector y municipio.
+   - **No deben alarmar.** Deben motivar la indagación y la acción oportuna.
+3. **Módulo de cuidadores** (formulario «Cuidando al Cuidador»).
+   - Una vista para investigadores y otra para la comunidad (colegio, familia y municipio).
+   - Con la misma lógica que estudiantes.
+4. **Triangulación solo para investigadores** entre docentes, cuidadores y estudiantes: patrones, puntos en común y tensiones.
+5. **Navegación:** «Dashboard» pasa a llamarse «Docentes», con un dashboard por población y uno de triangulación.
 
-La plataforma funciona bien y está en uso: todo esto es un **complemento**. Ninguna fase puede cambiar el comportamiento existente salvo donde se pide.
+La plataforma está en uso y funciona bien. Todo esto es un **complemento**: ninguna fase cambia lo existente salvo donde se pide.
 
-## 2. Decisiones tomadas con el usuario
+## 2. Decisiones del usuario
 
 | Tema | Decisión |
 |---|---|
-| Unidad de la alerta | **Por grupo** (colegio, grado, colegio × grado; n ≥ 10). Nunca un estudiante identificable. |
-| Ítems de alerta | **Malestar emocional:** los 6 ítems del SDQ marcados con `*`, en los dos niveles. **Desesperanza:** propuesta propia sobre el RCADS, solo secundaria (§6.2). |
-| Triangulación | Dos capas: **por colegio y grado** (los tres actores) y **díadas niño–cuidador** enlazadas por un identificador cifrado. |
-| Alerta del adulto | **Sí:** EPDS ítem 10 o EPDS ≥ 13, alerta por grupo en el módulo de cuidadores, visible para colegio y municipio. |
-| Trabajo pendiente | Los informes se integraron primero (commit `8287201`, PR #1); este trabajo sale encima. |
-| Despliegue público | Muestra **Estudiantes 360 y Cuidadores 360** (vistas de comunidad). Docentes y Triangulación, solo en los modos completo e investigador. |
+| Unidad de la alerta | **Por grupo** con n ≥ 10. Nunca un estudiante ni un cuidador identificable. |
+| Ítems de alerta | **Señales de malestar:** los 6 ítems del SDQ marcados con `*`, en los dos niveles. **Desesperanza:** propuesta sobre el RCADS, revisada, solo para secundaria (§5.4). |
+| Triangulación | Capa por colegio y capa de **díadas** niño–cuidador, enlazadas con un identificador cifrado. Las díadas solo existen en local. |
+| Alerta del adulto | Sí, a partir de la EPDS. Tras la revisión se divide en «ánimo» y «autolesión» (§5.5). |
+| Orden de trabajo | Los informes entraron primero (commit `8287201`, PR #1). |
+| Despliegue público | Estudiantes 360 y Cuidadores 360 (vistas de comunidad). La página de Cuidadores se habilita cuando sus textos estén aprobados (§5.5). |
+| Privacidad de los grados | **Todo agregado publicado se calcula sobre las celdas publicables.** Los totales «por grado» excluyen a los colegios pequeños, que siguen contando en el total del nivel (§5.1). |
+| Sedes | **La unidad es el colegio.** La sede es un detalle visible solo para investigadores. |
 
 ## 3. Datos
 
-### 3.1 Estado y archivos
+### 3.1 Estado
 
-| Archivo | Dónde | Estado |
+| Archivo | Ubicación | Estado |
 |---|---|---|
-| Estudiantes secundaria (CSV, 18-sep, 979 filas) | `datos_fuente_360/estudiantes/` | **Desactualizado** |
-| Estudiantes primaria (CSV, 18-sep, 283 filas) | `datos_fuente_360/estudiantes/` | Lo reemplaza el xlsx de abajo |
-| Estudiantes primaria (xlsx, hasta 6-oct, 355 filas, ítems con `*`) | `datos_fuente_360/estudiantes/entrantes/` | Nuevo; mismas 89 columnas que el CSV salvo el `*` |
-| Cuidadores (xlsx, sep-2025 a sep-2026, 779 filas, 209 columnas) | `datos_fuente_360/cuidadores/` | Nuevo; reemplaza al `Datos_Cuidador_corregido.csv` de 172 filas |
+| Estudiantes de secundaria (CSV del 18 de septiembre, 979 filas) | `datos_fuente_360/estudiantes/` | **Desactualizado** |
+| Estudiantes de primaria (CSV del 18 de septiembre, 283 filas) | `datos_fuente_360/estudiantes/` | Lo reemplaza el xlsx siguiente |
+| Estudiantes de primaria (xlsx hasta el 6 de octubre, 355 filas, 352 válidas hoy) | `datos_fuente_360/estudiantes/entrantes/` | Contiene a todos los del CSV, con las mismas 89 columnas más el `*` |
+| Cuidadores (xlsx de sep-2025 a sep-2026, 779 filas, 209 columnas) | `datos_fuente_360/cuidadores/` | Nuevo. Sustituye el CSV de 172 filas |
 
-Los dos xlsx llegaron a la raíz del repositorio. Se movieron fuera de él el 6-oct (traen nombres de menores y teléfonos), y la prueba `test_el_repositorio_no_guarda_hojas_de_calculo_en_la_raiz` vuelve a pasar.
+**La lista de los investigadores son conteos crudos**, antes de limpiar.
 
-**Falta: la exportación actualizada de secundaria.** La lista de los investigadores coincide exactamente con nuestros datos en La Balsa (sexto 24, séptimo 52, noveno 29, décimo 32) y en Laura Vicuña (95 / 69 / 93 / 90 / 90). Pero tiene grupos que nuestro CSV no trae:
+- Comparada en crudo, coincide en La Balsa y Laura Vicuña.
+- Después de limpiar, las cifras cambian algunas unidades: Laura Vicuña octavo 93 → 91, Laura Vicuña quinto 98 → 97, JJC noveno 58 → 57.
+- La plataforma mostrará **«n válidas de N respuestas»** para que ambas cifras se reconcilien a la vista.
 
-- CdP: sexto 16 y séptimo 24 (nosotros: 2 y 0).
-- JJC: décimo 83 (nosotros: 0) y noveno 59 (nosotros: 58).
-- SJMEB sede Samaria: sexto 50 (nosotros: 35).
+**Falta la exportación actualizada de secundaria.** Sin ella no aparecen:
 
-Esos grupos aparecerán cuando llegue esa exportación. Ninguna corrección de código los produce.
+- CdP sexto 16 y séptimo 24.
+- JJC décimo 83.
+- SJMEB sexto 50.
+
+Ningún cambio de código los produce.
+
+**San Josemaría** se trata como colegio.
+
+- Séptimo tiene 29 estudiantes: 25 de la sede Samaria y 4 de Principal.
+- La lista de los investigadores da el séptimo de Samaria (25). La diferencia se explica en la pestaña de muestra.
 
 ### 3.2 Formulario de cuidadores (columnas por posición)
 
-| Bloque | Columnas | Opciones |
+| Bloque | Columnas | Nota |
 |---|---|---|
-| Consentimiento, quién responde, nombres (cuidador, hijo), edad, sexo, colegio, tipo, curso | 0–9 | 756 «Sí autorizo», 23 «No autorizo» |
-| Contacto con madre y padre, edades, nivel educativo, hermanos, desempeño académico, zona, estrato | 10–19 | — |
-| Riesgo barrial (5) | 20–24 | No / Sí baja frecuencia / Sí muy frecuente |
-| PSS-10 | 25–34 | Nunca … Frecuentemente / Casi siempre (5 opciones) |
-| EPDS-10 | 35–44 | 4 opciones con redacción propia por ítem |
-| MSPSS-12 (del cuidador) | 45–56 | Escala de 5 puntos, igual que estudiantes |
-| APQ (crianza, 25 ítems, incluye castigo físico 78–80 y grito 81) | 57–81 | Nunca … Siempre |
-| Estrés parental, parte 1 (20) y parte 2 (19) = **39 ítems** | 82–120 | Muy en desacuerdo … Muy de acuerdo |
-| SDQ padres del hijo 1 | 121–145 | No es cierto / Un tanto cierto / Absolutamente cierto |
-| ¿Responde por otro hijo? + datos del hijo 2 | 146–152 | 217 «Sí» |
-| SDQ padres del hijo 2 | 153–177 | Ídem |
-| Futuras investigaciones, **teléfono** | 178–179 | Se descartan en la carga |
-| Vacías | 180–185, 200–208 | Se ignoran |
-| ARI padres del hijo 1 / hijo 2 | 186–192 / 193–199 | No es cierto / A veces cierto / Cierto |
+| Datos de base | 0–9 | Consentimiento (756 sí, 23 no), quién responde (mamá 586, papá 141, otros 52), nombres, edad, sexo, colegio, tipo, curso |
+| Familia y contexto | 10–19 | — |
+| Riesgo barrial (5 ítems) | 20–24 | — |
+| PSS-10 | 25–34 | **Mismos ítems y orden que la PSS de docentes**; inversos 3, 4, 5, 7 y 9 (`preparar_docentes.py:150,184`). Hay respuestas sueltas «Columna 6»: cuentan como faltantes. |
+| EPDS-10 | 35–44 | Cada ítem tiene 4 etiquetas propias y únicas |
+| MSPSS del cuidador | 45–56 | **Reparto 5/4/3** (persona especial, familia, amigos), no el 4/4/4 de estudiantes |
+| APQ | 57–81 | Castigo físico en 78–80, grito en 81 |
+| Estrés parental, «39 ítems» | 82–120 | **No es el PSI-SF estándar.** Las columnas 103–107 son las cinco opciones de una sola pregunta de elección forzada, partidas en ítems Likert. La 117 está redactada en positivo. |
+| SDQ de padres, hijo 1 | 121–145 | — |
+| Hijo 2 | 146–152 y SDQ en 153–177 | 217 cuidadores responden por un segundo hijo |
+| Teléfono | 178–179 | Se descarta en la carga |
+| ARI de padres, hijo 1 / hijo 2 | 186–192 / 193–199 | **Cobertura parcial:** 382 de 756 y 94 de 217. Nada en la ola 2025. |
+| Columnas vacías | 180–185 y 200–208 | Se ignoran |
 
-Quién responde: Mamá 586, Papá 141, otros 52.
+**Por colegio**, con consentimiento y normalizador corregido (§5.2):
 
-Por colegio, con consentimiento: LauV 448, JJC 119, SJMEB 27, LaBalsa 24, DiosCh 13, Bojacá 12. Además, 103 respuestas tienen colegio escrito libremente, sobre todo Conaldi/Diversificado (CND) y Santa Lucía (SaLu).
+- LauV 448, JJC 119 y SJMEB unos 39.
+- La Balsa 24, DiosCh 13 y Bojacá 12.
+- Unas 100 con el colegio escrito a mano (Conaldi o Diversificado, Santa Lucía…).
 
-El curso viene como texto libre: «501», «1002», «2A», «Transición»…
+**Dos olas:** 145 respuestas en sep-2025 y 634 en 2026.
 
-Hay dos olas: **septiembre de 2025 (145)** y **2026 (634)**.
+**Niños:**
 
-## 4. Principios que no se negocian (heredados)
+- Hay 973 filas de niño (hijo 1 más hijo 2) y **886 niños únicos**.
+- 87 son repetidos: casi siempre los dos padres respondieron por el mismo niño; solo 5 se repiten entre olas.
+- Edad del niño: hay 89 valores no numéricos y el máximo es 19.
 
-- **Nada individual.** Ningún nombre, teléfono, fila ni grupo con menos de `MIN_GROUP_N = 10` en pantallas, informes, exportaciones de comunidad ni Supabase.
+## 4. Principios que no se negocian
+
+- **Nada individual.** Ningún nombre, teléfono, fila, identificador ni grupo con menos de `MIN_GROUP_N = 10` en pantallas, informes, exportaciones de comunidad o Supabase.
+  - En cuidadores, el mínimo cuenta **cuidadores distintos**, no filas de niño.
+- **Nada deducible.** Ningún grupo de 1 a 9 puede obtenerse restando cifras publicadas, ni dentro de una corrida ni entre corridas (§5.1).
 - **A Supabase solo suben agregados.** El `CHECK n >= 10` sigue siendo la última barrera.
-- **Los textos sobre salud mental son fijos** y revisables por el equipo, en catálogos. Nunca los redacta la IA en tiempo de ejecución.
-- **El despliegue público no importa** módulos de investigación (corte en `main.py` antes de importarlos).
-- Cada fase llega en su **propio PR**, con la suite verde (salvo las 2 fallas preexistentes de `test_knowledge_base`) y la revisión con Playwright.
+- **Los textos sobre salud mental son fijos.** Viven en catálogos que revisa el equipo y nunca los redacta la IA.
+- **El despliegue público no importa** los módulos de investigación.
+- **Cada fase va en su propio PR**, con la suite verde (salvo las 2 fallas previas de `test_knowledge_base`) y la revisión con Playwright.
 
 ## 5. Fases
 
-Orden: 0 → 1 → 2 → 3 → 4 → 5. Cada fase es entregable sola. Las fases 3, 4 y 5 dependen de la tabla de colegios compartida (§5.2).
+Orden: 0 → 1 → 2 → 3 → 4a → 4b → 5. La tabla de colegios (§5.2) entra en la fase 1.
 
-### 5.0 Orden previo (hecho en parte)
+### 5.0 Orden previo
 
 - [x] Commit de los informes y PR #1.
-- [x] Los xlsx fuera de la raíz del repositorio.
-- [ ] Pedir a los investigadores la exportación actualizada de secundaria.
+- [x] Sacar los xlsx de la raíz del repositorio.
+- [ ] Pedir a los investigadores la exportación actualizada de secundaria y el libro de códigos de cuidadores (`Códigos.xlsx`, que no está en Documents).
 
-### 5.1 Fase 1 · Los grados que no se ven
+### 5.1 Fase 1 · Los grados que no se ven, con privacidad por resta resuelta
 
-**Causa A, datos:** CSV de secundaria viejo (§3.1).
+**Causas:**
 
-**Causa B, código:** el despliegue no publica el cruce colegio × grado. Cuando se elige un colegio, el selector de grado queda bloqueado (`estudiantes_comunidad._selector_grupo`) y el informe no trae «Por grado en el colegio».
+- **Datos:** el CSV de secundaria es viejo.
+- **Código:** el despliegue no publica el cruce colegio × grado. Eso afecta a tres lugares:
+  - El selector de grado queda bloqueado al elegir un colegio (`estudiantes_comunidad.py:655-680`).
+  - «Comparar entre grupos → Grado» con un colegio elegido sale vacío (`:345-350`).
+  - El informe no trae «Por grado en el colegio».
 
-Cambios:
+**Cambios:**
 
-1. **Carga:**
-   - `ingest` acepta `.xlsx` y quita el `*` inicial de los encabezados. El `*` se conserva como metadato para la fase 3: `ingest.items_marcados(raw) -> set[str]`.
-   - `localizar_formularios` resuelve duplicados por formulario y se queda con el archivo más reciente cuando hay CSV y xlsx del mismo formulario.
-   - El xlsx de primaria pasa de `entrantes/` a `estudiantes/` y el CSV viejo queda en `otros/archivo/`.
-2. **Pipeline:** `subanalizar` añade la agrupación `"Colegio×Grado"`, con la clave de grupo `"LauV|Sexto"`, solo para las celdas con n ≥ 10.
-3. **Supresión complementaria (nueva).** Para cada colegio, el *resto* es el total del colegio menos la suma de las celdas de grado publicadas.
-   - Si el resto está entre 1 y 9, se retira también la celda publicada más pequeña, y así hasta que el resto sea 0 o ≥ 10.
-   - Sin esto, la cifra de un grado pequeño se obtendría restando.
-   - La misma comprobación se aplica a `Colegio` frente al total del nivel y a `Grado` frente al total del nivel.
-   - Es una función pura `stats.suprimir_complementarias(conteos_hijos, total) -> set[grupo]`, probada aparte.
-4. **Publicar y leer:** `publicar._aplanar_subgrupo` y `lectura._subgrupos` aceptan la agrupación nueva.
-5. **Vista e informes:**
-   - Con datos publicados, `subanalisis` resuelve colegio + grado contra `"Colegio×Grado"`.
-   - El selector de grado se desbloquea y solo ofrece los grados con celda publicada.
-   - La tabla «Por grado en el colegio» del informe sale también en el despliegue.
-6. **Aceptación:**
-   - Una prueba toma la lista de los investigadores como verdad para los colegios cuyos datos ya coinciden (LaBalsa, LauV).
-   - Cuando llegue la exportación nueva, la prueba se extiende a todos los colegios.
-   - Ningún grupo con n < 10 aparece, ni directo ni deducible por resta.
+1. **Carga.**
+   - `ingest` ya lee xlsx y `norm_txt` ya quita el `*`.
+   - Hay que añadir `ingest.items_marcados(raw)`, que devuelve el conjunto de ítems con `*` para la fase 3.
+   - `localizar_formularios` debe quedarse con un archivo por formulario (el más reciente si hay CSV y xlsx).
+   - El xlsx de primaria pasa de `entrantes/` a `estudiantes/`; el CSV viejo va a `otros/archivo/`.
+2. **Base publicable.** La unidad mínima es la **celda colegio × grado con n ≥ 10**. A partir de ahí:
+   - **Colegio:** se calcula sobre la unión de sus celdas publicables. Si el colegio no tiene ninguna celda publicable, se usa el colegio completo, siempre que llegue a 10.
+   - **Grado:** se calcula sobre la unión de sus celdas publicables. Los colegios pequeños quedan fuera del grado.
+   - **Nivel:** usa todos los estudiantes, siempre que el **resto** (lo que no está en ningún colegio publicado) sea 0 o reúna ≥ 10 estudiantes de ≥ 2 colegios. Si no, el nivel también se calcula sobre la base publicable.
+   - **La pantalla y los informes lo dicen:** «Cálculo sobre los grupos de 10 o más; 11 respuestas de grupos pequeños cuentan solo en el total».
+3. **Todo o nada por celda.** Si un indicador de una celda tiene n < 10 por datos faltantes, la celda publica ese indicador como no disponible y **ningún otro indicador lleva `n` ni `casos` que permitan reconstruirlo**. Hoy `_aplanar_subgrupo` descarta filas sueltas y eso abre otra resta.
+4. **Auditoría de publicación.** `publicar.verificar` construye el conjunto de estudiantes de cada agregado. Prueba todas las restas de un paso entre agregados anidados y disjuntos (padre menos la suma de hijos que lo cubren) para cada estadístico con `n` o `casos`.
+   - Si alguna da entre 1 y 9, **se niega a publicar** y dice dónde.
+   - Es una función pura con pruebas propias, incluidos los casos reales: el décimo de CdP, el quinto de SJMEB y el cuarto de CdP en primaria.
+5. **Entre corridas.** Al aprobar una corrida, el publicador **despublica la anterior del mismo módulo**. Las vistas `ultima_corrida` y `resultados_vigentes` exponen solo la última publicada **por módulo**.
+   - Restando dos corridas se aislarían las respuestas nuevas: CdP pasa de 15 a 41 en primaria.
+6. **Filtro por módulo, adelantado a esta fase.**
+   - `lectura.id_corrida_vigente`, `_traer_filas` y las vistas filtran por `modulo`.
+   - El `CHECK` de identificadores pasa a `^[ECN][0-9a-f]{8}$`.
+   - Así queda desplegado antes de que exista cualquier corrida de cuidadores.
+   - La migración es aditiva e idempotente y la corre el usuario.
+7. **Publicar y leer.** Se añade la agrupación `"Colegio×Grado"`, con clave `"LauV|Sexto"`. Una corrida vieja sin esas filas se sigue leyendo; la vista explica que el cruce no está disponible, como hoy.
+8. **Vista e informes.**
+   - El selector de grado se desbloquea y ofrece solo las celdas publicadas.
+   - La comparación por grado dentro de un colegio funciona.
+   - El informe trae «Por grado en el colegio» también en el despliegue.
+9. **Investigadores.** La pestaña de muestra suma la tabla **colegio × grado** con «válidas / respuestas» y la sede como detalle.
+10. **Aceptación.**
+    - Prueba con la lista de los investigadores sobre **conteos crudos**: La Balsa y LauV hoy, todos los colegios cuando llegue la exportación.
+    - La auditoría (punto 4) pasa sobre los datos reales.
+    - Ningún grupo de 1 a 9 queda expuesto, ni directamente ni por resta.
 
-### 5.2 Pieza compartida · Tabla única de colegios
+### 5.2 Tabla única de colegios (dentro de la fase 1)
 
-Hoy hay tres mapas divergentes:
+Se crea `src/core/colegios.py`, con estas funciones:
 
-- `estudiantes/ingest._COLEGIOS`, en códigos.
-- `scripts/preparar_docentes.COLEGIOS`, que guarda nombres legibles en la columna `Colegio` de docentes.
-- El CSV viejo de cuidadores, en códigos con variantes («Bojaca» sin tilde).
+- `normalizar(texto) -> (codigo, nombre, sede)`
+- `nombre(codigo)`
+- `codigo_desde_nombre(nombre_docentes)`
 
-Se crea `src/core/colegios.py` con `normalizar(texto) -> (codigo, nombre, sede)`, `nombre(codigo)` y `codigo_desde_nombre(nombre)`.
+Reglas:
 
-- Une las claves de los tres mapas y agrega las variantes de texto libre de cuidadores: Conaldi, Conadi y Diversificado → CND; Santa Lucía → SaLu; «Jj casas» → JJC; Balaguer → SJMEB; Santa María del Río → SMR.
-- `estudiantes.ingest` y `preparar_docentes` pasan a usarla sin cambiar sus salidas. Una prueba de no regresión compara los resultados antes y después sobre los datos reales.
+- **Unidad = colegio; la sede es detalle.** Santa Lucía es una sede de Diversificado (CND), y Fusca·El Cerro una sede de Fusca.
+- **Docentes no cambia lo que muestra.** Su columna `Colegio` sigue con los nombres actuales, incluida «Diversificado · sede Santa Lucía». La tabla solo da el código para unir en la triangulación.
+- **Variantes que se agregan:**
+  - «San José María», con espacio. Hoy se pierde: SJMEB de cuidadores daba 27 con el normalizador de estudiantes y 39 con el de docentes.
+  - Conaldi, Conadi y Diversificado → CND.
+  - «Jj casas» → JJC.
+  - Balaguer → SJMEB.
+  - Santa María del Río → SMR.
+- **Prueba de no regresión.** Los códigos asignados a estudiantes y docentes sobre los datos reales no cambian, salvo la corrección de «San José María», que se documenta.
 
 ### 5.3 Fase 2 · Navegación
 
-- `src/core/modo.py` define constantes de página: `PAGINA_DOCENTES = "Docentes"`, `PAGINA_ESTUDIANTES`, `PAGINA_CUIDADORES = "Cuidadores 360"`, `PAGINA_TRIANGULACION = "Triangulación 360"`.
-- `main.py` las usa en `_todas` y en el enrutamiento. Orden: Docentes, Estudiantes 360, Cuidadores 360, Triangulación 360, Chat con IA, Cargar Datos, Análisis de tendencias, Reportes.
-- **Páginas por modo:**
-  - Completo: todas.
-  - Investigador: todas (como hoy).
-  - Comunidad: **Estudiantes 360 y Cuidadores 360**, con un selector de página. El corte de importaciones de `main.py` se extiende para que tampoco se importen Triangulación ni la vista de investigador de cuidadores.
-- Hay que renombrar las referencias listadas en el mapa de arquitectura: `main.py:96,113`, `modo.py:90`, `state.py:63`, `reports.py:19,24`, `dashboard.py:2,559`, `tests/test_modo_despliegue.py:114,195,233-236`, `ARCHITECTURE.md`, `README.md` y `DESPLIEGUE.md`. No se tocan las menciones al «dashboard» de Supabase.
-- El título de la página de docentes pasa a «📊 Docentes · Salud organizacional».
-- Una sesión con `"Dashboard"` guardado en el estado no debe romperse: si la página guardada no existe, se abre la página por defecto.
+- **Constantes en `modo.py`:** `PAGINA_DOCENTES = "Docentes"`, `PAGINA_ESTUDIANTES`, `PAGINA_CUIDADORES = "Cuidadores 360"` y `PAGINA_TRIANGULACION = "Triangulación 360"`.
+- **Orden del menú:** Docentes, Estudiantes 360, Cuidadores 360, Triangulación 360, Chat con IA, Cargar Datos, Análisis de tendencias, Reportes.
+- **Por modo:**
+  - **Completo e investigador:** todas las páginas.
+  - **Comunidad:** Estudiantes 360 y, cuando se habilite, Cuidadores 360. Elige la página en un selector.
+  - El corte de importaciones de `main.py` se extiende: en comunidad no se importan Triangulación ni la vista de investigador de cuidadores.
+- **Renombrar.**
+  - Archivos: `main.py:96,113`, `modo.py:90`, `state.py:63`, `reports.py:19,24` y `dashboard.py:2,559`.
+  - Pruebas: `tests/test_modo_despliegue.py:95-100,114,195,233-236`.
+  - Documentación: `ARCHITECTURE.md`, `README.md` y `DESPLIEGUE.md`.
+  - El `page_title` público pasa a «Observatorio 360 · Comunidad».
+  - No se tocan las menciones al «dashboard» de Supabase.
+- **Estado entre páginas.** El colegio y el rol elegidos se guardan en el estado de sesión fuera de los widgets, para no perderlos al cambiar entre Estudiantes y Cuidadores. `?colegio=` aplica a las dos páginas.
 
 ### 5.4 Fase 3 · Alertas de estudiantes: «Señales para actuar a tiempo»
 
-#### Definiciones, nivel estudiante (puras, en `src/estudiantes/alertas.py`)
+#### Definiciones por estudiante
 
-**Malestar emocional** (primaria y secundaria). Son los ítems marcados con `*`: SDQ 5 (me enojo y pierdo el control), 6 (solitario), 8 (preocupado), 13 (triste o con ganas de llorar), 19 (se burlan de mí) y 24 (muchos miedos).
+Viven en `src/estudiantes/alertas.py` (funciones puras). Los ítems y umbrales están en `catalog.ALERTAS`.
 
-- Hay señal si el estudiante responde **«Muy cierto» en 3 o más de los 6**.
-- Calibración con los datos actuales: 8,8 % en secundaria y 15,6 % en primaria. Con «2 o más» saldría 22 % y 33 %, que sería poco específico.
+**Señales de malestar** (primaria y secundaria):
 
-**Desesperanza** (solo secundaria; primaria no respondió el RCADS).
+- **Ítems marcados con `*`:**
+  - SDQ 5: me enojo y pierdo el control.
+  - SDQ 6: solitario.
+  - SDQ 8: preocupado.
+  - SDQ 13: triste o con ganas de llorar.
+  - SDQ 19: se burlan de mí.
+  - SDQ 24: muchos miedos.
+- **Regla:** «Muy cierto» en **3 o más de los 6**.
+- **Calibración:** 8,8 % en secundaria; 15,1 % en primaria con el xlsx nuevo. Con «2 o más» serían 22,0 % y 32,4 %.
+- Se nombra «malestar» y no «malestar emocional» porque los ítems incluyen enojo y relación con pares.
+- En primaria va junto al aviso de validez de edad.
 
-- Hay señal si responde RCADS 18 «Pienso acerca de la muerte» = **Siempre**, o RCADS 18 ≥ **Con frecuencia** junto con RCADS 16 «Me siento que no valgo nada» ≥ **Con frecuencia**.
-- Calibración: 17,0 %. Una regla amplia que sumaba RCADS 1 «triste o vacío» y 4 «nada me divierte» daba 33 %.
-- Se descartaron esos dos ítems porque miden ánimo y anhedonia, no desesperanza.
-- **Límite que hay que decir:** el instrumento no tiene una escala de desesperanza. El nombre visible es «Señales de desesperanza y pensamientos de muerte».
+**Señales de desesperanza y pensamientos de muerte** (solo secundaria):
 
-Los ítems y umbrales viven en el catálogo (`catalog.ALERTAS`), no en el código. Cuando el equipo marque el formulario de secundaria, se ajusta el catálogo y una prueba verifica que coinciden los ítems con `*` del archivo y los de `ALERTAS`.
+- **Regla:** RCADS 18 («Pienso acerca de la muerte») = **Siempre**, o RCADS 18 ≥ **Con frecuencia** junto con RCADS 16 («Me siento que no valgo nada») ≥ **Con frecuencia**.
+- **Calibración:** 17,0 % en total; entre 10,8 % y 21,5 % según el grado.
+- Para el análisis de sensibilidad, la **regla amplia** se define exactamente así: RCADS 18 ≥ Con frecuencia, o RCADS 16 ≥ Con frecuencia junto con (RCADS 4 o RCADS 1) ≥ Con frecuencia.
+- **Límite:** el instrumento no tiene una escala de desesperanza.
 
-#### Agregación y activación (por grupo, n ≥ 10)
+**Unificación con la tarjeta actual de muerte.** Hoy la tarjeta «Pensamientos sobre la muerte» (RCADS 18 ≥ Con frecuencia, 24,9 %) mostraría otra cifra sobre el mismo ítem. Para los roles colegio y municipio **el panel de alertas la reemplaza**. En la vista de investigadores, la prevalencia de RCADS 18 sigue en «Cortes y bandas».
 
-Para cada grupo se calcula el porcentaje con señal, su IC de Wilson y el número de casos. La alerta tiene dos estados y **nunca se oculta**:
+Una prueba verifica que los ítems con `*` de cada archivo coinciden con `catalog.ALERTAS`. Hoy solo primaria está marcado; cuando el equipo marque secundaria se ajusta el catálogo.
 
-- **«En seguimiento»** (gris sereno): se muestra siempre. Texto tipo: «1 de cada 6 estudiantes muestra señales. No es un diagnóstico: indica dónde mirar primero». Incluye qué hacer y la ruta.
-- **«Prioridad»** (naranja, nunca rojo): se activa en un grupo cuyo IC queda por encima del valor del municipio, la misma regla de `comparar()` que ya usan los informes. Dentro de un colegio se listan los grados en «Prioridad», en orden canónico y no por ranking.
+#### Agregación y estados
 
-**Por qué no hay un umbral fijo:** con los datos actuales, cualquier umbral razonable se activa en casi todos los grupos (desesperanza entre 11 % y 33 % por grado). Una alerta permanente deja de ser alerta.
+Para cada grupo publicable de §5.1 se calculan el porcentaje con señal y su IC de Wilson. El panel **nunca se oculta** y tiene dos estados:
 
-#### Dónde y para quién
+- **«Para tener presente»** (gris sereno). Por ejemplo: «1 de cada 6 estudiantes muestra señales. No es un diagnóstico: indica dónde mirar primero». Incluye qué hacer y la ruta.
+- **«Prioridad»** (naranja como máximo, nunca rojo). Se activa cuando el IC del grupo queda **por encima del resto del municipio**. La comparación es contra el resto, no contra el total: Laura Vicuña es el 46 % de secundaria.
+  - Dentro de un colegio se listan los grados en «Prioridad» en orden canónico.
+  - **Nota fija:** con muchas comparaciones, alguna «Prioridad» puede deberse al azar; sirve para orientar, no para concluir.
+
+**Cifras que no delatan:**
+
+- **Nunca se publica ni se muestra el número de casos** de ninguna alerta.
+- El porcentaje y el «1 de cada N» se muestran **solo si el número de casos está entre 3 y n − 3**.
+- Si no, el panel dice: «En este grupo las cifras son muy pequeñas para mostrarse sin riesgo de identificar a alguien; la ruta sigue aplicando».
+
+**¿Por qué no hay un umbral fijo?** Cualquier umbral razonable se activa en casi todos los grupos, y una alerta permanente deja de ser alerta.
+
+#### Quién ve qué
 
 | Rol | Malestar | Desesperanza | Qué ve |
 |---|---|---|---|
-| Colegio (rector, docente, orientación) | Sí | Sí | Panel arriba de las tarjetas, grados en «Prioridad», qué hacer y ruta escolar |
-| Municipio | Sí | Sí | Por colegio y por grado, con qué hacer de política y red |
-| Familia | Sí | **No** (igual que `ideacion` hoy) | Qué hacer en casa y a dónde acudir |
+| Colegio | Sí | Sí | Panel arriba de las tarjetas (compacto, con detalle desplegable), grados en «Prioridad», qué hacer y ruta escolar |
+| Municipio | Sí | Sí | Por colegio y por grado; qué hacer en política y red |
+| Familia | Sí | **No** (regla vigente) | Qué hacer en casa y a dónde acudir |
 
-- Entra en el informe del colegio, el informe de la Secretaría (una tabla de alertas por colegio) y el resumen PDF de una página. En este último, un recuadro compacto antes de las tarjetas, sin pasar de una página.
-- La tarjeta actual «Pensamientos sobre la muerte» se mantiene. El panel de alertas la referencia en vez de duplicarla.
+- **Informes:**
+  - El informe del colegio lleva el panel.
+  - El de la Secretaría lleva una tabla de alertas por colegio, sin conteos.
+  - El PDF de una página lleva un recuadro compacto antes de las tarjetas.
 - **Investigadores:**
-  - Definiciones, prevalencias por grupo y distribución de cada ítem.
-  - Un análisis de sensibilidad: umbrales de 2, 3 y 4 ítems, y la regla amplia frente a la estricta.
-  - Exportación en `alertas.csv` dentro del ZIP.
-- **Supabase:** filas `tipo = "alerta_grupo"` (n ≥ 10) y mensajes por rol en `obs360.mensajes`.
+  - Definiciones, prevalencias por grupo y la distribución de cada ítem.
+  - Sensibilidad: umbrales de 2, 3 y 4, y regla estricta frente a amplia.
+  - `alertas.csv` (solo por grupo) en el ZIP.
+- **Supabase:** filas `alerta_grupo` sin `casos`, y mensajes por rol.
 
-#### Rutas por rol (catálogo)
+#### Rutas
 
-`RUTA_ATENCION` pasa a ser `RUTAS[rol][tipo]`, para estudiante o adulto. Los textos y los teléfonos los aporta y aprueba el equipo; **el código no inventa números**. Mientras no estén aprobados, la ruta muestra las entradas actuales y un aviso interno visible solo en el modo completo: «ruta pendiente de validación».
+`RUTA_ATENCION` pasa a `RUTAS[rol][tipo]`, donde el tipo es estudiante o adulto.
+
+- **El código no inventa teléfonos.** La «Línea 106» actual es de Bogotá.
+- El equipo confirma las líneas para Chía, por ejemplo la 192 opción 4 o el ICBF 141.
+- Mientras no estén aprobadas, se muestran las entradas actuales. En el modo completo aparece además el aviso interno «ruta pendiente de validación».
 
 ### 5.5 Fase 4 · Cuidadores 360
 
-Es un paquete espejo de `src/estudiantes/`, que reutiliza `stats` y el patrón de vistas.
+Va en dos PR. **4a:** carga, puntuación y vista de investigadores. **4b:** vista de comunidad, informes y publicación.
 
 | Archivo | Responsabilidad |
 |---|---|
-| `src/cuidadores/catalog.py` | Escalas, ítems por posición, inversos, bandas, `MENSAJES`, `ALERTAS`, `RUTAS` de adulto |
-| `src/cuidadores/ingest.py` | Consentimiento, hash de cuidador (`C`+sha1[:8]) y de niño (`N`+sha1[:8], con la misma normalización que estudiantes, §5.6), descarte de nombres y teléfono, colegio vía `core/colegios`, curso libre → grado canónico, ola (2025/2026), expansión del hijo 2 y deduplicación |
-| `src/cuidadores/scoring.py` | Puntuaciones por escala desde el texto crudo |
-| `src/cuidadores/pipeline.py` | `AnalisisCuidadores` con dos marcos: **cuidador** (escalas del adulto) y **niño** (SDQ y ARI de padres, agrupado por cuidador); subgrupos Colegio, Grado y Colegio×Grado con supresión complementaria |
+| `src/cuidadores/catalog.py` | Escalas, ítems por posición, mapas texto → puntaje explícitos por ítem, bandas, `MENSAJES`, `ALERTAS`, `RUTAS` de adulto |
+| `src/cuidadores/ingest.py` | Consentimiento, identificadores con **HMAC con clave local** (`C…` para el cuidador, `N…` para el niño), descarte de nombres y teléfono, colegio vía `core/colegios`, curso libre → grado, ola, expansión del hijo 2 y deduplicación |
+| `src/cuidadores/scoring.py` | Puntuaciones desde el texto crudo |
+| `src/cuidadores/pipeline.py` | `AnalisisCuidadores` con dos marcos (**cuidador** y **niño**) y la base publicable de §5.1 |
 | `src/cuidadores/publicar.py`, `lectura.py` | Igual que estudiantes, con `modulo = "cuidadores"` |
-| `src/ui/cuidadores.py` | Página con despachador de audiencia |
-| `src/ui/views/cuidadores_{investigador,comunidad,informe}.py` | Vistas e informes HTML y PDF |
+| `src/ui/cuidadores.py`, `src/ui/views/cuidadores_{investigador,comunidad,informe}.py` | Página y vistas |
+
+**Deduplicación de niños:** queda una fila por niño.
+
+- **Prioridad:** la ola más reciente; si hay empate, quien responde como mamá, luego papá, luego otro; si persiste, el primer envío.
+- La deduplicación de cuidadores entre olas usa la respuesta más reciente.
+- El mínimo de 10 se aplica a **cuidadores distintos**.
 
 **Puntuación:**
 
-- **SDQ padres:** puntuación estándar desde el raw (No es cierto = 0, Un tanto = 1, Absolutamente = 2; inversos 7, 11, 14, 21, 25) y bandas `BANDS_PARENT`.
-  - Rango de edad válido: 4 a 17 años. Fuera de ese rango no se puntúa.
-  - **No se reutiliza nada del AUDIT legado**, que está mal codificado.
-- **ARI padres:** suma de los ítems 1–6 (0–12); el 7 es deterioro. El corte de padres (> 3) se reporta como referencia externa.
-- **PSS-10:** 0–4. **Es una adaptación, no el orden estándar.** Los ítems positivos que se invierten se identifican por su redacción: «manejó bien los cambios», «confianza en manejar sus problemas», «las cosas le iban bien», «ha podido controlar sus enojos» y «ha utilizado su tiempo adecuadamente» (columnas 27, 28, 29, 31 y 33). Se confirman contra el libro de códigos y con la consistencia interna (ítem–total). Sin corte clínico: terciles y percentiles.
-- **EPDS-10:** 0–3 por la posición de la opción. Los ítems 1, 2 y 4 se puntúan en orden directo y los 3 y 5–10 en inverso, según el instrumento original. El mapa opción → puntaje se escribe explícito por ítem en el catálogo porque las redacciones varían.
-  - Cortes: **≥ 10 posible** y **≥ 13 probable** sintomatología depresiva.
-  - Aviso: la EPDS se validó en el periodo perinatal; aquí se lee como tamizaje de malestar y no como diagnóstico.
-- **MSPSS-12:** media de 1 a 5, el total y las fuentes familia, amigos y persona especial. Es comparable con el de estudiantes, que usa la misma escala.
-- **APQ:** subescalas de implicación, crianza positiva, supervisión deficiente, disciplina inconsistente y castigo físico (ítems 78–80), según el libro de códigos del proyecto (`Preprocesamiento 360/codigos/Códigos.xlsx`).
-  - El castigo físico también se reporta como el porcentaje que usa alguna forma «A veces» o más. La Ley 2089 de 2021 lo prohíbe; el texto de acción lo trata como oportunidad de acompañamiento, no como acusación.
-- **Estrés parental (39 ítems):** **no es el PSI-SF estándar de 36 ítems.**
-  - Las subescalas (malestar paterno, interacción disfuncional, niño difícil) se asignan con el libro de códigos del proyecto.
-  - Si el libro no cubre los 39 ítems, solo se reporta el total, con la nota de que es una versión adaptada.
-  - **Bloqueante para las subescalas:** conseguir el libro de códigos.
-- **Riesgo barrial:** índice de 0 a 10 (0, 1 o 2 por ítem).
-
-**Datos que no se deducen del archivo:**
-
-- Edad del niño entre 2 y 27: fuera del rango del instrumento no se puntúa el SDQ.
+- **SDQ de padres:** estándar desde el raw, con bandas `BANDS_PARENT`. Edad **numérica entre 4 y 17**; si no es numérica, falta. Nada del AUDIT legado.
+- **ARI de padres:** ítems 1–6 (rango 0–12). La cobertura parcial se declara en pantalla y en la metodología.
+- **PSS-10:** 0–4, con inversos 3, 4, 5, 7 y 9, igual que docentes. Sin corte: terciles.
+- **EPDS-10:** **por texto de la respuesta**, con un mapa explícito de cada ítem en el catálogo. No se usa la posición.
+  - **Ánimo:** ≥ 10 posible, ≥ 13 probable (23,3 %).
+  - **Autolesión:** ítem 10 ≥ «Casi nunca» (11,0 %), siguiendo la práctica estándar de atender cualquier respuesta distinta de cero.
+  - **Aviso:** la EPDS se validó en el periodo perinatal; aquí se lee como tamizaje.
+- **MSPSS del cuidador:** media 1–5 **por fuente**. La comparación con estudiantes es solo por fuente (sobre todo familia) y con aviso de redacción distinta.
+- **APQ:** subescalas según el libro de códigos. Mientras no llegue, solo se reportan los ítems de castigo físico (78–80) como «usa alguna forma, a veces o más». La Ley 2089 de 2021 lo prohíbe; el texto lo plantea como acompañamiento.
+- **Estrés parental:** **no hay total ni subescalas hasta confirmar la dirección de los ítems** con el libro de códigos, por las columnas 103–107 y 117. Hasta entonces, solo los ítems descriptivos en la vista de investigadores.
+- **Riesgo barrial:** índice de 0 a 10.
 - **Curso libre:**
-  - Mapa de patrones a grado: «501» → Quinto, «1002» → Décimo, «Sexto 602» → Sexto.
-  - «2A», «Transición» y «Jardín» quedan fuera de los grados del estudio, y lo que no se reconoce va a «Otro».
-  - Una prueba con todas las variantes observadas.
-- **Duplicados entre olas:** el mismo cuidador y niño (por hash) en 2025 y 2026 conserva la respuesta más reciente en la vista de comunidad. El investigador puede elegir ola.
-- **Hijo 2:** es una fila de niño más, con el mismo `id_cuidador`. Los errores estándar se agrupan por cuidador.
+  - Mapa de patrones: «501» → Quinto, «1002» → Décimo, «Sexto 602» → Sexto.
+  - Grados del estudio: cuarto a décimo. Once, transición y primero a tercero quedan en «fuera del rango del estudio».
+  - Prueba con todas las variantes observadas.
 
 **Vistas:**
 
-- **Investigador:** las mismas 8 pestañas que estudiantes (muestra y exclusiones, tabla 1, cortes y bandas, correlaciones con corrección BH, por grupo, modelos con errores agrupados, calidad de datos y exportar en ZIP), más un filtro de ola.
-- **Comunidad, roles colegio, familia y municipio.** Tarjetas sugeridas, cuyos textos se redactan en el catálogo y los aprueba el equipo:
-  1. Estrés de crianza.
+- **Investigador (4a):** las mismas 8 pestañas que estudiantes, más un filtro de ola que **solo existe en local** y no se publica por ola.
+- **Comunidad (4b):** mismos roles y misma estructura que estudiantes. Tarjetas:
+  1. Estrés de crianza (PSS).
   2. Ánimo del cuidador (EPDS).
-  3. Apoyo que tiene el cuidador (MSPSS).
+  3. Apoyo que tiene (MSPSS por fuente).
   4. Crianza positiva y castigo físico.
   5. Seguridad del barrio.
-  6. Cómo ve el cuidador al hijo (SDQ padres).
-  - Con el mismo techo de 5 tarjetas, la misma barra de bandas, la comparación por grupo y los informes HTML (por colegio y Secretaría) y PDF de una página.
-- **Alerta del adulto:** EPDS ítem 10 ≥ «A veces» o EPDS ≥ 13, por grupo, con los dos estados de §5.4.
-  - Visible para colegio y municipio. A la familia se le muestra solo un mensaje general de autocuidado con la ruta de adultos, sin cifras de autolesión.
+  6. Cómo ve el cuidador al hijo (SDQ de padres).
 
-**Supabase (migración que corre el usuario):**
-
-- `obs360.corridas.modulo` ya existe. `ultima_corrida`, `resultados_vigentes`, `lectura.id_corrida_vigente` y `_traer_filas` **filtran por módulo**. Hoy, una corrida de cuidadores pisaría la de estudiantes.
-- El `CHECK nivel` acepta `'cuidadores'`.
-- `mensajes` agrega `modulo`, y la restricción `UNIQUE` pasa a ser (modulo, clave, accion_rol).
-- La migración es aditiva e idempotente, con prueba de que las corridas existentes de estudiantes se siguen leyendo igual.
+  Se mantiene el techo de 5 tarjetas.
+- **Alertas del adulto:**
+  - **«Ánimo»** (EPDS ≥ 13): por grupo, para colegio y municipio, con las reglas de cifras de §5.4.
+  - **«Autolesión»** (ítem 10): **solo a nivel municipio**, sin conteos y con la regla de 3 a n − 3. En el colegio queda dentro de un estado general.
+  - **Familia:** un mensaje de autocuidado con la ruta para adultos, sin cifras.
+- **Despliegue público:** la página de Cuidadores se habilita en modo comunidad **solo cuando** el equipo aprueba sus textos y rutas y hay una corrida de cuidadores publicada. Hasta entonces existe en los modos completo e investigador.
 
 ### 5.6 Fase 5 · Triangulación 360 (solo investigadores)
 
-`src/triangulacion/` (puro) y `src/ui/triangulacion.py`.
+Código en `src/triangulacion/` (puro) y `src/ui/triangulacion.py`.
 
-#### Capa 1 · Por colegio (y por grado donde haya base)
+#### Capa 1 · Por colegio
 
-Solo entran los colegios con **n ≥ 10 en cada actor**. Con los datos nuevos se esperan al menos LauV, JJC y SJMEB.
+**Colegios que entran:** los que tienen **n ≥ 10 en cada actor**. Con los datos actuales son 4: LauV, JJC, SJMEB y La Balsa (221 estudiantes, 24 cuidadores, 18 docentes).
 
-- **Docentes:** se unen por colegio mediante `core/colegios.codigo_desde_nombre`, porque su columna `Colegio` trae el nombre legible.
-- **Constructos alineados** (cada fila dice qué instrumento lo mide en cada actor):
+**Quiénes entran:**
 
-| Constructo | Estudiantes | Cuidadores | Docentes |
-|---|---|---|---|
-| Malestar emocional | SDQ emocional alto, señal de malestar | EPDS ≥ 13 | BLG desgaste / BTA |
-| Estrés | — | PSS-10 (adaptación) | PSS de docentes (**verificar** que sean los mismos ítems antes de compararlos en crudo; si no, solo posición relativa) |
-| Apoyo social | MSPSS (5 puntos) | MSPSS (5 puntos) | — |
-| Escuela y clima | PSSM, adulto de confianza | Desempeño percibido | Clima laboral, apoyo percibido |
-| Conducta del niño | SDQ autoinforme | SDQ padres | — |
+- **Cuidadores:** solo los de niños en los grados del estudio (631 de 756).
+- **Docentes:** se unen con `codigo_desde_nombre`.
+- **Por grado** solo es posible con estudiantes y cuidadores; los docentes no tienen grado. La vista lo dice.
 
-- **Lectura:** cada valor se expresa como posición relativa dentro de su propio actor (z respecto a la media municipal de ese actor), porque escalas distintas no se comparan en crudo.
-  - **«Coincidencia»:** los actores van en la misma dirección.
-  - **«Tensión»:** van en direcciones opuestas por encima de un umbral (por defecto |Δz| ≥ 0,5).
-- **Aviso fijo:** con 3 a 5 colegios esto es **descriptivo y ecológico**. No permite inferir relaciones entre individuos.
+**Medida:** para cada actor y constructo, la diferencia del colegio frente al **resto del municipio de ese mismo actor**, en unidades de la DE individual del actor, con su IC.
 
-#### Capa 2 · Díadas niño–cuidador
+**Clasificación:**
 
-- **Enlace:** se usa el hash del nombre normalizado del niño (la misma `norm_txt` y el mismo sha1 que el ID de estudiante), **verificado** con el código de colegio.
-  - Se reporta la calidad del enlace: coincidencias, descartes por colegio distinto y concordancia de sexo y edad (±1 año).
-  - Primer recuento sobre los datos crudos: 209 coincidencias exactas.
-  - No se usan coincidencias aproximadas en esta fase.
-- **Solo en la máquina que procesa.** Las díadas nunca suben a Supabase. Si se publica algo, son estadísticos agregados con n ≥ 10.
-- **Análisis:**
-  - Acuerdo SDQ niño frente a padre por subescala: correlación, CCI, diferencia media con límites de Bland–Altman, y kappa ponderado sobre las bandas, cada una con su propio corte (autoinforme o padres).
-  - **«Malestar que el cuidador no ve»:** el niño está en banda alta o tiene señal de malestar, y el cuidador lo ubica en banda promedio. Se da su porcentaje e IC.
-  - MSPSS de familia del niño frente al MSPSS del cuidador.
-  - Asociaciones con IC entre la EPDS, la PSS, el castigo físico y el barrio del cuidador, y los resultados del niño (SDQ, RCADS, señales de alerta). Errores agrupados por colegio.
-- **Exportación:** ZIP con tablas, figuras y `metodologia.md` de plantilla fija.
+- **Coincidencia o tensión** solo en constructos que hablan **del mismo objeto**:
+  - La conducta del niño, según él (SDQ autoinforme) y según su cuidador (SDQ de padres).
+  - El clima escolar, según los estudiantes (PSSM, adulto de confianza) y según los docentes (clima laboral, apoyo percibido).
+  - El estrés, entre cuidadores y docentes. Es la misma PSS, pero mide a personas distintas, así que se clasifica como co-ocurrencia.
+  - Hay **«tensión»** solo si los IC de los dos actores excluyen el cero **en direcciones opuestas**. Hay **«coincidencia»** si lo excluyen en la misma dirección. En otro caso: «sin diferencia clara».
+- **Los demás cruces son «co-ocurrencia».** Por ejemplo, el malestar del niño junto a la EPDS del cuidador y al desgaste docente: se describen lado a lado sin llamarlos acuerdo, porque no miden lo mismo.
 
-## 6. Experiencia de usuario: reglas para no empeorarla
+**Aviso fijo:** con 4 colegios esto es descriptivo y ecológico.
 
-- Las vistas existentes de estudiantes conservan su orden y su contenido. El panel de alertas se inserta arriba de las tarjetas, compacto, con el detalle desplegable.
-- **El lenguaje de las alertas sigue reglas fijas:**
+**En el despliegue de investigador** (sin archivos crudos) solo existe esta capa, desde agregados publicados con la base de §5.1.
+
+#### Capa 2 · Díadas niño–cuidador (solo local)
+
+**Enlace:**
+
+- HMAC con clave local del nombre normalizado del niño, en los dos archivos, **verificado con el colegio**.
+- Se reporta la calidad del enlace: coincidencias, descartes por colegio y concordancia de sexo y edad (±1 año).
+- Primer recuento: 209 niños. Por colegio verificado: LauV unos 204 filas, JJC 20, La Balsa 4, SJMEB 3.
+- No hay coincidencias aproximadas.
+
+**Análisis:**
+
+- **Acuerdo SDQ entre el niño y su cuidador**, por subescala: correlación, CCI, diferencia media con límites de Bland–Altman, y kappa ponderado sobre las bandas (cada informante con su propio corte).
+- **«Malestar que el cuidador no ve»:** el niño en banda alta o con señal de malestar, y el cuidador lo ubica en la banda promedio. Se da su porcentaje e IC.
+- **MSPSS de familia** del niño frente al del cuidador, por fuente y con aviso.
+- **Asociaciones** de la EPDS, la PSS, el castigo físico y el barrio con los resultados del niño.
+  - Errores **agrupados por familia**, con efecto fijo de colegio.
+  - Sensibilidad solo con LauV, porque 4 conglomerados escolares no sostienen errores robustos.
+
+**Exportación:** ZIP local con tablas, figuras y `metodologia.md` de plantilla fija. Nada de esto sube a Supabase.
+
+## 6. Experiencia de usuario
+
+- **Lo existente no se mueve.** Estudiantes conserva su orden y su contenido. El panel de alertas entra arriba de las tarjetas, compacto, y reemplaza la tarjeta de muerte solo para colegio y municipio.
+- **Lenguaje de las alertas:**
   - Nunca «riesgo de suicidio».
   - Siempre «señales», «no es un diagnóstico» y «dónde mirar primero».
-  - Naranja como color máximo.
-  - La ruta siempre a la vista.
-- El rol familia no ve desagregación por colegio ni nada sobre la muerte o la autolesión (regla vigente).
-- Cuidadores usa el mismo selector de rol, los mismos colores y la misma estructura que estudiantes, para que quien conoce una vista entienda la otra.
-- La triangulación se lee en tres niveles de profundidad: un resumen de hallazgos («dónde coinciden» y «dónde hay tensión»), luego las tablas y luego la metodología.
+  - Estados: «Para tener presente» y «Prioridad».
+  - Color máximo: naranja.
+  - La ruta siempre está a la vista.
+- **Familia** no ve desagregación por colegio, ni nada sobre la muerte o la autolesión, ni cifras de autolesión del adulto.
+- **Cuidadores** usa el mismo selector de rol, los mismos colores y la misma estructura que estudiantes.
+- **Las cifras se reconcilian** con «n válidas de N respuestas» y con la nota de la base publicable.
+- **La triangulación se lee en capas:** primero un resumen («dónde coinciden» y «dónde hay tensión»), luego las tablas, luego la metodología.
 
 ## 7. Pruebas y verificación
 
-- **Sintéticas por módulo**, con centinelas de privacidad:
-  - Nombres de cuidador y niño, y un teléfono como `3000000000`.
+- **Pruebas sintéticas por módulo**, con centinelas de privacidad:
+  - Nombres de cuidador y de niño, y el teléfono `3000000000`.
   - Un colegio y un grado pequeños.
-  - Un colegio donde la supresión complementaria debe actuar.
-- **Regresión sobre datos reales**, que se omite si faltan los archivos:
-  - Los conteos colegio × grado frente a la lista de los investigadores.
-  - Las prevalencias de alerta de §5.4.
-  - El recuento de díadas.
-- **No regresión:**
-  - Las cifras actuales de estudiantes y los informes no cambian, salvo lo nuevo. Se compara la salida de `informe_secretaria_html` antes y después, sin las secciones nuevas.
-  - Lo mismo para la tabla de colegios en docentes.
-- **Supabase:** el circuito publicar → leer para cada módulo, y prueba de que una corrida de un módulo no altera la lectura del otro.
-- **Playwright de punta a punta** en los modos comunidad (corrida publicada), completo e investigador. Cubre la navegación renombrada, el selector de grado desbloqueado, los paneles de alerta por rol, la vista de cuidadores, la triangulación invisible en comunidad, los informes y PDF de una página, y el celular.
+  - **Las tres configuraciones reales de resta**: décimo de CdP, quinto de SJMEB y cuarto de CdP en primaria.
+- **Auditoría de resta:** pruebas propias, y bloquea la publicación ante cualquier fallo.
+- **Regresión sobre datos reales** (se omite si faltan los archivos):
+  - Conteos crudos colegio × grado frente a la lista.
+  - Prevalencias de alertas (§5.4).
+  - Recuento de díadas.
+  - No regresión de los códigos de colegio (§5.2).
+- **No regresión de pantallas:** las cifras e informes actuales de estudiantes no cambian, salvo lo nuevo y la base publicable. Las diferencias por la base publicable se listan y se aprueban explícitamente.
+- **Supabase:**
+  - Circuito publicar → leer por módulo.
+  - Una corrida de cuidadores no altera la lectura de estudiantes.
+  - Solo se lee la última corrida por módulo.
+- **PDF de una página:** pruebas del peor caso (rol municipio, lista máxima de «Prioridad», ambos niveles), que debe seguir cabiendo en una página.
+- **Playwright de punta a punta** en los modos comunidad, completo e investigador:
+  - Navegación renombrada y estado entre páginas.
+  - Selector de grado desbloqueado y comparación por grado dentro de un colegio.
+  - Alertas por rol y regla de cifras.
+  - Cuidadores visible u oculto según su habilitación.
+  - Triangulación invisible en comunidad.
+  - Informes, PDF y celular.
 
-## 8. Lo que decide el equipo (no frena el desarrollo; hay valores provisionales)
+## 8. Lo que decide el equipo (hay valores provisionales)
 
-1. **Textos y rutas:** líneas telefónicas y entidades exactas por rol, tanto para estudiantes como para adultos.
-2. **Umbrales de alerta:** 3 de 6 para malestar y la regla estricta para desesperanza. Se les entrega el análisis de sensibilidad.
-3. **Ítems con `*` de secundaria**, para confirmar o ajustar la propuesta.
-4. **Uso de la EPDS** fuera del periodo perinatal, y redacción de su tarjeta.
-5. **Mensajes de las tarjetas de cuidadores.**
-6. Los textos actuales del catálogo de estudiantes que no se cumplen en todos los grupos. Por ejemplo, «más del doble en las chicas» en primaria de LauV, que da 29 % frente a 29 %. Hay que decidir si se vuelven condicionales.
+1. Textos y rutas por rol, para estudiantes y adultos, con las líneas exactas para Chía.
+2. Umbrales de alerta. Se les entrega la sensibilidad.
+3. Ítems con `*` de secundaria.
+4. Uso y redacción de la EPDS fuera del periodo perinatal.
+5. Mensajes de las tarjetas de cuidadores (condiciona la habilitación pública).
+6. Textos actuales de estudiantes que no se cumplen en todos los grupos. Ejemplo: «más del doble en las chicas» cuando primaria de LauV da 29 % frente a 29 %.
 
 ## 9. Bloqueantes de datos
 
-- **La exportación actualizada de secundaria**, para la fase 1 completa.
-- **El libro de códigos de cuidadores** (`Códigos.xlsx`), para las subescalas del APQ y del estrés parental. Sin él, la fase 4 entrega totales.
+- **Exportación actualizada de secundaria:** la necesita la fase 1 completa.
+- **Libro de códigos de cuidadores:** lo necesitan las subescalas del APQ y el estrés parental. Sin él, la fase 4 sale sin esas puntuaciones.
 
 ## 10. Fuera de alcance
 
 - Alertas o listas individuales.
-- Vínculo docente–niño.
+- Vínculo entre docente y niño.
 - Coincidencias aproximadas de nombres.
-- Inferencia multinivel con 3 a 5 colegios.
-- Rediseño del dashboard de docentes más allá del nombre.
-- Cambios en el PDF de docentes (sigue siendo la otra mitad del A/B).
+- Inferencia multinivel con 4 colegios.
+- Publicar por ola.
+- Rediseñar el dashboard de docentes más allá del nombre.
+- Cambiar el PDF de docentes: es la otra mitad del A/B.
