@@ -19,8 +19,6 @@ docs/instrumentos/fixtures/resultados_preliminares_estudiantes.json
 from __future__ import annotations
 
 import hashlib
-import re
-import unicodedata
 from dataclasses import dataclass, field
 
 import numpy as np
