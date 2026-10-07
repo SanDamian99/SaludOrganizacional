@@ -506,17 +506,31 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
         raise
 
     publicada = False
+    otras_despublicadas = False
     if publicar_ya:
         # Solo con todos los resultados dentro se abre la corrida nueva; y dos
         # corridas legibles a la vez permitirían restar una de otra y aislar
         # las respuestas nuevas, así que se cierran las demás del módulo.
         tabla(TABLA_CORRIDAS).update({"publicada": True}).eq("id", corrida_id).execute()
-        (tabla(TABLA_CORRIDAS).update({"publicada": False})
-         .eq("modulo", MODULO).neq("id", corrida_id).execute())
         publicada = True
+        try:
+            (tabla(TABLA_CORRIDAS).update({"publicada": False})
+             .eq("modulo", MODULO).neq("id", corrida_id).execute())
+            otras_despublicadas = True
+        except Exception as exc:                                  # noqa: BLE001
+            # La corrida nueva ya está abierta y completa: no se deshace. Con la
+            # migración 2026-10-07 el público solo lee la última publicada del
+            # módulo; sin ella, las viejas siguen legibles hasta cerrarlas a mano.
+            print(f"AVISO: la corrida {corrida_id} quedó publicada, pero no se pudieron "
+                  f"despublicar las demás corridas de «{MODULO}» ({exc}). Compruebe que "
+                  "corrió la migración supabase/migraciones/2026-10-07-modulo-y-ultima-"
+                  "corrida.sql y despublique a mano: UPDATE obs360.corridas SET "
+                  f"publicada = false WHERE modulo = '{MODULO}' AND id <> {corrida_id};",
+                  file=sys.stderr)
 
     return dict(corrida_id=corrida_id, version=corrida["version_analisis"],
-                filas=len(filas), publicada=publicada)
+                filas=len(filas), publicada=publicada,
+                otras_corridas_despublicadas=otras_despublicadas)
 
 
 def mensajes_para_subir() -> list[dict]:

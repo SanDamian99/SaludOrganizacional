@@ -409,3 +409,28 @@ def test_un_erq_invalidado_grande_se_publica_tal_cual():
     ing = publicar.aplanar_ingesta([Inf()])[0]["detalle"]["ingesta"]
     assert ing["erq_invalidado"] == 42
     assert ing["avisos"][0].startswith("ERQ-CA: 42 respuestas")
+
+
+def test_si_falla_despublicar_las_otras_avisa_y_devuelve_el_resultado(
+        analisis_sintetico, capsys):
+    """La corrida nueva ya está abierta: no se pierde el resultado, se avisa."""
+    original = _Tabla.execute
+
+    def execute(self):
+        if ("neq", "corridas", ("id", 7)) in self.r:
+            raise RuntimeError("permiso denegado")
+        return original(self)
+    _Tabla.execute = execute
+    try:
+        r = publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=_Cliente())
+    finally:
+        _Tabla.execute = original
+    assert r["publicada"] is True and r["corrida_id"] == 7
+    assert r["otras_corridas_despublicadas"] is False
+    err = capsys.readouterr().err
+    assert "migración" in err and "despublic" in err.lower()
+
+
+def test_publicar_ya_informa_que_despublico_las_otras(analisis_sintetico):
+    r = publicar.publicar(analisis_sintetico, publicar_ya=True, cliente=_Cliente())
+    assert r["otras_corridas_despublicadas"] is True
