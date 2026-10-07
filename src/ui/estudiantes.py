@@ -126,11 +126,21 @@ def colegio_de_la_url(analisis) -> str | None:
     if not pedido:
         return None
     for a in (analisis or {}).values():
-        if a is None or "Colegio" not in a.datos.columns:
+        if a is None:
             continue
-        cuenta = a.datos["Colegio"].value_counts()
+        datos = getattr(a, "datos", None)
+        if datos is not None and "Colegio" in datos.columns and not datos.empty:
+            cuenta = datos["Colegio"].value_counts().to_dict()
+        else:
+            # La corrida publicada no trae filas: los conteos vienen en `muestra`,
+            # con los grupos pequeños enmascarados como «<10».
+            cuenta = (getattr(a, "muestra", None) or {}).get("colegio") or {}
         for codigo, n in cuenta.items():
-            if str(codigo).lower() == pedido.lower() and n >= cat.MIN_GROUP_N:
+            try:
+                suficiente = float(n) >= cat.MIN_GROUP_N
+            except (TypeError, ValueError):
+                suficiente = False
+            if str(codigo).lower() == pedido.lower() and suficiente:
                 return str(codigo)
     return None
 

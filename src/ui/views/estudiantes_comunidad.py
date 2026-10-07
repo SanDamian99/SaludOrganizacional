@@ -802,9 +802,90 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
             for aviso in getattr(inf, "avisos", []) or []:
                 st.caption(f"· {aviso}")
 
-    # ── 7. descarga del informe
-    st.download_button(
-        "⬇️ Descargar informe de una página",
-        data=informe_markdown(a, rol, filtros),
-        file_name=f"informe_estudiantes_{nivel}_{rol}.md",
-        mime="text/markdown", key="est_com_descarga")
+    # ── 7. informes
+    _boton_una_pagina(a, rol, filtros)
+    if ve_colegios(rol):
+        _seccion_informes(analisis, rol, colegio)
+
+
+@st.cache_data(show_spinner="Preparando el PDF…", max_entries=64)
+def _pdf_de(html: str) -> bytes | None:
+    from src.ui.views.estudiantes_informe import a_pdf
+    return a_pdf(html)
+
+
+def _boton_una_pagina(a, rol: str, filtros: dict) -> None:
+    """Resumen de una página del grupo en pantalla, en PDF.
+
+    Si el servidor no puede generar PDF (falta WeasyPrint o sus librerías), se
+    entrega la misma hoja en HTML, que se imprime desde el navegador: nunca un
+    Markdown, que rectores y familias no saben abrir.
+    """
+    from src.ui.views.estudiantes_informe import informe_una_pagina_html
+
+    html = informe_una_pagina_html(a, rol, filtros)
+    pdf = _pdf_de(html)
+    base = f"resumen_estudiantes_{a.nivel}_{rol}"
+    for clave in ("colegio", "grado"):
+        valor = filtros.get(clave, TODOS)
+        if valor not in (TODOS, None, ""):
+            base += f"_{valor}"
+    if pdf:
+        st.download_button("⬇️ Descargar resumen de una página (PDF)", data=pdf,
+                           file_name=f"{base}.pdf", mime="application/pdf",
+                           type="primary", key="est_com_descarga")
+    else:
+        st.download_button("⬇️ Descargar resumen de una página", data=html,
+                           file_name=f"{base}.html", mime="text/html",
+                           type="primary", key="est_com_descarga")
+        st.caption("Se abre en el navegador; desde ahí se imprime o se guarda como PDF.")
+
+
+def _seccion_informes(analisis: dict, rol: str, colegio: str) -> None:
+    """Informes imprimibles en HTML: por colegio y, para el municipio, el de la Secretaría.
+
+    Conviven con el PDF de docentes para comparar formatos con el equipo.
+    """
+    import streamlit.components.v1 as components
+
+    from src.estudiantes.ingest import nombre_colegio
+    from src.ui.views import estudiantes_informe as inf
+
+    st.markdown("#### 🖨️ Informes para imprimir")
+    st.caption("Se descargan como página web: al abrirla en el navegador trae el botón "
+               "«Imprimir», desde el que también se guarda como PDF.")
+    codigos = inf.colegios_con_informe(analisis)
+    col_colegio, col_secretaria = st.columns(2)
+    html_colegio = None
+    with col_colegio:
+        if codigos:
+            indice = codigos.index(colegio) if colegio in codigos else 0
+            elegido = st.selectbox("Informe del colegio", codigos, index=indice,
+                                   format_func=nombre_colegio, key="est_inf_colegio")
+            html_colegio = inf.informe_colegio_html(analisis, elegido)
+            st.download_button(
+                "⬇️ Descargar informe del colegio", data=html_colegio,
+                file_name=f"informe_estudiantes_{elegido}.html", mime="text/html",
+                key="est_inf_desc_colegio")
+        else:
+            st.info("Ningún colegio tiene suficientes respuestas para un informe.", icon="ℹ️")
+    html_secretaria = None
+    with col_secretaria:
+        if rol == "municipio":
+            html_secretaria = inf.informe_secretaria_html(analisis)
+            st.markdown("**Informe para la Secretaría**")
+            st.caption("Total del municipio y comparación entre colegios y grados.")
+            st.download_button(
+                "⬇️ Descargar informe para la Secretaría", data=html_secretaria,
+                file_name="informe_estudiantes_secretaria.html", mime="text/html",
+                key="est_inf_desc_secretaria")
+    with st.expander("Vista previa del informe"):
+        previa = html_colegio
+        if html_secretaria and html_colegio:
+            cual = st.radio("Ver", ["Colegio", "Secretaría"], horizontal=True,
+                            key="est_inf_previa")
+            previa = html_secretaria if cual == "Secretaría" else html_colegio
+        elif html_secretaria:
+            previa = html_secretaria
+        if previa:
+            components.html(previa, height=900, scrolling=True)
