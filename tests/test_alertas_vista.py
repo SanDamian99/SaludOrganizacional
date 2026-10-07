@@ -329,3 +329,39 @@ def test_el_peor_caso_cabe_en_una_pagina(analisis, nivel):
     html = inf.informe_una_pagina_html(_peor_caso(analisis, nivel), "municipio", _f())
     assert f"y {len(COLEGIOS) - va.MAX_NOMBRES_PAGINA} más" in html
     assert len(HTML(string=html).render().pages) == 1
+
+
+# ══ Investigadores ══════════════════════════════════════════════════════════
+from src.ui.views import estudiantes_investigador as vi  # noqa: E402
+
+
+def test_alertas_csv_en_el_zip_y_sin_casos(analisis):
+    assert "alertas.csv" in vi.ARCHIVOS_PAQUETE
+    t = pd.read_csv(io.StringIO(vi.archivos_paquete({cat.NIVEL_SECUNDARIA: analisis})
+                                ["alertas.csv"]))
+    assert list(t.columns) == vi.COLUMNAS_ALERTAS_CSV
+    assert "casos" not in t.columns and "nombre" not in t.columns
+    assert (t["n"] >= cat.MIN_GROUP_N).all()
+    assert (t.loc[t["pct"].isna(), "estado"] == ac.ESTADOS[S]).all()
+
+
+def test_sensibilidad_e_items_no_van_al_zip(analisis):
+    assert not [n for n in vi.ARCHIVOS_PAQUETE if "sensibilidad" in n or "items" in n]
+
+
+def test_las_tablas_de_alertas_son_convertibles_a_arrow(analisis):
+    import pyarrow as pa
+    for t in (vi.alertas_tabla(analisis), vi.sensibilidad_tabla(analisis),
+              vi.items_alertas_tabla(analisis)):
+        assert len(t)
+        pa.Table.from_pandas(t)
+
+
+def test_la_metodologia_define_las_alertas(analisis):
+    md = vi.metodologia_md({cat.NIVEL_SECUNDARIA: analisis})
+    assert "Alertas de grupo" in md
+    assert ac.ALERTAS["malestar"].regla in md and ac.REGLA_CIFRAS in md
+
+
+def test_la_pestana_de_alertas_existe():
+    assert vi.PESTANAS.index("Alertas") == 5 and len(vi.PESTANAS) == 9
