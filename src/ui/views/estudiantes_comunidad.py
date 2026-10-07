@@ -919,7 +919,7 @@ def hay_datos_crudos(analisis) -> bool:
 
 
 def _selector_grupo(analisis, columna: str, etiqueta: str,
-                    colegio: str = TODOS) -> tuple[str, list[str]]:
+                    colegio: str = TODOS, nivel: str = "") -> tuple[str, list[str]]:
     """Selectbox con los grupos publicables; el de grado depende del colegio elegido.
 
     Con datos crudos y con la corrida publicada se ofrecen los mismos grupos
@@ -929,7 +929,10 @@ def _selector_grupo(analisis, columna: str, etiqueta: str,
     _, pequenos = grupos_visibles(analisis, columna)
     opciones = grupos_publicables(analisis, columna,
                                   colegio if columna == "Grado" else TODOS)
-    clave = f"est_com_{columna.lower()}"
+    # Una clave por nivel: al cambiar de nivel las opciones cambian y Streamlit
+    # reiniciaría el widget a «Todos»; con clave nueva arranca vacío y `sembrar`
+    # lo rellena desde el colegio compartido.
+    clave = f"est_com_{columna.lower()}_{nivel}"
     if not opciones:
         return TODOS, pequenos
     if columna == "Colegio":
@@ -937,7 +940,13 @@ def _selector_grupo(analisis, columna: str, etiqueta: str,
     if st.session_state.get(clave, TODOS) not in [TODOS] + opciones:
         st.session_state[clave] = TODOS     # el grado elegido no existe en este colegio
     valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave)
-    if columna == "Colegio":
+    # Si este nivel no ofrece el colegio compartido, el widget muestra «Todos»
+    # sin que la persona lo haya elegido: no se pisa el compartido, para que al
+    # volver a un nivel que sí lo tiene siga elegido. Un «Todos» elegido a
+    # propósito sí se guarda cuando el compartido está entre las opciones.
+    if columna == "Colegio" and (
+            valor != TODOS
+            or st.session_state.get(estado.COLEGIO, TODOS) in [TODOS] + opciones):
         estado.guardar(estado.COLEGIO, valor)
     return valor, pequenos
 
@@ -974,9 +983,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         _sin_datos()
         return
 
-    colegio, _ = (_selector_grupo(a, "Colegio", "Colegio")
+    colegio, _ = (_selector_grupo(a, "Colegio", "Colegio", nivel=nivel)
                             if ve_colegios(rol) else (TODOS, []))
-    grado, _ = _selector_grupo(a, "Grado", "Grado", colegio=colegio)
+    grado, _ = _selector_grupo(a, "Grado", "Grado", colegio=colegio, nivel=nivel)
     filtros = {"nivel": nivel, "colegio": colegio, "grado": grado}
 
     # ── 1. bandas del SDQ total

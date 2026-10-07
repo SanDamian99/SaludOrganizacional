@@ -53,3 +53,48 @@ def test_sin_colegio_en_la_url_no_hace_nada():
     sesion = {}
     estado.aplicar_colegio_de_url(None, sesion=sesion)
     assert estado.COLEGIO not in sesion
+
+
+# ── el colegio sobrevive al cambio de nivel en la vista comunidad ───────────
+def _app_niveles():
+    from types import SimpleNamespace
+    import streamlit as st
+    from src.ui.views import estudiantes_comunidad as vista
+
+    def falso(colegios):
+        return SimpleNamespace(subgrupos={"Colegio": {c: {} for c in colegios}, "Grado": {}},
+                               muestra={}, datos=None, base=None)
+    analisis = {"secundaria": falso(["LauV", "CND"]), "primaria": falso(["CND"])}
+    nivel = st.radio("nivel", ["secundaria", "primaria"], key="nivel")
+    vista._selector_grupo(analisis[nivel], "Colegio", "Colegio", nivel=nivel)
+
+
+def test_el_colegio_sobrevive_al_cambio_de_nivel():
+    from src.ui import estado
+    at = AppTest.from_function(_app_niveles).run()
+    assert not at.exception
+    at.selectbox[0].set_value("CND").run()
+    at.radio(key="nivel").set_value("primaria").run()
+    assert at.selectbox[0].value == "CND"
+    assert at.session_state[estado.COLEGIO] == "CND"
+    at.radio(key="nivel").set_value("secundaria").run()
+    assert at.selectbox[0].value == "CND"
+
+
+def test_un_colegio_ausente_en_otro_nivel_no_pisa_el_compartido():
+    from src.ui import estado
+    at = AppTest.from_function(_app_niveles).run()
+    at.selectbox[0].set_value("LauV").run()
+    at.radio(key="nivel").set_value("primaria").run()
+    assert at.selectbox[0].value == "Todos"          # primaria no tiene LauV
+    assert at.session_state[estado.COLEGIO] == "LauV"
+    at.radio(key="nivel").set_value("secundaria").run()
+    assert at.selectbox[0].value == "LauV"
+
+
+def test_elegir_todos_a_proposito_si_se_guarda():
+    from src.ui import estado
+    at = AppTest.from_function(_app_niveles).run()
+    at.selectbox[0].set_value("CND").run()
+    at.selectbox[0].set_value("Todos").run()
+    assert at.session_state[estado.COLEGIO] == "Todos"
