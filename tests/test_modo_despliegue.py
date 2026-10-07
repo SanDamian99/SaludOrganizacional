@@ -192,7 +192,7 @@ def test_la_pagina_inicial_depende_del_modo(con_modo):
     m = con_modo("comunidad")
     assert m.pagina_por_defecto() == "Estudiantes 360"
     m = con_modo(None)
-    assert m.pagina_por_defecto() == "Dashboard"
+    assert m.pagina_por_defecto() == "Docentes"
 
 
 def test_el_punto_de_entrada_usa_la_pagina_inicial_del_modo():
@@ -230,8 +230,17 @@ def test_la_alternativa_devuelve_una_pagina_valida():
         def paginas_permitidas():
             return None
 
-    opciones = ["Dashboard", "Estudiantes 360", "Chat con IA"]
+    opciones = ["Docentes", "Estudiantes 360", "Chat con IA"]
     pagina_inicial = getattr(ModuloRancio, "pagina_por_defecto", None)
     inicial = pagina_inicial() if callable(pagina_inicial) else opciones[0]
-    assert inicial == "Dashboard"
+    assert inicial == "Docentes"
     assert opciones.index(inicial) == 0
+
+
+def test_modo_y_navegacion_coinciden(con_modo):
+    from src.core import navegacion as nav
+    for valor in (None, "investigador", "comunidad"):
+        m = con_modo(valor)
+        assert m.pagina_por_defecto() == nav.pagina_inicial(m.modo())
+    m = con_modo("comunidad")
+    assert m.paginas_permitidas() == nav.menu(m.COMUNIDAD)
