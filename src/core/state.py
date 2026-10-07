@@ -60,7 +60,7 @@ def init_session_state():
 
     # Current view/page
     if "current_page" not in st.session_state:
-        st.session_state.current_page = "Dashboard"
+        st.session_state.current_page = "Docentes"
 
     # User info (if we add auth later)
     if "user" not in st.session_state:

@@ -3,6 +3,7 @@ Observatorio de Salud Organizacional — Main Entry Point
 """
 import streamlit as st
 from src.core import modo as modo_app
+from src.core import navegacion as nav
 from src.core.state import init_session_state
 
 _MODO = modo_app.modo()
@@ -10,7 +11,7 @@ _PUBLICO = _MODO == modo_app.COMUNIDAD
 
 # Page Config
 st.set_page_config(
-    page_title=("Observatorio 360 · Estudiantes" if _PUBLICO
+    page_title=("Observatorio 360 · Comunidad" if _PUBLICO
                 else "Observatorio de Salud Organizacional"),
     page_icon=("🎒" if _PUBLICO else "📊"),
     layout="wide",
@@ -21,14 +22,21 @@ st.set_page_config(
 init_session_state()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Despliegue público: solo la vista de estudiantes para la comunidad.
+# Despliegue público: solo las vistas de comunidad.
 # Se corta aquí, antes de importar el cargador de archivos, el chat, los
 # informes o la vista de investigación. En esta ejecución esos módulos no
 # existen, así que no hay URL ni clic que lleve a ellos.
 # ─────────────────────────────────────────────────────────────────────────────
 if _PUBLICO:
-    from src.ui.estudiantes import render_estudiantes
-    render_estudiantes()
+    _publicas = nav.menu(_MODO)
+    if len(_publicas) > 1:
+        with st.sidebar:
+            _pagina_publica = st.radio("Ir a:", _publicas, key="nav_pagina")
+    else:
+        _pagina_publica = _publicas[0]
+    if _pagina_publica == nav.PAGINA_ESTUDIANTES:
+        from src.ui.estudiantes import render_estudiantes
+        render_estudiantes()
     st.stop()
 
 from src.ai.gemini_client import get_gemini_api_key
@@ -93,44 +101,36 @@ if _datasets:
 # --- Sidebar Navigation ---
 with st.sidebar:
     st.title("Navegación")
-    _todas = ["Dashboard", "Estudiantes 360", "Chat con IA", "Cargar Datos",
-              "Analisis de tendencias", "Reportes"]
-    _permitidas = modo_app.paginas_permitidas()
-    _opciones = [p for p in _todas if _permitidas is None or p in _permitidas]
+    _opciones = nav.menu(_MODO)
     # El modo decide con qué página abre; después manda lo que elija la persona.
-    #
-    # Se consulta con getattr y con alternativa: al desplegar, Streamlit vuelve a
-    # ejecutar este archivo pero conserva en memoria los módulos ya importados.
-    # Durante ese hueco `main.py` es nuevo y `src.core.modo` todavía es el viejo,
-    # así que pedirle una función recién añadida tumbaba la aplicación entera con
-    # un AttributeError. Ninguna página vale eso: si falta, se abre en la primera.
-    _pagina_inicial = getattr(modo_app, "pagina_por_defecto", None)
-    _inicial = _pagina_inicial() if callable(_pagina_inicial) else _opciones[0]
+    # El menú sale de `navegacion`, un módulo nuevo: tras un despliegue nunca
+    # queda en memoria una versión vieja que no tenga estas funciones.
+    _inicial = nav.pagina_inicial(_MODO)
     _indice = _opciones.index(_inicial) if _inicial in _opciones else 0
-    page = st.radio("Ir a:", _opciones, index=_indice)
+    page = st.radio("Ir a:", _opciones, index=_indice, key="nav_pagina")
 
 # --- Main Routing ---
-if page == "Dashboard":
+if page == nav.PAGINA_DOCENTES:
     from src.ui.dashboard import render_dashboard
     render_dashboard()
 
-elif page == "Estudiantes 360":
+elif page == nav.PAGINA_ESTUDIANTES:
     from src.ui.estudiantes import render_estudiantes
     render_estudiantes()
 
-elif page == "Chat con IA":
+elif page == nav.PAGINA_CHAT:
     from src.ui.chat import render_chat
     render_chat()
 
-elif page == "Cargar Datos":
+elif page == nav.PAGINA_CARGA:
     from src.ui.upload import render_upload
     render_upload()
 
-elif page == "Analisis de tendencias":
+elif page == nav.PAGINA_TENDENCIAS:
     from src.ui.trends import render_trends
     render_trends()
 
-elif page == "Reportes":
+elif page == nav.PAGINA_REPORTES:
     render_reports_page()
 
 # --- Footer Debug (sidebar) ---

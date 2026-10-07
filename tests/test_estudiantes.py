@@ -463,3 +463,16 @@ def test_la_ingesta_guarda_conteos_crudos_e_items_marcados():
     assert sum(inf.crudo_colegio_grado.values()) == len(raw)
     assert all("|" in k for k in inf.crudo_colegio_grado)
     assert len(inf.items_marcados) == 1 and inf.items_marcados[0].startswith("sdq")
+
+
+def test_las_etiquetas_se_convierten_aunque_el_texto_no_sea_object():
+    """Con pandas 3 el texto llega como `str`, no como `object`.
+
+    Streamlit Cloud instala pandas 3: con la comprobación vieja
+    (`dtype == object`) las respuestas no se convertían y el SDQ quedaba vacío.
+    """
+    sdq = next(e for e in cat.ESCALAS if e.key == "SDQ")
+    etiqueta, valor = next(iter(sdq.mapa.items()))
+    df = pd.DataFrame({"x": pd.Series([etiqueta, etiqueta], dtype="string")})
+    res = ingest._mapear_bloque(df, [0], sdq, ingest.InformeIngesta())
+    assert res.iloc[:, 0].tolist() == [valor, valor]

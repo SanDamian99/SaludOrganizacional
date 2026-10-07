@@ -74,13 +74,14 @@ graph TB
     User[Usuario] --> Main[main.py]
     Main --> Nav{Navegación}
     
-    Nav --> Dashboard[Dashboard]
+    Nav --> Docentes[Docentes]
+    Nav --> Estudiantes[Estudiantes 360]
     Nav --> Chat[Chat con IA]
     Nav --> Upload[Cargar Datos]
     Nav --> Trends[Análisis de Tendencias]
     Nav --> Reports[Reportes]
     
-    Dashboard --> State[Session State]
+    Docentes --> State[Session State]
     Chat --> Gemini[Gemini Client]
     Upload --> Processor[Data Processor]
     Trends --> Analytics[Analytics Module]
@@ -133,7 +134,7 @@ sequenceDiagram
    - Cálculo de puntajes agregados por dimensión
 4. **Almacenamiento**: DataFrame procesado se guarda en `st.session_state.df`
 
-### 2. Visualización en Dashboard
+### 2. Visualización en Docentes
 
 ```mermaid
 sequenceDiagram
@@ -143,7 +144,7 @@ sequenceDiagram
     participant DD as DATA_DICTIONARY
     participant P as Plotly
     
-    U->>D: Navega a Dashboard
+    U->>D: Navega a Docentes
     D->>S: Obtiene df
     D->>DD: Lee configuración de dimensiones
     D->>D: Calcula promedios por dimensión
@@ -443,7 +444,7 @@ Cada dimensión tiene entre 3 y 22 ítems medidos en escalas Likert (1-7) o Dife
 ### Stakeholder: Empresa
 
 1. **Carga de datos**: Sube archivo Excel con resultados de encuesta
-2. **Dashboard**: Revisa visualizaciones por dimensión
+2. **Docentes**: Revisa visualizaciones por dimensión
 3. **Analiza tendencias**: Compara por sexo, edad, área
 4. **Genera reporte**: Descarga PDF ejecutivo con análisis IA
 5. **Chat con IA**: Hace preguntas específicas sobre los datos

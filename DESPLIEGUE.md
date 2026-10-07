@@ -96,7 +96,7 @@ Conviene hacer dos, del mismo repositorio, con distinta configuración.
 
 ### A · Para el equipo investigador (privado)
 
-En este modo el investigador ve **toda** la plataforma: dashboard, tendencias,
+En este modo el investigador ve **toda** la plataforma: Docentes, tendencias,
 carga de datos, informes y las dos vistas de estudiantes. La única diferencia
 con el modo local es con qué vista abre el módulo de estudiantes. Es deliberado:
 quien revisa también va a enseñar la herramienta, y conviene que la conozca
@@ -135,6 +135,10 @@ investigación, el cargador de archivos, el chat, los informes y el panel
 técnico: no están escondidos, no existen en esa ejecución. `?debug=1` no abre
 nada. Un valor mal escrito en `OBS360_MODO` cae en `comunidad`, el más
 restrictivo.
+
+En el menú solo aparecen las páginas públicas: Estudiantes 360 y, cuando se
+habilite, Cuidadores 360. Con más de una hay un selector de página; con una sola
+no hay menú. El título de la pestaña es «Observatorio 360 · Comunidad».
 
 Acepta `?colegio=LauV` para dar a cada colegio su propio enlace.
 
@@ -180,6 +184,9 @@ publica.
 
 5. **Comprobar** que la app dice «Fuente: corrida publicada» y que el N coincide
    con 943 y 282.
+
+**Después de fusionar a `main`, haz siempre *Manage app → Reboot app*.** Si no,
+la aplicación puede quedar con módulos viejos en memoria.
 
 ## Qué esperar del arranque
 
