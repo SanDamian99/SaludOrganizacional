@@ -208,10 +208,10 @@ def render_estudiantes() -> None:
 
     if clave == "comunidad":
         # Enlace por colegio: ?colegio=LauV deja su colegio preseleccionado la
-        # primera vez. Después manda lo que la persona elija en el selector.
-        preseleccion = colegio_de_la_url(analisis)
-        if preseleccion and "est_com_colegio" not in st.session_state:
-            st.session_state["est_com_colegio"] = preseleccion
+        # primera vez, en Estudiantes y en Cuidadores. Después manda lo que la
+        # persona elija.
+        from src.ui import estado
+        estado.aplicar_colegio_de_url(colegio_de_la_url(analisis))
         from src.ui.views.estudiantes_comunidad import render_comunidad
         render_comunidad(analisis, informes)
     else:

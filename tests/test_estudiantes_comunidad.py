@@ -500,3 +500,25 @@ def test_el_corte_por_sexo_se_quita_si_queda_un_resto(analisis, valor):
     assert vc.prevalencia_por_sexo(a, {}).empty
     claves = [t.clave for t in vc.tarjetas(a, "colegio", {})]
     assert "emocional_sexo" not in claves
+
+
+def test_la_vista_previa_usa_iframe_si_existe(monkeypatch):
+    import streamlit as st
+    from src.ui.views import estudiantes_comunidad as vista
+    llamadas = []
+    monkeypatch.setattr(st, "iframe",
+                        lambda src, **kw: llamadas.append((src, kw)), raising=False)
+    vista._vista_previa("<html>hola</html>")
+    assert llamadas == [("<html>hola</html>", {"height": 900})]
+
+
+def test_la_vista_previa_cae_al_componente_viejo(monkeypatch):
+    import streamlit as st
+    import streamlit.components.v1 as components
+    from src.ui.views import estudiantes_comunidad as vista
+    monkeypatch.delattr(st, "iframe", raising=False)
+    llamadas = []
+    monkeypatch.setattr(components, "html",
+                        lambda html, **kw: llamadas.append((html, kw)))
+    vista._vista_previa("<html>hola</html>")
+    assert llamadas == [("<html>hola</html>", {"height": 900, "scrolling": True})]

@@ -12,9 +12,10 @@ la diferencia no puede depender de que nadie haga clic donde no debe.
                                   despliegue privado del equipo: quien entra
                                   puede recorrer el resto de la plataforma y
                                   enseñarla, porque es quien la conoce.
-    OBS360_MODO = "comunidad"     SOLO la vista de estudiantes para colegios,
-                                  familias y municipio. Es el único modo que
-                                  restringe, y es lo que se despliega en
+    OBS360_MODO = "comunidad"     SOLO las páginas públicas (Estudiantes 360 y,
+                                  cuando se habilite, Cuidadores 360) en su vista
+                                  para colegios, familias y municipio. Es el único
+                                  modo que restringe, y es lo que se despliega en
                                   público.
 
 El candado es para los actores no investigadores. Un investigador es, a efectos
@@ -65,7 +66,8 @@ def paginas_permitidas() -> list[str] | None:
     Solo el modo comunidad restringe. En investigador se ve toda la plataforma:
     quien revisa también la va a enseñar, y conviene que la conozca entera.
     """
-    return ["Estudiantes 360"] if modo() == COMUNIDAD else None
+    from src.core import navegacion
+    return navegacion.menu(COMUNIDAD) if modo() == COMUNIDAD else None
 
 
 def audiencias_permitidas() -> list[str] | None:
@@ -82,9 +84,6 @@ PAGINA_ESTUDIANTES = "Estudiantes 360"
 
 
 def pagina_por_defecto() -> str:
-    """Página con la que abre la aplicación.
-
-    En los dos modos pensados para estudiantes se aterriza en su módulo, que es
-    a lo que entra la gente; desde ahí se navega al resto.
-    """
-    return PAGINA_ESTUDIANTES if modo() in (INVESTIGADOR, COMUNIDAD) else "Dashboard"
+    """Página con la que abre la aplicación. La decide `navegacion`."""
+    from src.core import navegacion
+    return navegacion.pagina_inicial(modo())

@@ -30,6 +30,7 @@ import streamlit as st
 
 from src.estudiantes import catalog as cat
 from src.estudiantes import privacidad, scoring, stats, supresion
+from src.ui import estado
 
 # Colores del semáforo para las cuatro bandas del SDQ (verde → rojo).
 COLORES_BANDAS = ["#1A7F4B", "#8FBF3F", "#B07D0D", "#C0392B"]
@@ -1043,7 +1044,7 @@ def hay_datos_crudos(analisis) -> bool:
 
 
 def _selector_grupo(analisis, columna: str, etiqueta: str,
-                    colegio: str = TODOS) -> tuple[str, list[str]]:
+                    colegio: str = TODOS, nivel: str = "") -> tuple[str, list[str]]:
     """Selectbox con los grupos publicables; el de grado depende del colegio elegido.
 
     Con datos crudos y con la corrida publicada se ofrecen los mismos grupos
@@ -1053,12 +1054,25 @@ def _selector_grupo(analisis, columna: str, etiqueta: str,
     _, pequenos = grupos_visibles(analisis, columna)
     opciones = grupos_publicables(analisis, columna,
                                   colegio if columna == "Grado" else TODOS)
-    clave = f"est_com_{columna.lower()}"
+    # Una clave por nivel: al cambiar de nivel las opciones cambian y Streamlit
+    # reiniciaría el widget a «Todos»; con clave nueva arranca vacío y `sembrar`
+    # lo rellena desde el colegio compartido.
+    clave = f"est_com_{columna.lower()}_{nivel}"
     if not opciones:
         return TODOS, pequenos
+    if columna == "Colegio":
+        estado.sembrar(clave, estado.COLEGIO, [TODOS] + opciones)
     if st.session_state.get(clave, TODOS) not in [TODOS] + opciones:
         st.session_state[clave] = TODOS     # el grado elegido no existe en este colegio
     valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave)
+    # Si este nivel no ofrece el colegio compartido, el widget muestra «Todos»
+    # sin que la persona lo haya elegido: no se pisa el compartido, para que al
+    # volver a un nivel que sí lo tiene siga elegido. Un «Todos» elegido a
+    # propósito sí se guarda cuando el compartido está entre las opciones.
+    if columna == "Colegio" and (
+            valor != TODOS
+            or st.session_state.get(estado.COLEGIO, TODOS) in [TODOS] + opciones):
+        estado.guardar(estado.COLEGIO, valor)
     return valor, pequenos
 
 
@@ -1077,9 +1091,11 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         _sin_datos()
         return
 
+    estado.sembrar("est_com_rol", estado.ROL, list(cat.ROLES))
     rol = st.radio("Estoy viendo esto como", list(cat.ROLES),
                    format_func=lambda r: cat.ROLES[r], horizontal=True,
                    key="est_com_rol")
+    estado.guardar(estado.ROL, rol)
 
     st.sidebar.markdown("### Estudiantes · vista comunidad")
     disponibles = [n for n in (cat.NIVEL_SECUNDARIA, cat.NIVEL_PRIMARIA) if n in analisis]
@@ -1092,9 +1108,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         _sin_datos()
         return
 
-    colegio, _ = (_selector_grupo(a, "Colegio", "Colegio")
+    colegio, _ = (_selector_grupo(a, "Colegio", "Colegio", nivel=nivel)
                             if ve_colegios(rol) else (TODOS, []))
-    grado, _ = _selector_grupo(a, "Grado", "Grado", colegio=colegio)
+    grado, _ = _selector_grupo(a, "Grado", "Grado", colegio=colegio, nivel=nivel)
     filtros = {"nivel": nivel, "colegio": colegio, "grado": grado}
 
     # ── 1. bandas del SDQ total
@@ -1230,12 +1246,25 @@ def _boton_una_pagina(a, rol: str, filtros: dict) -> None:
         st.caption("Se abre en el navegador; desde ahí se imprime o se guarda como PDF.")
 
 
+def _vista_previa(html: str) -> None:
+    """Muestra un informe HTML embebido.
+
+    `st.iframe` reemplaza a `components.html`, que Streamlit retira; las
+    versiones anteriores a `st.iframe` siguen usando el componente.
+    """
+    iframe = getattr(st, "iframe", None)
+    if callable(iframe):
+        iframe(html, height=900)
+        return
+    import streamlit.components.v1 as components
+    components.html(html, height=900, scrolling=True)
+
+
 def _seccion_informes(analisis: dict, rol: str, colegio: str) -> None:
     """Informes imprimibles en HTML: por colegio y, para el municipio, el de la Secretaría.
 
     Conviven con el PDF de docentes para comparar formatos con el equipo.
     """
-    import streamlit.components.v1 as components
 
     from src.estudiantes.ingest import nombre_colegio
     from src.ui.views import estudiantes_informe as inf
@@ -1277,4 +1306,4 @@ def _seccion_informes(analisis: dict, rol: str, colegio: str) -> None:
         elif html_secretaria:
             previa = html_secretaria
         if previa:
-            components.html(previa, height=900, scrolling=True)
+            _vista_previa(previa)

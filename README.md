@@ -13,7 +13,7 @@ datos y en literatura científica, y reportes PDF profesionales.
 - **Puntuación psicométrica válida:** cada dimensión se calcula orientando sus ítems por
   valencia (los negativos se invierten), de modo que **mayor = mejor bienestar**. Reporta
   α de Cronbach, N, desviación e IC 95 %. Ver [docs/METODOLOGIA_PUNTAJES.md](docs/METODOLOGIA_PUNTAJES.md).
-- **Dashboard dual:**
+- **Docentes (dashboard dual):**
   - *Ejecutivo:* KPIs, semáforo de bienestar (índice 0-100), fortalezas y áreas de atención.
   - *Académico:* tabla de fiabilidad, matriz de correlación entre dimensiones y
     comparativas por grupo con N.

@@ -100,6 +100,10 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
         assert modulo not in antes, f"{modulo} se importa antes del corte público"
         assert modulo in despues, f"{modulo} ya no aparece en main.py"
 
+    # lo que llega en fases futuras tampoco puede importarse antes del corte
+    for modulo in ("triangulacion", "cuidadores_investigador"):
+        assert modulo not in antes, f"{modulo} se importa antes del corte público"
+
 
 def test_el_panel_tecnico_queda_despues_del_corte():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
@@ -109,9 +113,16 @@ def test_el_panel_tecnico_queda_despues_del_corte():
 
 def test_la_navegacion_se_filtra_por_modo():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "paginas_permitidas()" in fuente
-    # el radio ya no recibe la lista completa escrita a mano
-    assert not re.search(r'st\.radio\("Ir a:", \[\s*"Dashboard"', fuente)
+    assert "nav.menu(_MODO)" in fuente
+    # ningún nombre de página escrito a mano: todos salen de navegacion
+    for nombre in ('"Dashboard"', '"Docentes"', '"Estudiantes 360"', '"Chat con IA"',
+                   '"Cargar Datos"', '"Reportes"'):
+        assert nombre not in fuente, f"{nombre} está escrito a mano en main.py"
+
+
+def test_el_titulo_publico_es_de_comunidad():
+    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
+    assert "Observatorio 360 · Comunidad" in fuente
 
 
 def test_el_enlace_por_colegio_ignora_codigos_invalidos():
@@ -192,12 +203,12 @@ def test_la_pagina_inicial_depende_del_modo(con_modo):
     m = con_modo("comunidad")
     assert m.pagina_por_defecto() == "Estudiantes 360"
     m = con_modo(None)
-    assert m.pagina_por_defecto() == "Dashboard"
+    assert m.pagina_por_defecto() == "Docentes"
 
 
 def test_el_punto_de_entrada_usa_la_pagina_inicial_del_modo():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "pagina_por_defecto" in fuente
+    assert "nav.pagina_inicial(_MODO)" in fuente
     assert "index=_indice" in fuente
 
 
@@ -209,10 +220,9 @@ def test_el_arranque_sobrevive_a_un_modulo_rancio():
     aplicación entera caía con AttributeError. Ninguna página vale eso.
     """
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert 'getattr(modo_app, "pagina_por_defecto"' in fuente, \
-        "la página inicial debe pedirse con alternativa"
-    assert "modo_app.pagina_por_defecto()" not in fuente, \
-        "no debe llamarse directamente: un módulo rancio tumba el arranque"
+    assert "from src.core import navegacion as nav" in fuente, \
+        "el menú debe venir de un módulo nuevo, que nunca está rancio"
+    assert "modo_app.pagina_por_defecto" not in fuente
 
     despachador = open(os.path.join(RAIZ, "src", "ui", "estudiantes.py"),
                        encoding="utf-8").read()
@@ -220,18 +230,43 @@ def test_el_arranque_sobrevive_a_un_modulo_rancio():
     assert "modo_app.audiencia_por_defecto()" not in despachador
 
 
-def test_la_alternativa_devuelve_una_pagina_valida():
-    """Sin la función, se abre en la primera página permitida, no en un error."""
-    class ModuloRancio:
-        COMPLETO = "completo"
-        COMUNIDAD = "comunidad"
+def test_modo_y_navegacion_coinciden(con_modo):
+    from src.core import navegacion as nav
+    for valor in (None, "investigador", "comunidad"):
+        m = con_modo(valor)
+        assert m.pagina_por_defecto() == nav.pagina_inicial(m.modo())
+    m = con_modo("comunidad")
+    assert m.paginas_permitidas() == nav.menu(m.COMUNIDAD)
 
-        @staticmethod
-        def paginas_permitidas():
-            return None
 
-    opciones = ["Dashboard", "Estudiantes 360", "Chat con IA"]
-    pagina_inicial = getattr(ModuloRancio, "pagina_por_defecto", None)
-    inicial = pagina_inicial() if callable(pagina_inicial) else opciones[0]
-    assert inicial == "Dashboard"
-    assert opciones.index(inicial) == 0
+@pytest.mark.parametrize("modo_env", ["comunidad", "completo"])
+def test_main_arranca_con_un_modo_rancio_de_la_version_anterior(monkeypatch, modo_env):
+    """Guardia real: `src.core.modo` en memoria solo tiene la API vieja.
+
+    Es lo que pasa tras un despliegue sin reinicio: main.py nuevo, módulo viejo.
+    """
+    import sys
+    from types import ModuleType
+    from streamlit.testing.v1 import AppTest
+    import src.core
+
+    rancio = ModuleType("src.core.modo")
+    rancio.COMPLETO, rancio.COMUNIDAD, rancio.INVESTIGADOR = (
+        "completo", "comunidad", "investigador")
+    rancio.VALIDOS = (rancio.COMPLETO, rancio.COMUNIDAD, rancio.INVESTIGADOR)
+    rancio.modo = lambda: modo_env
+    rancio.es_publico = lambda: modo_env == "comunidad"
+    rancio.audiencias_permitidas = (
+        lambda: ["comunidad"] if modo_env == "comunidad" else None)
+    rancio.audiencia_por_defecto = (
+        lambda: "comunidad" if modo_env == "comunidad" else "investigador")
+    monkeypatch.setitem(sys.modules, "src.core.modo", rancio)
+    monkeypatch.setattr(src.core, "modo", rancio, raising=False)
+    # que el despachador de estudiantes se importe de nuevo y vea el módulo rancio
+    monkeypatch.delitem(sys.modules, "src.ui.estudiantes", raising=False)
+    monkeypatch.setenv("OBS360_MODO", modo_env)
+    monkeypatch.setenv("OBS360_DATOS_DIR", "/ruta/que/no/existe")
+
+    at = AppTest.from_file(os.path.join(RAIZ, "main.py"), default_timeout=90).run()
+    assert not at.exception
+    assert not hasattr(sys.modules["src.core.modo"], "pagina_por_defecto")
