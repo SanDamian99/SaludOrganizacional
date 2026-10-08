@@ -24,14 +24,31 @@ def _sesion(sesion: MutableMapping | None) -> MutableMapping:
 
 def sembrar(clave_widget: str, clave_compartida: str, opciones: Sequence[Any],
             sesion: MutableMapping | None = None) -> None:
-    """Antes de dibujar el widget: si no tiene valor, toma el compartido.
+    """Antes de dibujar el widget: toma el valor compartido, si es una de las opciones.
 
-    Solo si ese valor es una de las opciones; si no, el widget usa su valor
-    inicial. Nunca pisa lo que la persona ya eligió en este widget.
+    Se asigna en cada ejecución, aunque el widget ya tenga valor. En el
+    despliegue público `main.py` termina con `st.stop()` y Streamlit, ante esa
+    parada prematura, no borra el estado de los widgets que no se dibujaron: al
+    volver a una página su clave sigue en la sesión con el valor viejo y, como no
+    se asignó en esta ejecución, el navegador no lo recibe y dibuja la opción por
+    defecto («Todos»). Asignarlo siempre hace que el servidor lo envíe.
+
+    Lo que la persona elige no se pierde: el widget debe declarar
+    `on_change=al_cambiar(...)`, que copia la elección al valor compartido antes
+    de que corra la página.
     """
     s = _sesion(sesion)
-    if clave_widget not in s and s.get(clave_compartida) in list(opciones):
+    if s.get(clave_compartida) in list(opciones):
         s[clave_widget] = s[clave_compartida]
+
+
+def al_cambiar(clave_widget: str, clave_compartida: str,
+               sesion: MutableMapping | None = None):
+    """Callback `on_change`: la elección de la persona pasa al valor compartido."""
+    def _copiar() -> None:
+        s = _sesion(sesion)
+        guardar(clave_compartida, s[clave_widget], sesion=s)
+    return _copiar
 
 
 def guardar(clave_compartida: str, valor: Any,

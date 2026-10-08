@@ -11,7 +11,8 @@ def _app():
     opciones = ["Todos", "LauV", "CND"] if pagina == "A" else ["Todos", "CND"]
     clave = "a_colegio" if pagina == "A" else "b_colegio"
     estado.sembrar(clave, estado.COLEGIO, opciones)
-    valor = st.selectbox("colegio", opciones, key=clave)
+    valor = st.selectbox("colegio", opciones, key=clave,
+                         on_change=estado.al_cambiar(clave, estado.COLEGIO))
     estado.guardar(estado.COLEGIO, valor)
 
 
@@ -31,11 +32,20 @@ def test_un_valor_que_no_esta_en_las_opciones_no_se_siembra():
     assert at.selectbox(key="b_colegio").value == "Todos"
 
 
-def test_sembrar_no_pisa_lo_que_eligio_la_persona():
+def test_sembrar_reasigna_aunque_el_widget_ya_tenga_valor():
+    """Un valor viejo que quedó en la sesión (parada prematura) no manda."""
     from src.ui import estado
     sesion = {"w": "CND", estado.COLEGIO: "LauV"}
     estado.sembrar("w", estado.COLEGIO, ["LauV", "CND"], sesion=sesion)
-    assert sesion["w"] == "CND"
+    assert sesion["w"] == "LauV"
+
+
+def test_lo_que_elige_la_persona_pasa_al_compartido_antes_de_sembrar():
+    from src.ui import estado
+    sesion = {"w": "CND", estado.COLEGIO: "LauV"}
+    estado.al_cambiar("w", estado.COLEGIO, sesion=sesion)()
+    estado.sembrar("w", estado.COLEGIO, ["LauV", "CND"], sesion=sesion)
+    assert sesion["w"] == sesion[estado.COLEGIO] == "CND"
 
 
 def test_el_colegio_de_la_url_se_aplica_una_sola_vez():

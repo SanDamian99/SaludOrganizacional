@@ -580,7 +580,8 @@ def _selector(ac, columna: str, colegio: str = TODOS) -> str:
     if st.session_state.get(clave, TODOS) not in [TODOS] + opciones:
         st.session_state[clave] = TODOS
     etiqueta = "Colegio" if columna == "Colegio" else "Grado (del hijo o la hija)"
-    valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave)
+    cambio = estado.al_cambiar(clave, estado.COLEGIO) if columna == "Colegio" else None
+    valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave, on_change=cambio)
     if columna == "Colegio" and (
             valor != TODOS or st.session_state.get(estado.COLEGIO, TODOS) in [TODOS] + opciones):
         estado.guardar(estado.COLEGIO, valor)
@@ -627,7 +628,8 @@ def render_comunidad(ac) -> None:
         return
     estado.sembrar("cuid_com_rol", estado.ROL, list(cc.ROLES))
     rol = st.radio("Estoy viendo esto como", list(cc.ROLES), format_func=lambda r: cc.ROLES[r],
-                   horizontal=True, key="cuid_com_rol")
+                   horizontal=True, key="cuid_com_rol",
+                   on_change=estado.al_cambiar("cuid_com_rol", estado.ROL))
     estado.guardar(estado.ROL, rol)
     st.sidebar.markdown("### Cuidadores · vista comunidad")
     colegio = _selector(ac, "Colegio") if ve_colegios(rol) else TODOS
