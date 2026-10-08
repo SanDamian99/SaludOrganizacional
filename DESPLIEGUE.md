@@ -153,11 +153,23 @@ es peor que no medir.
 la segunda administra el proyecto. Las dos se quedan en el equipo de quien
 publica.
 
-`OBS360_CLAVE_HMAC` tampoco. Es la clave local con la que Cuidadores 360 (y la
-triangulación de la fase 5) convierte nombres en seudónimos HMAC. Solo la
-necesita la máquina que procesa los formularios; un despliegue nunca lee
-archivos crudos. Si se pierde, basta con crear otra: los seudónimos no se
-guardan ni se publican, se recalculan en cada carga.
+`OBS360_CLAVE_HMAC` tampoco: **nunca va en los secretos del despliegue**
+(ni en `.streamlit/secrets.toml` de Streamlit Cloud, ni en variables de
+entorno de un servidor público). Es la clave local con la que Cuidadores 360
+(y la triangulación de la fase 5) convierte nombres en seudónimos HMAC (`C…`
+para el cuidador, `N…` para el niño). Solo la necesita la máquina que procesa
+los formularios; un despliegue nunca lee archivos crudos.
+
+- **Los seudónimos `C…` y `N…` nunca van a Supabase** ni a ningún archivo
+  publicado o compartido: solo existen en memoria, en la máquina local. Lo que
+  se publica son agregados.
+- **Respaldo privado de la clave.** Si se pierde, se puede crear otra y la
+  aplicación sigue funcionando, pero los seudónimos ya no se pueden
+  reproducir: el mismo nombre da otro `C…`/`N…`, así que no se pueden enlazar
+  cuidadores ni niños con cargas anteriores (por ejemplo, entre olas o en la
+  triangulación de la fase 5). Guarde una copia en un gestor de contraseñas o
+  bóveda privada del equipo de investigación, nunca en el repositorio, en un
+  correo ni en los secretos del despliegue.
 
 ## Pasos
 
