@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 
 import pandas as pd
@@ -246,14 +247,72 @@ def aplanar(ac) -> list[dict]:
     return filas + aplanar_ingesta(getattr(ac, "informe", None))
 
 
+# Columnas del formulario y de la carga que nunca salen, en cualquier parte de la fila.
+COLUMNAS_PROHIBIDAS = frozenset({"id_nino", "telefono", "ola", "n_hmac", "familia"})
+# Identificador seudónimo (E/C/N + 8 hex) o celular colombiano (3 + 9 dígitos),
+# dentro de cualquier texto de la fila, también en `detalle`.
+PATRON_ID_EN_TEXTO = re.compile(r"(?<![0-9A-Za-z])[CEN][0-9a-f]{8}(?![0-9a-f])")
+PATRON_TELEFONO = re.compile(r"(?<!\d)3\d{9}(?!\d)")
+
+
+def _recorrer(valor, ruta: str = ""):
+    """(ruta, clave o None, valor) de cada hoja y cada clave de diccionario."""
+    if isinstance(valor, dict):
+        for k, v in valor.items():
+            yield ruta, str(k), None
+            yield from _recorrer(v, f"{ruta}.{k}")
+    elif isinstance(valor, (list, tuple)):
+        for i, v in enumerate(valor):
+            yield from _recorrer(v, f"{ruta}[{i}]")
+    else:
+        yield ruta, None, valor
+
+
+def _problemas_de_contenido(i: int, fila: dict) -> list[str]:
+    problemas = []
+    for ruta, clave, valor in _recorrer(fila):
+        if clave is not None:
+            if clave.lower() in COLUMNAS_PROHIBIDAS:
+                problemas.append(f"fila {i}: contiene la columna prohibida «{clave.lower()}»")
+            textos = [clave]
+        elif isinstance(valor, bool) or valor is None:
+            continue
+        elif isinstance(valor, float):
+            # Un número con decimales no es un teléfono; uno entero guardado como
+            # float sí puede serlo.
+            if not (valor == valor and valor.is_integer()):
+                continue
+            textos = [str(int(valor))]
+        else:
+            textos = [str(valor)]
+        for texto in textos:
+            if PATRON_ID_EN_TEXTO.search(texto):
+                problemas.append(f"fila {i}: {ruta or 'fila'} tiene forma de identificador "
+                                 "de estudiante, cuidador o niño")
+            if PATRON_TELEFONO.search(texto):
+                problemas.append(f"fila {i}: {ruta or 'fila'} tiene forma de teléfono")
+    return problemas
+
+
 def verificar(filas: list[dict]) -> None:
-    """Las guardas de estudiantes y, además, que todo sea del nivel «cuidadores»."""
+    """Las guardas de estudiantes y, además, las de cuidadores.
+
+    Todo del nivel «cuidadores» y con marco; ninguna columna del formulario
+    (`COLUMNAS_PROHIBIDAS`) ni valor con forma de identificador o teléfono en
+    ninguna parte de la fila, `detalle` incluido.
+    """
     pub_est.verificar(filas)
     otros = [i for i, f in enumerate(filas) if f.get("nivel") != NIVEL
              or (f.get("detalle") or {}).get("marco") not in cat.NOMBRES_MARCO]
     if otros:
         raise PublicacionInsegura(f"No se publicó nada: {len(otros)} fila(s) sin nivel "
                                   "«cuidadores» o sin marco.")
+    problemas = [p for i, f in enumerate(filas) for p in _problemas_de_contenido(i, f)]
+    if problemas:
+        raise PublicacionInsegura(
+            f"No se publicó nada. El lote tiene {len(problemas)} problema(s) de "
+            "privacidad:\n  - " + "\n  - ".join(problemas[:20])
+            + ("\n  … y más" if len(problemas) > 20 else ""))
 
 
 def verificar_restas(ac) -> list[str]:
