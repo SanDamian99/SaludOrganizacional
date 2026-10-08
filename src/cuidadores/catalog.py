@@ -227,7 +227,14 @@ MSPSS_FUENTES = {"MSPSS_Otro": tuple(range(1, 6)), "MSPSS_Fam": tuple(range(6, 1
                  "MSPSS_Amigos": tuple(range(10, 13))}
 EPDS_POSIBLE, EPDS_PROBABLE = 10, 13
 EPDS_ITEM_AUTOLESION = 10
+# Castigo físico = alguno de los ítems 22–24 «a veces» o más. Conservador: el
+# indicador queda FALTANTE si falta cualquiera de los tres ítems, aunque otro
+# ya marque «a veces» o más (scoring.puntuar_cuidadores). Así la base es la
+# misma para todos y nadie cuenta como caso con respuestas incompletas.
 APQ_FISICO = {22: "Nalgadas con la mano", 23: "Cachetadas", 24: "Golpes con correa u objeto"}
+APQ_FISICO_FALTANTE = ("Castigo físico: el indicador queda faltante si falta cualquiera de "
+                       "los ítems 22, 23 o 24 (criterio conservador), aunque otro ya marque "
+                       "«a veces» o más.")
 APQ_GRITO = 25
 APQ_UMBRAL = MAP_APQ["a veces"]          # «a veces o más»
 EP_ELECCION_FORZADA = (22, 23, 24, 25, 26)   # columnas 103–107: una sola pregunta partida

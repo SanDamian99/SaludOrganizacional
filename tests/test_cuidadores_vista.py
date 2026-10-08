@@ -10,6 +10,7 @@ from src.ui.views import cuidadores_investigador as vi
 from tests import cuidadores_sinteticos as cs
 
 K = cs.CLAVE_PRUEBA.encode()
+APQ_FISICO_FALTANTE = "si falta cualquiera de los ítems 22, 23 o 24"
 SEUDONIMO = re.compile(r"\b[CN][0-9a-f]{8}\b")
 
 
@@ -75,7 +76,7 @@ def test_el_zip_es_agregado_y_anonimo(ac):
 def test_metodologia_declara_lo_pendiente(ac):
     md = vi.metodologia_md(ac)
     for fragmento in ("Columna 6", "libro de códigos", "5 / 4 / 3", "OBS360_CLAVE_HMAC",
-                      "periodo perinatal", "501", "fuera del rango"):
+                      "periodo perinatal", "501", "fuera del rango", APQ_FISICO_FALTANTE):
         assert fragmento in md, fragmento
 
 

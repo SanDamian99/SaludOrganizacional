@@ -245,7 +245,7 @@ def metodologia_md(ac) -> str:
         "- MSPSS del cuidador: media 1–5 por fuente (5 / 4 / 3 ítems) y total. "
         + cat.AVISO_MSPSS,
         "- Riesgo del barrio: suma de 5 ítems (0–10).",
-        "- " + cat.AVISO_APQ,
+        "- " + cat.AVISO_APQ + " " + cat.APQ_FISICO_FALTANTE,
         "- " + cat.AVISO_ESTRES_PARENTAL,
         "- SDQ de padres: subescalas estándar y bandas de la versión para padres 4-17. "
         + cat.AVISO_SDQ_EDAD,
