@@ -102,3 +102,11 @@ def test_nada_de_triangulacion_sube_a_supabase():
                             re.MULTILINE)
     for f in archivos:
         assert not prohibidos.search(f.read_text(encoding="utf-8")), f.name
+
+
+def test_la_metodologia_declara_los_limites_estadisticos(tri):
+    md = ex.metodologia_md(tri)
+    assert "IC de Fisher" not in md                       # correlaciones por bootstrap
+    assert "hermanos" in md                               # EE de la capa 1 sin agrupar
+    assert "juntan primaria y secundaria" in md           # constructos de estudiantes
+    assert cat.AVISO_SENSIBILIDAD_CONCORDANCIA in md

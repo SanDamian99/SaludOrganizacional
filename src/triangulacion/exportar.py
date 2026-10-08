@@ -155,9 +155,10 @@ def metodologia_md(t) -> str:
         "## Capa 2 · díadas niño–cuidador", "",
         cat.AVISO_ENLACE, "", *lineas_calidad, "",
         cat.AVISO_DIADAS, "",
-        f"- Acuerdo SDQ por subescala: Spearman y Pearson (IC de Fisher), CCI(A,1) de McGraw "
-        f"y Wong y kappa ponderado lineal sobre 4 bandas (IC percentil con {cat.N_BOOT} "
-        "remuestreos de familias), diferencia media niño − cuidador (IC por errores "
+        f"- Acuerdo SDQ por subescala: Spearman, Pearson, CCI(A,1) de McGraw y Wong y kappa "
+        f"ponderado lineal sobre 4 bandas, todos con IC percentil de {cat.N_BOOT} "
+        "remuestreos de familias enteras (los hermanos no cuentan como independientes), "
+        "diferencia media niño − cuidador (IC por errores "
         "agrupados por familia) y límites de Bland–Altman (± 1,96 DE). " + cat.AVISO_SDQ,
         "- " + cat.AVISO_BLAND_ALTMAN,
         "- «Malestar que el cuidador no ve»: el niño en banda alta o muy alta de su "
@@ -165,7 +166,8 @@ def metodologia_md(t) -> str:
         "cuidador lo ubica en «cercano al promedio» con las bandas de padres. Se publica "
         "solo si las tres partes (sin malestar, visto, no visto) tienen 3 o más díadas y "
         "familias, y no más de n − 3. IC de Wilson.",
-        "- MSPSS por fuente: Spearman y diferencia media. " + cat.AVISO_MSPSS,
+        "- MSPSS por fuente: Spearman (IC por bootstrap de familias) y diferencia media. "
+        + cat.AVISO_MSPSS,
         "- " + cat.AVISO_ASOCIACIONES + " Resultados estandarizados (z); predictores "
         "continuos en z y castigo físico como 0/1; un predictor binario exige 10 o más "
         "díadas y familias en cada nivel. q de Benjamini–Hochberg por muestra.",
@@ -175,6 +177,15 @@ def metodologia_md(t) -> str:
         "díadas no son una muestra aleatoria de los niños.",
         "- Cada cuidador aporta su respuesta más reciente; si respondió en dos olas, la del "
         "niño puede ser de otra ola.",
+        "- Capa 1: el error estándar de d trata cada fila como independiente. En el marco "
+        "de niños (SDQ según el cuidador) los hermanos del mismo cuidador no se agrupan, "
+        "así que esos IC pueden ser algo estrechos.",
+        "- Capa 1: los constructos de estudiantes juntan primaria y secundaria (la DE del "
+        "actor y las medias son de los dos niveles); los átomos y la protección contra "
+        "restas sí se arman por nivel. Un colegio con más primaria que otro puede diferir "
+        "en parte por la mezcla de niveles.",
+        "- Modelos: un predictor que no varía en la muestra se omite y se anota; si no "
+        "queda ninguno, la fila dice el motivo.",
         "- La protección contra restas cubre la triangulación junto con lo que publican los "
         "módulos de estudiantes y cuidadores (auditoría lineal en las pruebas); no cubre "
         "otras vistas locales.",

@@ -6,8 +6,8 @@ Entra la tabla de díadas de `enlace.enlazar` (solo en memoria) y sale un
 
   · `acuerdo`: SDQ del niño (autoinforme, bandas de autoinforme) frente al de
     su cuidador (versión para padres, bandas de padres), por subescala:
-    Spearman y Pearson con IC de Fisher, CCI(A,1) y kappa ponderado lineal
-    sobre las 4 bandas (IC por bootstrap de familias), diferencia media
+    Spearman, Pearson, CCI(A,1) y kappa ponderado lineal sobre las 4 bandas
+    (todos con IC por bootstrap de familias), diferencia media
     (niño − cuidador) con IC por errores agrupados y límites de Bland–Altman.
   · `bland_altman`: la figura agrupada, sin díadas: hasta 5 grupos por
     quintil del promedio de los dos informantes, cada uno con ≥ 10 díadas de
@@ -50,6 +50,8 @@ MOTIVO_POCAS = "menos de 10 díadas o de 10 familias"
 MOTIVO_PEQUENAS = "cifras pequeñas: alguna parte con menos de 3 díadas o familias"
 MOTIVO_MODELO = "menos de 30 díadas completas o de 10 familias"
 MOTIVO_SINGULAR = "el modelo no se puede estimar (predictores redundantes)"
+MOTIVO_SIN_PREDICTORES = ("ningún predictor se puede estimar (cifras pequeñas o sin "
+                          "variación)")
 MOTIVO_SENSIBILIDAD = ("las díadas excluidas por la sensibilidad serían de 1 a 9 o de menos "
                        "de 10 familias (saldrían restando)")
 MUESTRA_TODAS = "Todas las díadas (efecto fijo de colegio)"
@@ -110,6 +112,15 @@ def excluidas_seguras(excluidas: pd.DataFrame) -> bool:
     return excluidas.empty or est.suficiente(excluidas, FAMILIA)
 
 
+def correlacion_boot(sub: pd.DataFrame, a: str, b: str, metodo: str,
+                     n_boot: int) -> tuple[float, float, float]:
+    """(r, IC inf, IC sup): IC percentil remuestreando familias enteras, como CCI y kappa."""
+    r = est.correlacion_ic(sub[a], sub[b], metodo)[0]
+    lo, hi = est.bootstrap_ic(sub, lambda x: est.correlacion_ic(x[a], x[b], metodo)[0],
+                              FAMILIA, n_boot)
+    return r, lo, hi
+
+
 def acuerdo_sdq(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
     filas = []
     for s in cat.SUBESCALAS_SDQ:
@@ -119,8 +130,8 @@ def acuerdo_sdq(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
         if not est.suficiente(sub, FAMILIA):
             filas.append({**fila, "motivo": MOTIVO_POCAS})
             continue
-        rho = est.correlacion_ic(sub[e], sub[c], "spearman")
-        r = est.correlacion_ic(sub[e], sub[c], "pearson")
+        rho = correlacion_boot(sub, e, c, "spearman", n_boot)
+        r = correlacion_boot(sub, e, c, "pearson", n_boot)
         icc = est.icc_a1(sub[[e, c]].to_numpy())
         icc_ic = est.bootstrap_ic(sub, lambda x: est.icc_a1(x[[e, c]].to_numpy()), FAMILIA,
                                   n_boot)
@@ -213,7 +224,7 @@ def malestar_no_visto(D: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
-def apoyo_familiar(D: pd.DataFrame) -> pd.DataFrame:
+def apoyo_familiar(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
     filas = []
     for clave, nombre in cat.FUENTES_MSPSS:
         e, a = f"e_{clave}", f"a_{clave}"
@@ -222,7 +233,7 @@ def apoyo_familiar(D: pd.DataFrame) -> pd.DataFrame:
         if not est.suficiente(sub, FAMILIA):
             filas.append({**fila, "motivo": MOTIVO_POCAS})
             continue
-        rho = est.correlacion_ic(sub[e], sub[a], "spearman")
+        rho = correlacion_boot(sub, e, a, "spearman", n_boot)
         mg = est.media_agrupada(sub[e] - sub[a], sub[FAMILIA])
         filas.append({**fila, "n": len(sub), "familias": int(sub[FAMILIA].nunique()),
                       "media_nino": _r(sub[e].mean(), 2), "media_cuidador": _r(sub[a].mean(), 2),
@@ -250,7 +261,7 @@ def _modelo(datos: pd.DataFrame, y: str, etiqueta_y: str, muestra: str,
     base = dict(muestra=muestra, resultado=etiqueta_y)
     if len(sub) < cat.MIN_MODELO or sub[FAMILIA].nunique() < cat.MIN_GROUP_N:
         return [{**base, "motivo": MOTIVO_MODELO}]
-    X, omitidos = pd.DataFrame(index=sub.index), []
+    X, omitidos, constantes = pd.DataFrame(index=sub.index), [], []
     for p, etiqueta, binario in cat.PREDICTORES:
         v = sub[f"a_{p}"].astype(float)
         if binario:
@@ -261,6 +272,10 @@ def _modelo(datos: pd.DataFrame, y: str, etiqueta_y: str, muestra: str,
             X[etiqueta] = v
         elif v.std(ddof=1) > 0:
             X[etiqueta] = _z(v)
+        else:
+            constantes.append(etiqueta)
+    if X.empty:
+        return [{**base, "motivo": MOTIVO_SIN_PREDICTORES}]
     controles = pd.DataFrame({"_mujer": (sub["e_Sexo"] == "Mujer").astype(float),
                               "_edad": sub["e_Edad"].astype(float)}, index=sub.index)
     controles = controles.loc[:, controles.std(ddof=1) > 0]
@@ -273,7 +288,9 @@ def _modelo(datos: pd.DataFrame, y: str, etiqueta_y: str, muestra: str,
     except np.linalg.LinAlgError:
         return [{**base, "motivo": MOTIVO_SINGULAR}]
     res = res[res["predictor"].isin(X.columns)]
-    nota = ("Omitido por cifras pequeñas: " + ", ".join(omitidos)) if omitidos else ""
+    nota = "; ".join(
+        [f"Omitido por cifras pequeñas: {', '.join(omitidos)}"] * bool(omitidos)
+        + [f"Omitido por no variar (sin variación): {', '.join(constantes)}"] * bool(constantes))
     return [{**base, "predictor": f["predictor"], "beta": _r(f["beta"]), "ic_inf": _r(f["ic_inf"]),
              "ic_sup": _r(f["ic_sup"]), "p": _r(f["p"], 4), "n": len(sub),
              "familias": int(sub[FAMILIA].nunique()), "colegios": int(sub["Colegio"].nunique()),
@@ -309,6 +326,6 @@ def analizar(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> Diadas:
         return Diadas()
     return Diadas(n=len(D), familias=int(D[FAMILIA].nunique()),
                   acuerdo=acuerdo_sdq(D, n_boot), bland_altman=bland_altman_agrupado(D),
-                  no_visto=malestar_no_visto(D), apoyo=apoyo_familiar(D),
+                  no_visto=malestar_no_visto(D), apoyo=apoyo_familiar(D, n_boot),
                   asociaciones=asociaciones(D),
                   acuerdo_concordantes=acuerdo_concordantes(D, n_boot))

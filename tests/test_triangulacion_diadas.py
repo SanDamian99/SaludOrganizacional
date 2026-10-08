@@ -177,3 +177,40 @@ def test_sensibilidad_no_se_muestra_si_las_excluidas_son_1_a_9():
     sub = t.asociaciones[t.asociaciones["muestra"] == dy.MUESTRA_CONCORDANTES]
     assert (sub["motivo"] == dy.MOTIVO_SENSIBILIDAD).all()
     assert "beta" not in sub.columns or sub["beta"].isna().all()
+
+
+# ── IC de las correlaciones por bootstrap de familias; predictores omitidos ─
+def test_ic_de_correlaciones_por_bootstrap_de_familias():
+    rng = np.random.default_rng(5)
+    e = rng.integers(0, 30, 50).astype(float)
+    familias = [f"C{i // 2:08x}" for i in range(50)]            # hermanos
+    d = _diadas(e, e + rng.normal(0, 4, 50), familias=familias)
+    f = dy.acuerdo_sdq(d, n_boot=40).iloc[0]
+    from src.triangulacion import estadistica as est
+    sub = d[["e_SDQ_Total", "c_SDQ_Total", "familia"]].dropna()
+    lo, hi = est.bootstrap_ic(
+        sub, lambda x: est.correlacion_ic(x["e_SDQ_Total"], x["c_SDQ_Total"], "spearman")[0],
+        "familia", 40)
+    assert (f["rho_ic_inf"], f["rho_ic_sup"]) == (round(lo, 3), round(hi, 3))
+    a = dy.apoyo_familiar(d, n_boot=40).iloc[0]
+    assert a["rho_ic_inf"] <= a["rho"] <= a["rho_ic_sup"]
+
+
+def test_un_predictor_constante_se_anota():
+    d = _diadas(np.arange(40.0), np.arange(40.0))
+    d["a_BARRIO_Indice"] = 3.0
+    t = dy.asociaciones(d)
+    sub = t[t["muestra"] == dy.MUESTRA_TODAS]
+    assert "Riesgo del barrio (z)" not in set(sub["predictor"])
+    assert sub["nota"].str.contains("sin variación").all()
+
+
+def test_sin_ningun_predictor_da_una_fila_con_motivo():
+    d = _diadas(np.arange(40.0), np.arange(40.0))
+    for p in ("a_EPDS_Total", "a_PSS_Total", "a_BARRIO_Indice"):
+        d[p] = 1.0
+    d["a_APQ_Fisico"] = 0.0
+    t = dy.asociaciones(d)
+    sub = t[t["muestra"] == dy.MUESTRA_TODAS]
+    assert len(sub) == len(cat.RESULTADOS)
+    assert (sub["motivo"] == dy.MOTIVO_SIN_PREDICTORES).all()
