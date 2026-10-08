@@ -221,3 +221,9 @@ def test_cuidadores_el_filtro_de_grado_quita_atomos_enteros():
     conjuntos = (span.conjuntos_capa1(d, lista, c, {"Colegio": ["A", "B"], "Grado": ["Sexto"]})
                  + span.conjuntos_modulo(d, cat.CUIDADOR, c.columna))
     assert span.piezas_deducibles(d, conjuntos, "ID_cuidador") == 0
+
+
+def test_aviso_del_resto_dice_que_entra_en_el_resto():
+    aviso = cat.AVISO_RESTO
+    assert "OTRO" in aviso and "menos de 10" in aviso
+    assert "reconocidos" not in aviso          # el resto incluye no reconocidos

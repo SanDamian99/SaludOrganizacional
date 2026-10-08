@@ -148,10 +148,13 @@ AVISO_ECOLOGICO = ("Con {n} colegios esto es descriptivo y ecológico: compara p
                    "grupo, no personas, y no permite concluir relaciones individuales ni "
                    "causales. Cada actor se compara con el resto del municipio del mismo "
                    "actor, en unidades de su desviación estándar individual.")
-AVISO_RESTO = ("«Resto del municipio» = los demás colegios reconocidos de ese actor. Si los "
-               "colegios que no entran en la comparación suman entre 1 y 9 personas con dato "
-               "en un constructo, se excluyen de ese constructo (no pueden deducirse "
-               "restando).")
+AVISO_RESTO = ("«Resto del municipio» = las demás personas de ese actor que su módulo "
+               "publica: los otros colegios publicados y, si el módulo lo admite, el resto R, "
+               "que junta a los colegios con menos de 10, las respuestas fuera de las celdas "
+               "publicables y las de colegio no reconocido (OTRO) o sin dato. En cuidadores "
+               "solo entran grupos con todos sus niños en los grados del estudio. Si una de "
+               "esas partes tiene entre 1 y 9 personas con dato en un constructo, sale entera "
+               "de ese constructo (no puede deducirse restando).")
 AVISO_GRADO = ("Por grado solo se comparan estudiantes y cuidadores: los docentes no "
                "tienen grado.")
 AVISO_COOCURRENCIA = ("«Co-ocurrencia»: dos cifras que se describen lado a lado sin llamarlas "
