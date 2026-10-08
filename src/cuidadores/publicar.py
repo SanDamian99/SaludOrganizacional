@@ -131,6 +131,9 @@ def _filas_marco(marco: str, a) -> list[dict]:
                 n_col = f"n·{grupo}"
                 if n_col not in tabla.columns or pd.isna(f[col]) or pd.isna(f[n_col]):
                     continue
+                from src.cuidadores.pipeline import media_acota_corte
+                if media_acota_corte(f["clave"], f[col], f[n_col]):
+                    continue                    # la media acotaría un corte suprimido
                 filas.append(_fila(marco, "grupo", f["clave"], f[n_col], f[col],
                                    escala=f["escala"], agrupacion=agrupacion, grupo=grupo,
                                    p=f["p"], eta2=f.get("eta2"), q_bh=f.get("q_bh")))
