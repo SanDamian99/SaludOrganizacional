@@ -708,7 +708,23 @@ def _pdf_de(html: str) -> bytes | None:
     return a_pdf(html)
 
 
+def descargas_bloqueadas(ac) -> bool:
+    """True si la auditoría local encontró algo (`ui.cuidadores.preparar_con_auditoria`).
+
+    La corrida publicada no trae el atributo: ya pasó la auditoría al publicarse.
+    """
+    return bool(getattr(ac, "hallazgos_auditoria", None))
+
+
+def _boton_bloqueado(etiqueta: str, clave: str) -> None:
+    st.download_button(etiqueta, data=b"", disabled=True, key=clave)
+
+
 def _boton_una_pagina(ac, rol: str, filtros: dict) -> None:
+    if descargas_bloqueadas(ac):
+        _boton_bloqueado("⬇️ Descargar resumen de una página", "cuid_com_descarga")
+        st.caption(cc.DESCARGAS_BLOQUEADAS)
+        return
     from src.ui.views.cuidadores_informe import informe_una_pagina_html
     html = informe_una_pagina_html(ac, rol, filtros)
     pdf = _pdf_de(html)
@@ -733,6 +749,13 @@ def _seccion_informes(ac, rol: str, colegio: str) -> None:
     st.caption("Se descargan como página web: al abrirla en el navegador trae el botón "
                "«Imprimir», desde el que también se guarda como PDF.")
     codigos = grupos(ac, "Colegio")
+    if descargas_bloqueadas(ac):
+        _boton_bloqueado("⬇️ Descargar informe del colegio", "cuid_inf_desc_colegio")
+        if rol == "municipio":
+            _boton_bloqueado("⬇️ Descargar informe para la Secretaría",
+                             "cuid_inf_desc_secretaria")
+        st.caption(cc.DESCARGAS_BLOQUEADAS)
+        return
     izq, der = st.columns(2)
     with izq:
         if codigos:

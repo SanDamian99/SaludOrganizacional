@@ -48,10 +48,24 @@ def _analisis(firma: tuple, ola: str | None):
     return pipeline.analizar(_carga(firma), ola=ola)
 
 
+def preparar_con_auditoria(analisis):
+    """`comunidad.preparar` y, una sola vez, la auditoría de la publicación.
+
+    Los hallazgos quedan en `hallazgos_auditoria`: con uno solo, la vista no
+    ofrece descargas. Si la auditoría no se puede correr, también se bloquea.
+    """
+    from src.cuidadores import comunidad, publicar
+    preparado = comunidad.preparar(analisis)
+    try:
+        preparado.hallazgos_auditoria = list(publicar.verificar_restas(preparado))
+    except Exception as exc:                               # noqa: BLE001
+        preparado.hallazgos_auditoria = [f"la auditoría no se pudo correr: {type(exc).__name__}"]
+    return preparado
+
+
 @st.cache_resource(show_spinner="Preparando la vista de comunidad…")
 def _preparado(firma: tuple):
-    from src.cuidadores import comunidad
-    return comunidad.preparar(_analisis(firma, None))
+    return preparar_con_auditoria(_analisis(firma, None))
 
 
 def _vista() -> str:

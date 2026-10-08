@@ -228,6 +228,9 @@ AVISO_MINIMO = (f"Ningún grupo con menos de {cat.MIN_GROUP_N} cuidadores distin
                 "El grado es el del hijo o la hija por quien respondió el cuidador.")
 AVISO_SIN_OLAS = ("Las cifras reúnen todas las olas de la encuesta (2025 y 2026); no se "
                   "publican por ola.")
+DESCARGAS_BLOQUEADAS = ("Descargas desactivadas: la auditoría de privacidad encontró cifras "
+                        "que no se pueden entregar. Quien procesa los datos debe revisarla "
+                        "antes de imprimir informes.")
 TEXTOS_PENDIENTES = ("Aviso interno: los textos y la ruta de esta página están pendientes de "
                      "aprobación del equipo. Solo se ve en el modo completo.")
 NO_PUBLICADO = ("Cuidadores 360 todavía no tiene resultados publicados. La página mostrará las "
