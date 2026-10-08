@@ -75,3 +75,42 @@ def test_conteos_por_colegio_sin_colegios_pequenos_deducibles():
     assert [filas["C"][a] for a in ("Estudiantes", "Cuidadores", "Docentes")] \
         == [vi.EN_OTROS, vi.EN_OTROS, "15"]
     assert filas["A"]["En la capa 1"] == "sí" and filas[en.OTROS_COLEGIOS]["En la capa 1"] == "no"
+
+
+# ── errores sin detalle en pantalla; la firma de la caché cambia con la clave ─
+def test_un_error_inesperado_no_muestra_su_texto(monkeypatch, tmp_path):
+    from src.triangulacion import pipeline
+    ts.escribir(tmp_path)
+
+    def falla(*a, **k):
+        raise RuntimeError("detalle-interno-que-no-debe-verse")
+    monkeypatch.setattr(pipeline, "cargar_y_analizar", falla)
+    at = _pagina(monkeypatch, str(tmp_path), ts.CLAVE_PRUEBA).run()
+    assert not at.exception
+    textos = " ".join(e.value for e in at.error)
+    assert "detalle-interno" not in textos and textos
+
+
+def test_si_localizar_falla_no_rompe_la_pagina(monkeypatch, tmp_path):
+    from src.triangulacion import fuentes
+
+    def falla():
+        raise OSError("ruta-que-no-debe-verse")
+    monkeypatch.setattr(fuentes, "localizar", falla)
+    at = _pagina(monkeypatch, str(tmp_path), ts.CLAVE_PRUEBA).run()
+    assert not at.exception
+    assert at.error and "ruta-que-no-debe-verse" not in " ".join(e.value for e in at.error)
+
+
+def test_la_firma_cambia_con_la_clave_sin_llevarla(monkeypatch, tmp_path):
+    from src.triangulacion import fuentes
+    from src.ui import triangulacion as pag
+    ts.escribir(tmp_path)
+    monkeypatch.setenv("OBS360_DATOS_DIR", str(tmp_path))
+    disp = fuentes.localizar()
+    monkeypatch.setenv("OBS360_CLAVE_HMAC", ts.CLAVE_PRUEBA)
+    f1 = pag.firma(disp)
+    monkeypatch.setenv("OBS360_CLAVE_HMAC", ts.CLAVE_PRUEBA + "-otra")
+    f2 = pag.firma(disp)
+    assert f1 != f2
+    assert ts.CLAVE_PRUEBA not in repr(f1) and ts.CLAVE_PRUEBA not in repr(f2)
