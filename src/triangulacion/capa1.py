@@ -96,7 +96,9 @@ def marcos(fuentes) -> dict:
 
 
 def conteos_por_colegio(tablas: dict) -> dict:
-    return {m: {str(c): n_unidades(g, m) for c, g in d.groupby("Colegio")}
+    """{marco: {colegio: unidades}}; sin colegio cuenta como SIN_DATO (suma = total)."""
+    return {m: {str(c): n_unidades(g, m) for c, g in
+                d.groupby(d["Colegio"].fillna(cat.COLEGIOS_SIN_GRUPO[-1]))}
             for m, d in tablas.items()}
 
 

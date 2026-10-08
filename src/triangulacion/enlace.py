@@ -13,8 +13,9 @@ no enlaza. Un mismo nombre en colegios distintos se descarta y se cuenta.
 `enlazar` devuelve las díadas (solo en memoria: nunca se guardan, se muestran
 ni se exportan) y un informe de calidad que solo tiene conteos y tasas:
 coincidencias, descartes por colegio y concordancia de sexo, edad (± 1 año) y
-grado. La vista muestra los conteos por colegio como «<10» por debajo del
-mínimo y las tasas con la regla 3 ≤ k ≤ n − 3.
+grado. La vista junta los colegios con menos de 10 díadas en «otros
+colegios» (`reparto_legible`), de modo que ningún conteo pequeño sale
+restando del total, y da las tasas con la regla 3 ≤ k ≤ n − 3.
 
 Columnas de una díada: `familia` (seudónimo del cuidador, solo para agrupar
 errores y contar familias distintas), `Colegio`, las del niño según él con el
@@ -108,24 +109,76 @@ def conteo_legible(valor) -> str:
     return str(v) if v >= cat.MIN_GROUP_N else f"<{cat.MIN_GROUP_N}"
 
 
+OTROS_COLEGIOS = f"otros colegios (<{cat.MIN_GROUP_N} en total o por colegio)"
+OTROS_NIVELES = f"otros niveles (<{cat.MIN_GROUP_N})"
+
+
+def reparto(conteos: dict) -> tuple[dict, int, str | None]:
+    """(grupos con 10 o más, total de «otros», grupo absorbido por «otros» o None).
+
+    Los grupos con menos de 10 y los códigos que no son colegio (OTRO,
+    SIN_DATO) van juntos en «otros». Si «otros» queda con 1 a 9, se le suma el
+    grupo publicado más pequeño: así el total exacto, menos los grupos
+    mostrados, nunca deja de 1 a 9 (ni un colegio pequeño solo).
+    """
+    grandes = {str(k): int(v) for k, v in conteos.items()
+               if int(v) >= cat.MIN_GROUP_N and str(k) not in cat.COLEGIOS_SIN_GRUPO}
+    otros = sum(int(v) for k, v in conteos.items() if str(k) not in grandes)
+    absorbido = None
+    if 0 < otros < cat.MIN_GROUP_N and grandes:
+        absorbido = min(grandes, key=lambda k: (grandes[k], k))
+        otros += grandes.pop(absorbido)
+    return grandes, otros, absorbido
+
+
+def reparto_legible(conteos: dict, otros: str = OTROS_COLEGIOS) -> dict:
+    """{etiqueta: valor} con los grupos de 10 o más y una fila «otros» (ver `reparto`)."""
+    grandes, n_otros, absorbido = reparto(conteos)
+    salida = {k: str(v) for k, v in sorted(grandes.items())}
+    if n_otros:
+        salida[f"{absorbido} y {otros}" if absorbido else otros] = conteo_legible(n_otros)
+    return salida
+
+
+def total_legible(total: int, partes: list) -> str:
+    """El total exacto solo si lo que no se muestra exacto suma 0 o 10 o más."""
+    exactas = sum(int(p) for p in partes if int(p) >= cat.MIN_GROUP_N)
+    oculto = int(total) - exactas
+    if 0 < oculto < cat.MIN_GROUP_N and exactas:
+        return f"más de {exactas}"
+    return conteo_legible(total)
+
+
 def tabla_calidad(informe: dict) -> pd.DataFrame:
-    """La calidad del enlace para mostrar y exportar: conteos legibles y tasas."""
+    """La calidad del enlace para mostrar y exportar: conteos legibles y tasas.
+
+    Ningún conteo pequeño sale restando: los colegios (y niveles) con menos de
+    10 díadas van juntos (`reparto_legible`) y las coincidencias se dan como
+    «más de N» si sus descartes pequeños sumarían 1 a 9.
+    """
     if not informe:
         return pd.DataFrame(columns=["indicador", "valor"])
+    descartes = [informe["descartadas_colegio_distinto"],
+                 informe["descartadas_colegio_no_reconocido"],
+                 informe.get("descartadas_ambiguas", 0)]
     filas = [
         ("Estudiantes con nombre", conteo_legible(informe["estudiantes_con_nombre"])),
         ("Niños reportados por cuidadores (únicos)", conteo_legible(informe["ninos_con_nombre"])),
-        ("Coincidencias exactas del seudónimo", conteo_legible(informe["coincidencias_nombre"])),
+        ("Coincidencias exactas del seudónimo",
+         total_legible(informe["coincidencias_nombre"], [informe["verificadas"], *descartes])),
         ("Díadas verificadas con el colegio", conteo_legible(informe["verificadas"])),
         ("Familias distintas en las díadas", conteo_legible(informe["familias"])),
         ("Descartadas: colegio distinto", conteo_legible(informe["descartadas_colegio_distinto"])),
         ("Descartadas: colegio no reconocido",
          conteo_legible(informe["descartadas_colegio_no_reconocido"])),
     ]
-    for colegio, v in sorted(informe["por_colegio"].items()):
-        filas.append((f"Díadas en {colegio}", conteo_legible(v)))
-    for nivel, v in sorted(informe["por_nivel"].items()):
-        filas.append((f"Díadas en {nivel}", conteo_legible(v)))
+    if "descartadas_ambiguas" in informe:
+        filas.append(("Descartadas: seudónimo repetido en el colegio (ambiguo)",
+                      conteo_legible(informe["descartadas_ambiguas"])))
+    for colegio, v in reparto_legible(informe["por_colegio"]).items():
+        filas.append((f"Díadas en {colegio}", v))
+    for nivel, v in reparto_legible(informe["por_nivel"], OTROS_NIVELES).items():
+        filas.append((f"Díadas en {nivel}", v))
     for clave, nombre in (("sexo", "Concordancia de sexo"),
                           ("edad", "Concordancia de edad (± 1 año)"),
                           ("grado", "Concordancia de grado")):

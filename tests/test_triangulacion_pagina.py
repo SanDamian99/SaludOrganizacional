@@ -55,3 +55,23 @@ def test_con_datos_muestra_las_pestanas_sin_nada_individual(monkeypatch, tmp_pat
         " ".join(str(getattr(d, "value", "")) for d in at.dataframe)
     for prohibido in ts.textos_prohibidos():
         assert prohibido not in pantalla
+
+
+def test_conteos_por_colegio_sin_colegios_pequenos_deducibles():
+    from types import SimpleNamespace
+    from src.triangulacion import enlace as en
+    capa = SimpleNamespace(colegios=["A"], conteos={
+        cat.ESTUDIANTE: {"A": 50, "B": 30, "C": 4, "OTRO": 2},
+        cat.CUIDADOR: {"A": 40, "B": 12, "C": 3},
+        cat.DOCENTE: {"A": 20, "B": 11, "C": 15, "SIN_DATO": 1}})
+    t = vi.conteos_actores(SimpleNamespace(capa1=capa))
+    filas = {f["Colegio"]: f for f in t.to_dict("records")}
+    assert set(filas) == {"A", "B", "C", en.OTROS_COLEGIOS}
+    # Cada columna: «otros» (pequeños + OTRO/SIN_DATO) tendría 1 a 9, así que se le
+    # suma el colegio publicado más pequeño (B): el total exacto no deduce nada.
+    assert [filas[en.OTROS_COLEGIOS][a] for a in ("Estudiantes", "Cuidadores", "Docentes")] \
+        == ["36", "15", "12"]
+    assert [filas["B"][a] for a in ("Estudiantes", "Cuidadores", "Docentes")] == [vi.EN_OTROS] * 3
+    assert [filas["C"][a] for a in ("Estudiantes", "Cuidadores", "Docentes")] \
+        == [vi.EN_OTROS, vi.EN_OTROS, "15"]
+    assert filas["A"]["En la capa 1"] == "sí" and filas[en.OTROS_COLEGIOS]["En la capa 1"] == "no"

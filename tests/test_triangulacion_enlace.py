@@ -93,3 +93,49 @@ def test_tabla_de_calidad_oculta_los_conteos_pequenos(enlace_sint):
     valores = dict(zip(t["indicador"], t["valor"]))
     assert valores["Descartadas: colegio distinto"] == "<10"
     assert valores["Díadas en LauV"] == "37"
+
+
+# ── cifras pequeñas por resta: «otros colegios» y totales coherentes ────────
+def test_reparto_junta_los_pequenos_en_otros():
+    r = en.reparto_legible({"A": 30, "B": 4, "C": 7})
+    assert r == {"A": "30", en.OTROS_COLEGIOS: "11"}
+
+
+def test_reparto_con_otros_por_debajo_de_10_absorbe_el_menor_publicado():
+    r = en.reparto_legible({"LauV": 184, "JJC": 19, "LaBalsa": 3, "SJMEB": 2})
+    assert r == {"LauV": "184", f"JJC y {en.OTROS_COLEGIOS}": "24"}
+    assert "<10" not in r.values()              # el total exacto ya no deduce nada
+
+
+def test_reparto_sin_publicados_solo_dice_menos_de_10():
+    assert en.reparto_legible({"A": 4, "OTRO": 3}) == {en.OTROS_COLEGIOS: "<10"}
+
+
+def _informe(**cambios):
+    inf = dict(estudiantes_con_nombre=900, ninos_con_nombre=700, coincidencias_nombre=209,
+               verificadas=208, familias=194, descartadas_colegio_distinto=1,
+               descartadas_colegio_no_reconocido=0, descartadas_ambiguas=0,
+               por_colegio={"LauV": 184, "JJC": 19, "LaBalsa": 3, "SJMEB": 2},
+               por_nivel={"primaria": 60, "secundaria": 148},
+               sexo=dict(concordantes=204, con_dato=208), edad=dict(concordantes=202, con_dato=206),
+               grado=dict(concordantes=203, con_dato=208))
+    inf.update(cambios)
+    return inf
+
+
+def test_tabla_de_calidad_no_deja_restar_colegios_pequenos():
+    valores = dict(zip(*en.tabla_calidad(_informe()).T.values))
+    assert "Díadas en LaBalsa" not in valores and "Díadas en SJMEB" not in valores
+    assert valores[f"Díadas en JJC y {en.OTROS_COLEGIOS}"] == "24"
+    assert valores["Díadas verificadas con el colegio"] == "208"
+    # coincidencias − verificadas = 1 descarte: no se da el total exacto
+    assert valores["Coincidencias exactas del seudónimo"] == "más de 208"
+
+
+def test_tabla_de_calidad_con_otros_de_10_o_mas_da_todo_exacto():
+    inf = _informe(por_colegio={"LauV": 184, "JJC": 12, "LaBalsa": 6, "SJMEB": 6},
+                   descartadas_colegio_distinto=12, coincidencias_nombre=220)
+    valores = dict(zip(*en.tabla_calidad(inf).T.values))
+    assert valores[f"Díadas en {en.OTROS_COLEGIOS}"] == "12"
+    assert valores["Díadas en JJC"] == "12"
+    assert valores["Coincidencias exactas del seudónimo"] == "220"

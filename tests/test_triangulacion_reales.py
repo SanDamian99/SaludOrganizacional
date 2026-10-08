@@ -106,7 +106,13 @@ def test_ningun_nombre_telefono_ni_seudonimo_en_la_salida(tri):
 def test_tabla_de_calidad_legible(tri):
     t = en.tabla_calidad(tri.enlace)
     valores = dict(zip(t["indicador"], t["valor"]))
-    assert valores["Díadas en LaBalsa"] == "<10" and valores["Díadas en SJMEB"] == "<10"
+    por_colegio = {k: v for k, v in valores.items() if k.startswith("Díadas en ")
+                   and k[len("Díadas en "):] not in tri.enlace["por_nivel"]}
+    # ningún colegio con menos de 10 díadas aparece solo; «otros» llega a 10 o más
+    pequenos = [c for c, v in tri.enlace["por_colegio"].items() if v < 10]
+    solos = sum(1 for c in pequenos if f"Díadas en {c}" in valores)
+    assert solos == 0
+    assert all(v != "<10" for v in por_colegio.values()) or len(por_colegio) == 1
 
 
 def test_capa1_junto_a_los_modulos_no_deduce_piezas_pequenas(fuentes_reales, tri):

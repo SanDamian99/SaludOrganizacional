@@ -40,16 +40,39 @@ def hallazgos(clasificacion: pd.DataFrame, tipo: str) -> pd.DataFrame:
     return t[["agrupacion", "grupo", "par", "d_a", "ic_a", "d_b", "ic_b"]].reset_index(drop=True)
 
 
+EN_OTROS = "incluido en «otros»"
+
+
 def conteos_actores(t) -> pd.DataFrame:
+    """Personas por colegio y actor sin que ningún colegio pequeño salga restando.
+
+    Por actor, los colegios con menos de 10 (y OTRO/SIN_DATO) van juntos en
+    «otros colegios»; si esa fila quedara con 1 a 9, se le suma el colegio
+    publicado más pequeño (`enlace.reparto`). Así el total exacto del actor
+    (metodología) menos lo mostrado nunca deja de 1 a 9.
+    """
     conteos = t.capa1.conteos or {}
-    colegios = sorted({c for m in conteos.values() for c in m} - set(cat.COLEGIOS_SIN_GRUPO))
+    actores = ((cat.ESTUDIANTE, "Estudiantes"), (cat.CUIDADOR, "Cuidadores"),
+               (cat.DOCENTE, "Docentes"))
+    repartos = {m: en.reparto(conteos.get(m, {})) for m, _ in actores}
+    colegios = sorted({c for g, _, _ in repartos.values() for c in g}
+                      | {a for _, _, a in repartos.values() if a})
     filas = []
     for c in colegios:
-        filas.append(dict(
-            Colegio=c, Estudiantes=en.conteo_legible(conteos.get(cat.ESTUDIANTE, {}).get(c)),
-            Cuidadores=en.conteo_legible(conteos.get(cat.CUIDADOR, {}).get(c)),
-            Docentes=en.conteo_legible(conteos.get(cat.DOCENTE, {}).get(c)),
-            **{"En la capa 1": "sí" if c in t.capa1.colegios else "no"}))
+        fila = dict(Colegio=c)
+        for m, nombre in actores:
+            grandes, _, _ = repartos[m]
+            fila[nombre] = (str(grandes[c]) if c in grandes
+                            else EN_OTROS if c in conteos.get(m, {}) else "—")
+        fila["En la capa 1"] = "sí" if c in t.capa1.colegios else "no"
+        filas.append(fila)
+    if any(n for _, n, _ in repartos.values()):
+        fila = dict(Colegio=en.OTROS_COLEGIOS)
+        for m, nombre in actores:
+            n_otros = repartos[m][1]
+            fila[nombre] = en.conteo_legible(n_otros) if n_otros else "—"
+        fila["En la capa 1"] = "no"
+        filas.append(fila)
     return pd.DataFrame(filas)
 
 
