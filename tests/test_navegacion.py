@@ -50,23 +50,38 @@ def test_triangulacion_nunca_es_publica():
 
 
 def test_triangulacion_sigue_fuera_aunque_cuidadores_sea_publica(monkeypatch):
-    monkeypatch.setattr(nav, "CUIDADORES_PUBLICO", True)
+    _aprobar_cuidadores(monkeypatch)
     assert nav.PAGINA_TRIANGULACION not in nav.menu(COMUNIDAD)
 
 
 def test_cuidadores_no_es_publica_hasta_la_aprobacion():
-    """Fase 4a: existe para investigadores; el público no la ve hasta la 4b (spec §5.5)."""
+    """Existe para investigadores; el público no la ve hasta la aprobación (spec §5.5)."""
     assert nav.CUIDADORES_PUBLICO is False
+    assert nav.cuidadores_publico() is False
     assert nav.PAGINA_CUIDADORES in nav.DISPONIBLES
     assert nav.PAGINA_CUIDADORES not in nav.menu(COMUNIDAD)
     assert nav.PAGINA_CUIDADORES not in nav.menu("cualquier-cosa")
 
 
+def _aprobar_cuidadores(monkeypatch, bandera=True, textos=True, rutas=True):
+    from src.cuidadores import comunidad_catalogo as cc
+    monkeypatch.setattr(nav, "CUIDADORES_PUBLICO", bandera)
+    monkeypatch.setattr(cc, "TEXTOS_APROBADOS", textos)
+    monkeypatch.setattr(cc, "RUTAS_VALIDADAS", rutas)
+
+
 def test_cuando_cuidadores_se_apruebe_comunidad_lo_ve(monkeypatch):
+    """Fase 4b: la bandera del equipo Y los textos y la ruta aprobados en el catálogo."""
     monkeypatch.setattr(nav, "DISPONIBLES",
                         nav.DISPONIBLES | {nav.PAGINA_CUIDADORES, nav.PAGINA_TRIANGULACION})
     assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
-    monkeypatch.setattr(nav, "CUIDADORES_PUBLICO", True)
+    _aprobar_cuidadores(monkeypatch, bandera=True, textos=False, rutas=False)
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    _aprobar_cuidadores(monkeypatch, bandera=True, textos=True, rutas=False)
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    _aprobar_cuidadores(monkeypatch, bandera=False, textos=True, rutas=True)
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    _aprobar_cuidadores(monkeypatch)
     assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360"]
     assert nav.menu(INVESTIGADOR)[:4] == [
         "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
@@ -87,7 +102,9 @@ PROHIBIDOS_EN_COMUNIDAD = (
     "src.ui.trends", "src.ai.gemini_client",
     "src.ui.views.estudiantes_investigador",
     "src.ui.cuidadores", "src.ui.views.cuidadores_investigador",
-    "src.cuidadores.ingest", "src.cuidadores.pipeline",
+    "src.cuidadores.ingest", "src.cuidadores.pipeline", "src.cuidadores.scoring",
+    "src.cuidadores.privacidad", "src.cuidadores.publicar", "src.cuidadores.auditoria",
+    "src.cuidadores.comunidad", "src.core.seudonimo",
     "src.ui.triangulacion", "src.ui.views.triangulacion_investigador",
     "src.triangulacion.fuentes", "src.triangulacion.enlace", "src.triangulacion.diadas",
     "src.triangulacion.capa1", "src.triangulacion.pipeline")
@@ -120,14 +137,40 @@ def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
 
 
 def test_comunidad_con_dos_paginas_publicas_muestra_el_selector(monkeypatch):
+    """Aprobada pero sin corrida publicada: la página lo dice y no se cae."""
     import sys
-    monkeypatch.setattr(nav, "CUIDADORES_PUBLICO", True)
+    from src.cuidadores import comunidad_catalogo as cc
+    from src.cuidadores import lectura
+    _aprobar_cuidadores(monkeypatch)
+    monkeypatch.setattr(lectura, "disponible", lambda: False)
     at = _main_en_comunidad(monkeypatch).run()
     assert not at.exception
     radio = at.radio(key="nav_pagina")
     assert list(radio.options) == ["Estudiantes 360", "Cuidadores 360"]
     radio.set_value("Cuidadores 360").run()
     assert not at.exception
+    assert any(cc.NO_PUBLICADO in i.value for i in at.info)
+    for m in PROHIBIDOS_EN_COMUNIDAD:
+        assert m not in sys.modules, f"{m} se importó en modo comunidad"
+
+
+def test_comunidad_con_corrida_de_cuidadores_muestra_solo_la_vista_de_comunidad(monkeypatch):
+    import sys
+    from src.cuidadores import comunidad_catalogo as cc
+    from src.cuidadores import lectura
+    from tests import cuidadores_comunidad_datos as datos
+    from src.ui.views import cuidadores_comunidad as vc
+    _, base = datos.publicado()
+    vc._corrida_vigente.clear()
+    vc._leer_publicado.clear()
+    _aprobar_cuidadores(monkeypatch)
+    monkeypatch.setattr(lectura, "disponible", lambda: True)
+    monkeypatch.setattr(lectura, "_cliente", lambda: base.cliente(anonimo=True))
+    at = _main_en_comunidad(monkeypatch).run()
+    at.radio(key="nav_pagina").set_value("Cuidadores 360").run()
+    assert not at.exception
+    assert at.radio(key="cuid_com_rol").value in cc.ROLES
+    assert "src.ui.views.cuidadores_comunidad" in sys.modules
     for m in PROHIBIDOS_EN_COMUNIDAD:
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
 
@@ -148,8 +191,10 @@ def test_no_queda_dashboard_visible_en_la_interfaz():
 
 
 def test_main_en_investigador_ofrece_cuidadores(monkeypatch, tmp_path):
-    """Sin archivos (como en el despliegue del equipo), la página dice que no está publicada."""
+    """Sin archivos y sin corrida publicada, la página dice que no está publicada."""
     from streamlit.testing.v1 import AppTest
+    from src.cuidadores import lectura
+    monkeypatch.setattr(lectura, "disponible", lambda: False)
     monkeypatch.setenv("OBS360_MODO", "investigador")
     monkeypatch.setenv("OBS360_DATOS_DIR", str(tmp_path))
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

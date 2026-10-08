@@ -37,6 +37,11 @@ if _PUBLICO:
     if _pagina_publica == nav.PAGINA_ESTUDIANTES:
         from src.ui.estudiantes import render_estudiantes
         render_estudiantes()
+    elif _pagina_publica == nav.PAGINA_CUIDADORES:
+        # Solo la vista de comunidad, leída de la corrida publicada: nunca la
+        # carga del formulario, la vista de investigadores ni la página local.
+        from src.ui.views.cuidadores_comunidad import render_publico
+        render_publico()
     st.stop()
 
 from src.ai.gemini_client import get_gemini_api_key
@@ -119,8 +124,9 @@ elif page == nav.PAGINA_ESTUDIANTES:
     render_estudiantes()
 
 elif page == nav.PAGINA_CUIDADORES:
-    # Fase 4a: solo la vista de investigadores, con los archivos en local. Nunca
-    # se importa en el despliegue público, que se corta arriba.
+    # Vistas de comunidad y de investigadores, con los archivos en local o la
+    # corrida publicada. El despliegue público se corta arriba y usa solo
+    # `cuidadores_comunidad.render_publico`.
     from src.ui.cuidadores import render_cuidadores
     render_cuidadores()
 

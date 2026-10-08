@@ -40,7 +40,14 @@ DISPONIBLES = frozenset({PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES,
 PUBLICAS = (PAGINA_ESTUDIANTES, PAGINA_CUIDADORES)
 
 # Cuidadores es pública solo cuando el equipo aprueba sus textos y rutas y hay
-# una corrida de cuidadores publicada (spec §5.5). Lo cambia la fase 4b.
+# una corrida de cuidadores publicada (spec §5.5). Dos llaves, las dos a mano:
+#   1. `CUIDADORES_PUBLICO`: la pone en True el equipo, en un commit propio,
+#      DESPUÉS de publicar la corrida con `--publicar-ya`.
+#   2. `comunidad_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS` (ver
+#      `cuidadores_publico`).
+# La navegación no consulta Supabase: el arranque nunca depende de la red. Si
+# aun así no hubiera corrida, la página pública lo dice («todavía no tiene
+# resultados publicados») en vez de fallar.
 CUIDADORES_PUBLICO = False
 
 _COMPLETO = "completo"
@@ -52,11 +59,28 @@ def _es_publico(modo: str) -> bool:
     return modo not in (_COMPLETO, _INVESTIGADOR)
 
 
+def cuidadores_publico() -> bool:
+    """¿Cuidadores 360 aparece en el despliegue público?
+
+    Solo si el equipo puso `CUIDADORES_PUBLICO = True` y el catálogo de textos de
+    la comunidad está aprobado (textos y ruta). Si el catálogo falta o falla al
+    importarse, no: ante la duda, la página no se publica.
+    """
+    if CUIDADORES_PUBLICO is not True:
+        return False
+    try:
+        from src.cuidadores import comunidad_catalogo as cc
+    except Exception:                                      # noqa: BLE001
+        return False
+    return (getattr(cc, "TEXTOS_APROBADOS", False) is True
+            and getattr(cc, "RUTAS_VALIDADAS", False) is True)
+
+
 def menu(modo: str) -> list[str]:
     """Páginas del menú en este modo, en orden."""
     if _es_publico(modo):
         visibles = [p for p in PUBLICAS
-                    if p != PAGINA_CUIDADORES or CUIDADORES_PUBLICO]
+                    if p != PAGINA_CUIDADORES or cuidadores_publico()]
     else:
         visibles = MENU
     return [p for p in MENU if p in visibles and p in DISPONIBLES]
