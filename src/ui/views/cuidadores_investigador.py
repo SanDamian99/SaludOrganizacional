@@ -231,7 +231,11 @@ def metodologia_md(ac) -> str:
         "Formulario «Cuidando al Cuidador», leído por posición y verificado con el texto de "
         "cada encabezado. Cada respuesta se convierte en número por su texto, con un mapa "
         "explícito por ítem (src/cuidadores/catalog.py).", "",
-        f"Olas: {olas or _SIN_DATO}. El filtro de ola existe solo en la vista local.", "",
+        f"Olas: {olas or _SIN_DATO}. El filtro de ola existe solo en la vista local: se "
+        "deduplica sobre todas las olas y la ola es parte del total publicable de «Todas». "
+        "Con una ola solo se muestra el total de cada marco; una cifra se oculta si la ola o "
+        "su resta con «Todas» tiene menos de 10 cuidadores distintos o menos de 3 casos o no "
+        "casos. Este paquete solo se exporta con «Todas».", "",
         "## Identificadores", "",
         "Los nombres se convierten en seudónimos HMAC-SHA256 con una clave local "
         "(OBS360_CLAVE_HMAC) y no se guardan. El teléfono no se lee. Ninguna tabla de este "
