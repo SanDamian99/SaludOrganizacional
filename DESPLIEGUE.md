@@ -254,6 +254,14 @@ los despliegues la página dice «Cuidadores aún no está publicado»; en el
 público ni siquiera aparece en el menú hasta que la fase 4b ponga
 `navegacion.CUIDADORES_PUBLICO = True`.
 
+**Triangulación 360 (fase 5)** solo funciona en la máquina que tiene los tres
+archivos (estudiantes, cuidadores y docentes, de preferencia el codificado por
+`scripts/preparar_docentes.py`) y la clave `OBS360_CLAVE_HMAC`. Las díadas
+niño–cuidador nunca salen de esa máquina y nada de la triangulación sube a
+Supabase. En el despliegue del equipo la página explica que la capa por
+colegio necesitará los agregados publicados de cuidadores (fase 4b); en el
+público no aparece en el menú ni se importa.
+
 ## Antes de dar por terminado
 
 - Revocar el token de acceso de Supabase de la sesión de trabajo.

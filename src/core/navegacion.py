@@ -30,10 +30,11 @@ PAGINA_REPORTES = "Reportes"
 MENU = (PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES, PAGINA_TRIANGULACION,
         PAGINA_CHAT, PAGINA_CARGA, PAGINA_TENDENCIAS, PAGINA_REPORTES)
 
-# Las que ya tienen vista. Cuidadores entra en la fase 4a (solo investigadores)
-# y Triangulación en la 5.
+# Las que ya tienen vista. Cuidadores entró en la fase 4a y Triangulación en la
+# 5, las dos solo para investigadores: Triangulación nunca está en PUBLICAS.
 DISPONIBLES = frozenset({PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES,
-                         PAGINA_CHAT, PAGINA_CARGA, PAGINA_TENDENCIAS, PAGINA_REPORTES})
+                         PAGINA_TRIANGULACION, PAGINA_CHAT, PAGINA_CARGA,
+                         PAGINA_TENDENCIAS, PAGINA_REPORTES})
 
 # Lo único que puede ver el público. Triangulación es solo para investigadores.
 PUBLICAS = (PAGINA_ESTUDIANTES, PAGINA_CUIDADORES)

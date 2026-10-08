@@ -35,6 +35,14 @@ def _hash_id(nombre_normalizado: str) -> str:
     return "E" + hashlib.sha1(nombre_normalizado.encode()).hexdigest()[:8]
 
 
+# Seudónimo del niño con clave local (core.seudonimo, letra «N»), el mismo que
+# calcula Cuidadores 360 para el hijo. Solo existe si quien llama pasa la clave
+# (`clave_nino`): lo pide la triangulación local (fase 5). El pipeline de
+# estudiantes, la vista y la publicación nunca la pasan, así que su salida no
+# cambia ni en una columna.
+COLUMNA_NINO = "N_hmac"
+
+
 # ── Detección de bloques de ítems en los encabezados crudos ─────────────────
 # Cada escala se localiza por el prefijo con el que Google Forms agrupó la matriz.
 _PREFIJOS = {
@@ -141,11 +149,16 @@ def _mapear_bloque(df: pd.DataFrame, idx: list[int], escala: cat.Escala,
     return res
 
 
-def cargar(ruta_o_df, nivel: str | None = None) -> tuple[pd.DataFrame, InformeIngesta]:
+def cargar(ruta_o_df, nivel: str | None = None, clave_nino: bytes | None = None
+           ) -> tuple[pd.DataFrame, InformeIngesta]:
     """Lee un formulario de estudiantes y devuelve (DataFrame limpio, informe).
 
     `nivel` fuerza 'secundaria' o 'primaria'; por defecto se infiere de la
     presencia del bloque RCADS (solo lo respondió secundaria).
+
+    `clave_nino` (solo la triangulación local): añade `COLUMNA_NINO`, el
+    seudónimo HMAC «N…» del nombre con esa clave. Sin ella (lo de siempre) la
+    salida es idéntica a la de antes de la fase 5.
     """
     if isinstance(ruta_o_df, pd.DataFrame):
         raw = ruta_o_df.copy()
@@ -187,9 +200,15 @@ def cargar(ruta_o_df, nivel: str | None = None) -> tuple[pd.DataFrame, InformeIn
         _nombre_norm = raw.iloc[:, idx_ident["nombre"]].map(norm_txt)
         d["ID"] = _nombre_norm.map(_hash_id)
         _clave_dedupe = _nombre_norm
+        if clave_nino is not None:
+            from src.core.seudonimo import seudonimo
+            d[COLUMNA_NINO] = raw.iloc[:, idx_ident["nombre"]].map(
+                lambda x: seudonimo(x, "N", clave_nino))
     else:
         d["ID"] = [f"E{i:05d}" for i in range(len(raw))]
         _clave_dedupe = pd.Series([f"__{i}" for i in range(len(raw))], index=raw.index)
+        if clave_nino is not None:
+            d[COLUMNA_NINO] = None
 
     # ── consentimiento
     if idx_ident["consent"] is not None:
@@ -305,7 +324,8 @@ def cargar(ruta_o_df, nivel: str | None = None) -> tuple[pd.DataFrame, InformeIn
     return d.reset_index(drop=True), inf
 
 
-def cargar_varios(rutas: list, niveles: list[str] | None = None
+def cargar_varios(rutas: list, niveles: list[str] | None = None,
+                  clave_nino: bytes | None = None
                   ) -> tuple[pd.DataFrame, list[InformeIngesta]]:
     """Carga los formularios, los concatena y elimina duplicados ENTRE archivos.
 
@@ -316,7 +336,7 @@ def cargar_varios(rutas: list, niveles: list[str] | None = None
     dfs, infs = [], []
     for i, r in enumerate(rutas):
         nivel = niveles[i] if niveles and i < len(niveles) else None
-        d, inf = cargar(r, nivel=nivel)
+        d, inf = cargar(r, nivel=nivel, clave_nino=clave_nino)
         dfs.append(d)
         infs.append(inf)
     todo = pd.concat(dfs, ignore_index=True)
