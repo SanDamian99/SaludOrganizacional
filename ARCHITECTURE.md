@@ -590,3 +590,35 @@ referencia guardada en
 `docs/instrumentos/fixtures/resultados_preliminares_estudiantes.json`. Las de
 regresión se omiten solas si los formularios no están en el directorio de
 trabajo, así que la suite corre en cualquier máquina.
+
+---
+
+## Módulo Cuidadores 360 (fase 4a)
+
+Formulario «Cuidando al Cuidador» (209 columnas, dos olas). Solo local y solo
+para investigadores; la vista de comunidad, los informes y la publicación son
+de la fase 4b.
+
+```
+src/core/seudonimo.py      HMAC-SHA256 con clave local (OBS360_CLAVE_HMAC):
+                           «C…» cuidador, «N…» niño, «E…» estudiante.
+src/cuidadores/
+├── catalog.py             Columnas por posición con verificación de encabezado,
+│                          mapas texto → número por ítem (EPDS uno por ítem),
+│                          puntuaciones, señales del adulto y avisos fijos.
+├── ingest.py              Consentimiento, seudónimos, colegio (core/colegios),
+│                          curso libre → grado, ola, hijo 2 y deduplicación.
+├── scoring.py             PSS-10, EPDS-10, MSPSS 5/4/3, barrio, castigo físico,
+│                          SDQ y ARI de padres. Tablas con la forma de estudiantes.
+├── privacidad.py          Base publicable contando cuidadores distintos.
+└── pipeline.py            AnalisisCuidadores: marcos «cuidador» y «nino», cada
+                           uno un estudiantes.pipeline.Analisis con supresión.
+src/ui/cuidadores.py                    Página: archivo local, clave y filtro de ola.
+src/ui/views/cuidadores_investigador.py Pestañas y paquete exportable.
+```
+
+- **Nada individual.** Los nombres solo se leen para el seudónimo; el teléfono
+  no se lee. El mínimo de 10 cuenta cuidadores distintos, también en el marco
+  de niños. Toda proporción pasa por `estudiantes/supresion.py`.
+- **Sin publicación todavía.** `navegacion.CUIDADORES_PUBLICO = False`: el
+  despliegue público no muestra ni importa nada de cuidadores.

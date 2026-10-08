@@ -153,6 +153,12 @@ es peor que no medir.
 la segunda administra el proyecto. Las dos se quedan en el equipo de quien
 publica.
 
+`OBS360_CLAVE_HMAC` tampoco. Es la clave local con la que Cuidadores 360 (y la
+triangulación de la fase 5) convierte nombres en seudónimos HMAC. Solo la
+necesita la máquina que procesa los formularios; un despliegue nunca lee
+archivos crudos. Si se pierde, basta con crear otra: los seudónimos no se
+guardan ni se publican, se recalculan en cada carga.
+
 ## Pasos
 
 1. **Subir y aprobar la corrida.** Desde la máquina que tiene los formularios:
@@ -229,6 +235,12 @@ la carpeta hermana `../datos_fuente_360` (subcarpetas `estudiantes`, `docentes`,
 `src/core/rutas.py` es el único que lo sabe; la aplicación local, el publicador
 de estudiantes y las pruebas le preguntan a él. En el despliegue esa carpeta no
 existe y la aplicación lee Supabase, que es lo previsto.
+
+**Cuidadores 360 (fase 4a)** solo funciona con el archivo en local
+(`cuidadores/Cuidando al Cuidador … .xlsx`) y la clave `OBS360_CLAVE_HMAC`. En
+los despliegues la página dice «Cuidadores aún no está publicado»; en el
+público ni siquiera aparece en el menú hasta que la fase 4b ponga
+`navegacion.CUIDADORES_PUBLICO = True`.
 
 ## Antes de dar por terminado
 
