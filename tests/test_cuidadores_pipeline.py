@@ -145,3 +145,37 @@ def test_items_publicables_quita_el_conteo_y_los_pct_que_delatan():
     p = pipeline._items_publicables(t)
     assert "casos" not in p.columns
     assert p["pct"].tolist()[0] == 50.0 and p["pct"].isna().tolist()[1:] == [True, True]
+
+
+# ── I1: la media de un ítem no deshace su % suprimido ─────────────────────
+def test_cota_de_media_con_casos_altos():
+    # APQ de 1 a 5, caso = «a veces» (3) o más. Media 1,02 en 85: a lo sumo 0 casos.
+    assert supresion.media_delata(1.02, 85, 1, 5, 3, casos_altos=True)
+    assert supresion.media_delata(4.98, 85, 1, 5, 3, casos_altos=True)   # casi todos caso
+    assert not supresion.media_delata(3.0, 85, 1, 5, 3, casos_altos=True)
+    # Estrés parental: caso = «de acuerdo» (4) o más.
+    assert supresion.cotas_media(4.0, 20, 1, 5, 4, casos_altos=True) == (20, 10)
+    # La versión de casos bajos es la de PSSM7 (sin cambios).
+    assert supresion.cotas_media(4.0, 20, 1, 5, 2) == supresion.cotas_item("PSSM7", 4.0, 20)
+
+
+def test_media_del_item_apq_no_delata_un_solo_caso():
+    raw = cs.formulario()
+    p = cat.APQ.inicio + 21                     # APQ22
+    raw.iloc[:, p] = "Nunca"
+    raw.iloc[3, p] = "A veces"                  # un solo «a veces» en todo el marco
+    ac = pipeline.analizar(ingest.cargar(raw, k=K), n_boot=5)
+    fila = ac.items_apq.set_index("item").loc[22]
+    assert fila["n"] >= 80
+    assert pd.isna(fila["pct"]) and pd.isna(fila["M"])
+    # Los ítems con un % publicable conservan la media.
+    otros = ac.items_apq[ac.items_apq["pct"].notna()]
+    assert len(otros) and otros["M"].notna().all()
+
+
+def test_items_publicables_quita_la_media_que_acota_los_casos():
+    t = pd.DataFrame({"item": [1, 2], "n": [85, 40], "M": [1.02, 3.1], "casos": [1, 20],
+                      "pct": [1.2, 50.0]})
+    p = pipeline._items_publicables(t, umbral=3, escala=(1, 5))
+    assert pd.isna(p["M"].iloc[0]) and pd.isna(p["pct"].iloc[0])
+    assert p["M"].iloc[1] == 3.1 and p["pct"].iloc[1] == 50.0

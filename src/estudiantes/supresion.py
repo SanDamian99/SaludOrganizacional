@@ -389,19 +389,41 @@ ITEMS_CON_CORTE = {"PSSM7": (1, 5, 2)}
 REDONDEO_MEDIA = 0.005           # stats.medias_items redondea la media a 2 decimales
 
 
-def cotas_item(item: str, media, n, holgura: float = 0.0) -> tuple[int, int] | None:
-    """(máximo de casos, máximo de no casos) que deja ver la media; None si no aplica.
+def cotas_media(media, n, minimo_escala, maximo_escala, corte, holgura: float = 0.0,
+                casos_altos: bool = False) -> tuple[int, int] | None:
+    """(máximo de casos, máximo de no casos) que deja ver una media de ítem; None si no aplica.
 
+    Escala entera de `minimo_escala` a `maximo_escala`. Con `casos_altos=False`
+    es caso todo valor ≤ `corte` (PSSM7); con `casos_altos=True`, todo valor
+    ≥ `corte` (APQ «a veces o más», estrés parental «de acuerdo o más»): se
+    refleja la escala (v → mín + máx − v) y se usa la misma fórmula.
     `holgura` desplaza Σ en el sentido que estrecha cada cota (conservador
     frente al redondeo de la media publicada).
     """
-    if item not in ITEMS_CON_CORTE or media is None or pd.isna(media) or not n:
+    if media is None or pd.isna(media) or not n:
+        return None
+    lo, hi, c, m = minimo_escala, maximo_escala, corte, float(media)
+    if casos_altos:
+        m, c = lo + hi - m, lo + hi - corte
+    n = int(n)
+    k_max = np.floor(((hi * n) - (m + holgura) * n) / (hi - c) + 1e-9)
+    nk_max = np.floor(((m - holgura) * n - lo * n) / (c + 1 - lo) + 1e-9)
+    return int(min(k_max, n)), int(min(nk_max, n))
+
+
+def media_delata(media, n, minimo_escala, maximo_escala, corte, casos_altos: bool = False,
+                 minimo: int = MIN_CASOS, holgura: float = REDONDEO_MEDIA) -> bool:
+    """True si la media obliga a que haya < minimo casos o no casos."""
+    cotas = cotas_media(media, n, minimo_escala, maximo_escala, corte, holgura, casos_altos)
+    return cotas is not None and min(cotas) < minimo
+
+
+def cotas_item(item: str, media, n, holgura: float = 0.0) -> tuple[int, int] | None:
+    """`cotas_media` de un ítem de `ITEMS_CON_CORTE`; None si no está ahí."""
+    if item not in ITEMS_CON_CORTE:
         return None
     lo, hi, c = ITEMS_CON_CORTE[item]
-    n = int(n)
-    k_max = np.floor(((hi * n) - (float(media) + holgura) * n) / (hi - c) + 1e-9)
-    nk_max = np.floor(((float(media) - holgura) * n - lo * n) / (c + 1 - lo) + 1e-9)
-    return int(min(k_max, n)), int(min(nk_max, n))
+    return cotas_media(media, n, lo, hi, c, holgura)
 
 
 def item_delata(item: str, media, n, minimo: int = MIN_CASOS,

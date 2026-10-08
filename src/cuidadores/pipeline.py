@@ -166,14 +166,31 @@ def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
     return a
 
 
-def _items_publicables(t: pd.DataFrame) -> pd.DataFrame:
-    """Quita el % de los ítems con menos de MIN_CASOS casos o no casos; nunca deja `casos`."""
+def _items_publicables(t: pd.DataFrame, umbral: int | None = None,
+                       escala: tuple[int, int] = (1, 5)) -> pd.DataFrame:
+    """Quita el % de los ítems con menos de MIN_CASOS casos o no casos; nunca deja `casos`.
+
+    La media del ítem también acota sus casos (caso = respuesta ≥ `umbral` en
+    una escala `escala`): se quita la media donde el % se suprime o donde la
+    media sola obliga a que haya menos de MIN_CASOS casos o no casos
+    (`supresion.media_delata`, la misma regla que PSSM7 en estudiantes).
+    """
     if t.empty:
         return t
     t = t.copy()
     if "casos" in t.columns:
-        ok = [supresion.proporcion_publicable(k, n) for k, n in zip(t["casos"], t["n"])]
-        t.loc[[not x for x in ok], "pct"] = float("nan")
+        ok = pd.Series([supresion.proporcion_publicable(k, n)
+                        for k, n in zip(t["casos"], t["n"])], index=t.index)
+        t.loc[~ok, "pct"] = float("nan")
+        if "M" in t.columns and umbral is not None:
+            delata = pd.Series([supresion.media_delata(m, n, escala[0], escala[1], umbral,
+                                                       casos_altos=True)
+                                for m, n in zip(t["M"], t["n"])], index=t.index)
+            quitar = ~ok | delata
+            for c in ("M", "DE"):
+                if c in t.columns:
+                    t[c] = t[c].astype(float)
+                    t.loc[quitar, c] = float("nan")
         t = t.drop(columns=["casos"])
     return t
 
@@ -198,8 +215,11 @@ def analizar(carga: ingest.Carga, ola: str | None = None, n_boot: int = 300
             else ("redactado en positivo" if i in cat.EP_POSITIVO else ""))
     olas = sorted(o for o in carga.respuestas["Ola"].dropna().unique() if o != cat.SIN_DATO)
     return AnalisisCuidadores(cuidador=a_c, nino=a_n, informe=informe, ola=ola, olas=olas,
-                              items_apq=_items_publicables(items_apq),
-                              items_estres=_items_publicables(items_estres))
+                              items_apq=_items_publicables(
+                                  items_apq, cat.APQ_UMBRAL, (cat.APQ.valor_min, cat.APQ.valor_max)),
+                              items_estres=_items_publicables(
+                                  items_estres, cat.MAP_ACUERDO["de acuerdo"],
+                                  (cat.EP.valor_min, cat.EP.valor_max)))
 
 
 def cargar_y_analizar(ruta: str | None = None, ola: str | None = None,
