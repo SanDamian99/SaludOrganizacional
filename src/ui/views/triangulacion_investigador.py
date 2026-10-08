@@ -126,6 +126,9 @@ def _tab_acuerdo(t) -> None:
         sub = st.selectbox("Subescala", list(ba["subescala"].unique()), key="tri_ba")
         st.pyplot(ex.figura_bland_altman(t, sub))
         _df(ba[ba["subescala"] == sub])
+    st.markdown("**Sensibilidad: solo díadas concordantes en sexo, edad y grado**")
+    st.caption(cat.AVISO_SENSIBILIDAD_CONCORDANCIA)
+    _df(t.diadas.acuerdo_concordantes)
 
 
 def _tab_no_visto(t) -> None:
@@ -142,6 +145,7 @@ def _tab_apoyo(t) -> None:
 
 def _tab_asociaciones(t) -> None:
     st.caption(cat.AVISO_ASOCIACIONES)
+    st.caption(cat.AVISO_SENSIBILIDAD_CONCORDANCIA)
     _df(t.diadas.asociaciones)
 
 

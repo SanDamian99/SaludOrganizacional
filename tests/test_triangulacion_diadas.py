@@ -128,3 +128,52 @@ def test_ninguna_salida_lleva_familias():
     for t in (r.acuerdo, r.bland_altman, r.no_visto, r.apoyo, r.asociaciones):
         assert "familia" not in t.columns
         assert not t.astype(str).apply(lambda s: s.str.fullmatch(r"C[0-9a-f]{8}")).any().any()
+
+
+# ── sensibilidad: sin las díadas que no concuerdan en sexo, edad o grado ────
+def _con_concordancia(n=60, discordantes=12, seed=3):
+    rng = np.random.default_rng(seed)
+    d = _diadas(rng.integers(0, 30, n).astype(float), rng.integers(0, 30, n).astype(float),
+                seed=seed)
+    d["c_Sexo"] = np.where(d["e_Sexo"] == "Mujer", "Niña", "Niño")
+    d["c_Edad"] = d["e_Edad"].astype(float)
+    d["e_Grado"] = "Sexto"
+    d["c_Grado"] = "Sexto"
+    k = discordantes // 3
+    d.loc[d.index[:k], "c_Sexo"] = np.where(d.loc[d.index[:k], "e_Sexo"] == "Mujer", "Niño", "Niña")
+    d.loc[d.index[k:2 * k], "c_Edad"] += 2                     # ± 1 año todavía concuerda
+    d.loc[d.index[2 * k:discordantes], "c_Grado"] = "Quinto"
+    d.loc[d.index[discordantes:discordantes + 3], "c_Edad"] += 1
+    return d
+
+
+def test_concordantes_excluye_sexo_edad_y_grado():
+    d = _con_concordancia()
+    assert int(dy.concordantes(d).sum()) == 48
+    d.loc[d.index[0], "c_Sexo"] = np.nan                       # sin dato no es discordancia
+    assert int(dy.concordantes(d).sum()) == 49
+
+
+def test_sensibilidad_de_acuerdo_y_modelos_con_10_o_mas_excluidas():
+    d = _con_concordancia()
+    t = dy.analizar(d, n_boot=20)
+    s = t.acuerdo_concordantes
+    fila = s[s["subescala"] == "SDQ_Total"].iloc[0]
+    assert fila["motivo"] == "" and fila["n"] == 48
+    esperado = dy.acuerdo_sdq(d[dy.concordantes(d)], n_boot=20)
+    assert fila["cci"] == esperado.iloc[0]["cci"]
+    muestras = set(t.asociaciones["muestra"])
+    assert dy.MUESTRA_CONCORDANTES in muestras
+    sub = t.asociaciones[t.asociaciones["muestra"] == dy.MUESTRA_CONCORDANTES]
+    assert (sub["motivo"] == "").any() and (sub["n"].dropna() <= 48).all()
+
+
+def test_sensibilidad_no_se_muestra_si_las_excluidas_son_1_a_9():
+    d = _con_concordancia(discordantes=6)
+    t = dy.analizar(d, n_boot=20)
+    s = t.acuerdo_concordantes
+    assert (s["motivo"] == dy.MOTIVO_SENSIBILIDAD).all()
+    assert "n" not in s.columns or s["n"].isna().all()
+    sub = t.asociaciones[t.asociaciones["muestra"] == dy.MUESTRA_CONCORDANTES]
+    assert (sub["motivo"] == dy.MOTIVO_SENSIBILIDAD).all()
+    assert "beta" not in sub.columns or sub["beta"].isna().all()

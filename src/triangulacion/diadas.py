@@ -24,6 +24,10 @@ Entra la tabla de díadas de `enlace.enlazar` (solo en memoria) y sale un
     SDQ del niño (total, internalizante, externalizante): MCO estandarizado,
     controles de sexo y edad del niño, efecto fijo de colegio y errores
     agrupados por familia; sensibilidad solo con Laura Vicuña.
+  · Sensibilidad de concordancia (`acuerdo_concordantes` y una muestra más en
+    `asociaciones`): sin las díadas en que niño y cuidador no concuerdan en
+    sexo, edad (± 1 año) o grado. Solo se muestra si lo excluido (que saldría
+    restando de la cifra principal) es 0 o ≥ 10 díadas de ≥ 10 familias.
 
 Reglas de cifras pequeñas: toda cifra exige ≥ 10 díadas de ≥ 10 familias
 distintas (los modelos, ≥ 30 díadas completas); un predictor binario exige
@@ -46,6 +50,12 @@ MOTIVO_POCAS = "menos de 10 díadas o de 10 familias"
 MOTIVO_PEQUENAS = "cifras pequeñas: alguna parte con menos de 3 díadas o familias"
 MOTIVO_MODELO = "menos de 30 díadas completas o de 10 familias"
 MOTIVO_SINGULAR = "el modelo no se puede estimar (predictores redundantes)"
+MOTIVO_SENSIBILIDAD = ("las díadas excluidas por la sensibilidad serían de 1 a 9 o de menos "
+                       "de 10 familias (saldrían restando)")
+MUESTRA_TODAS = "Todas las díadas (efecto fijo de colegio)"
+MUESTRA_LAUV = "Solo Laura Vicuña (sensibilidad)"
+MUESTRA_CONCORDANTES = ("Díadas que concuerdan en sexo, edad (± 1) y grado (sensibilidad, "
+                        "efecto fijo de colegio)")
 
 
 @dataclass
@@ -57,6 +67,7 @@ class Diadas:
     no_visto: pd.DataFrame = field(default_factory=pd.DataFrame)
     apoyo: pd.DataFrame = field(default_factory=pd.DataFrame)
     asociaciones: pd.DataFrame = field(default_factory=pd.DataFrame)
+    acuerdo_concordantes: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def _r(v, dec: int = 3):
@@ -72,6 +83,31 @@ def _par(D: pd.DataFrame, a: str, b: str) -> pd.DataFrame:
     if a not in D.columns or b not in D.columns:
         return D.iloc[0:0][[FAMILIA]]
     return D[[a, b, FAMILIA]].dropna()
+
+
+def concordantes(D: pd.DataFrame) -> pd.Series:
+    """Díadas sin discordancia de sexo, edad (más de ± 1 año) ni grado.
+
+    Solo es discordancia cuando los dos informantes dan el dato y no coinciden;
+    sin dato en alguno de los dos, la díada se queda.
+    """
+    from src.triangulacion.enlace import SEXO_NINO
+    ok = pd.Series(True, index=D.index)
+    if {"e_Sexo", "c_Sexo"} <= set(D.columns):
+        c = D["c_Sexo"].map(SEXO_NINO)
+        ok &= ~(c.notna() & D["e_Sexo"].isin(SEXO_NINO.values()) & (c != D["e_Sexo"]))
+    if {"e_Edad", "c_Edad"} <= set(D.columns):
+        dif = (pd.to_numeric(D["e_Edad"], errors="coerce")
+               - pd.to_numeric(D["c_Edad"], errors="coerce")).abs()
+        ok &= ~(dif > 1)
+    if {"e_Grado", "c_Grado"} <= set(D.columns):
+        ok &= ~(D["e_Grado"].notna() & D["c_Grado"].notna() & (D["e_Grado"] != D["c_Grado"]))
+    return ok
+
+
+def excluidas_seguras(excluidas: pd.DataFrame) -> bool:
+    """Lo que una sensibilidad quita (y saldría restando) es 0 o ≥ 10 díadas y familias."""
+    return excluidas.empty or est.suficiente(excluidas, FAMILIA)
 
 
 def acuerdo_sdq(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
@@ -105,6 +141,19 @@ def acuerdo_sdq(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
                       "ba_lim_sup": _r(ba["lim_sup"], 2), "kappa_w": _r(kw),
                       "kappa_ic_inf": _r(kw_ic[0]), "kappa_ic_sup": _r(kw_ic[1]), "motivo": ""})
     return pd.DataFrame(filas)
+
+
+def acuerdo_concordantes(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
+    """`acuerdo_sdq` sin las díadas discordantes, si lo excluido no sale restando."""
+    conc = concordantes(D)
+    t = acuerdo_sdq(D[conc], n_boot)
+    for s in cat.SUBESCALAS_SDQ:
+        sub = _par(D, f"e_{s}", f"c_{s}")
+        if not excluidas_seguras(sub[~conc.loc[sub.index]]):
+            fila = t["subescala"] == s
+            t.loc[fila, [c for c in t.columns if c not in ("subescala", "escala")]] = np.nan
+            t.loc[fila, "motivo"] = MOTIVO_SENSIBILIDAD
+    return t
 
 
 def bland_altman_agrupado(D: pd.DataFrame) -> pd.DataFrame:
@@ -187,10 +236,14 @@ def _z(s: pd.Series) -> pd.Series:
     return (s - s.mean()) / s.std(ddof=1)
 
 
+def _columnas_modelo(y: str) -> list[str]:
+    return [f"e_{y}", *[f"a_{p}" for p, _, _ in cat.PREDICTORES], "e_Sexo", "e_Edad",
+            FAMILIA, "Colegio"]
+
+
 def _modelo(datos: pd.DataFrame, y: str, etiqueta_y: str, muestra: str,
             efecto_fijo: bool) -> list[dict]:
-    pred_cols = [f"a_{p}" for p, _, _ in cat.PREDICTORES]
-    cols = [f"e_{y}", *pred_cols, "e_Sexo", "e_Edad", FAMILIA, "Colegio"]
+    cols = _columnas_modelo(y)
     if any(c not in datos.columns for c in cols):
         return [dict(muestra=muestra, resultado=etiqueta_y, motivo=MOTIVO_MODELO)]
     sub = datos[cols].dropna()
@@ -228,12 +281,20 @@ def _modelo(datos: pd.DataFrame, y: str, etiqueta_y: str, muestra: str,
 
 
 def asociaciones(D: pd.DataFrame) -> pd.DataFrame:
-    muestras = (("Todas las díadas (efecto fijo de colegio)", D, True),
-                ("Solo Laura Vicuña (sensibilidad)", D[D["Colegio"] == cat.COLEGIO_SENSIBILIDAD],
-                 False))
+    conc = concordantes(D)
+    muestras = ((MUESTRA_TODAS, D, True),
+                (MUESTRA_LAUV, D[D["Colegio"] == cat.COLEGIO_SENSIBILIDAD], False),
+                (MUESTRA_CONCORDANTES, D[conc], True))
     filas = []
     for muestra, datos, ef in muestras:
         for y, etiqueta_y in cat.RESULTADOS:
+            if muestra == MUESTRA_CONCORDANTES:
+                cols = [c for c in _columnas_modelo(y) if c in D.columns]
+                completas = D[cols].dropna()
+                if not excluidas_seguras(completas[~conc.loc[completas.index]]):
+                    filas.append(dict(muestra=muestra, resultado=etiqueta_y,
+                                      motivo=MOTIVO_SENSIBILIDAD))
+                    continue
             filas += _modelo(datos, y, etiqueta_y, muestra, ef)
     t = pd.DataFrame(filas)
     if not t.empty and "p" in t.columns:
@@ -249,4 +310,5 @@ def analizar(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> Diadas:
     return Diadas(n=len(D), familias=int(D[FAMILIA].nunique()),
                   acuerdo=acuerdo_sdq(D, n_boot), bland_altman=bland_altman_agrupado(D),
                   no_visto=malestar_no_visto(D), apoyo=apoyo_familiar(D),
-                  asociaciones=asociaciones(D))
+                  asociaciones=asociaciones(D),
+                  acuerdo_concordantes=acuerdo_concordantes(D, n_boot))

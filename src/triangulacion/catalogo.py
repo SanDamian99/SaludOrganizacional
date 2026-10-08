@@ -184,6 +184,11 @@ AVISO_ASOCIACIONES = ("Regresión lineal con efecto fijo de colegio, controles d
                       "del niño y errores agrupados por familia (cuidador). Con 4 colegios no "
                       "se usan errores agrupados por colegio; la sensibilidad repite el "
                       "análisis solo con Laura Vicuña. Son asociaciones, no efectos causales.")
+AVISO_SENSIBILIDAD_CONCORDANCIA = (
+    "Sensibilidad de concordancia: el acuerdo SDQ y las asociaciones se repiten sin las "
+    "díadas en que el niño y su cuidador no concuerdan en sexo, edad (más de ± 1 año) o "
+    "grado (sin dato en alguno no cuenta como discordancia). Solo se muestra si las "
+    "díadas excluidas son 0 o 10 o más de 10 o más familias; si no, saldrían restando.")
 AVISO_BLAND_ALTMAN = ("Bland–Altman agrupado: cada punto es el promedio de un grupo de 10 o "
                       "más díadas (quintiles del promedio de los dos informantes); no se "
                       "dibuja ninguna díada.")

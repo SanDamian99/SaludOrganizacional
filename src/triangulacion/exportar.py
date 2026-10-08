@@ -26,7 +26,8 @@ from src.triangulacion import enlace as en
 TABLAS = ("capa1_diferencias.csv", "capa1_clasificacion.csv", "capa1_por_grado.csv",
           "capa1_clasificacion_grado.csv", "enlace_calidad.csv", "diadas_acuerdo_sdq.csv",
           "diadas_bland_altman_agrupado.csv", "diadas_malestar_no_visto.csv",
-          "diadas_apoyo_familiar.csv", "diadas_asociaciones.csv")
+          "diadas_apoyo_familiar.csv", "diadas_asociaciones.csv",
+          "diadas_acuerdo_sdq_concordantes.csv")
 COLORES = {"Estudiantes": "#3b6ea8", "Cuidadores": "#b5651d", "Docentes": "#4d8b55"}
 # Columnas que nunca salen, aunque una tabla las trajera.
 PROHIBIDAS = ("familia", "ID_cuidador", "ID_nino", "N_hmac", "ID", "casos")
@@ -52,6 +53,7 @@ def tablas(t) -> dict[str, pd.DataFrame]:
         "diadas_acuerdo_sdq.csv": d.acuerdo, "diadas_bland_altman_agrupado.csv": d.bland_altman,
         "diadas_malestar_no_visto.csv": d.no_visto, "diadas_apoyo_familiar.csv": d.apoyo,
         "diadas_asociaciones.csv": d.asociaciones,
+        "diadas_acuerdo_sdq_concordantes.csv": d.acuerdo_concordantes,
     }
 
 
@@ -166,7 +168,8 @@ def metodologia_md(t) -> str:
         "- MSPSS por fuente: Spearman y diferencia media. " + cat.AVISO_MSPSS,
         "- " + cat.AVISO_ASOCIACIONES + " Resultados estandarizados (z); predictores "
         "continuos en z y castigo físico como 0/1; un predictor binario exige 10 o más "
-        "díadas y familias en cada nivel. q de Benjamini–Hochberg por muestra.", "",
+        "díadas y familias en cada nivel. q de Benjamini–Hochberg por muestra.",
+        "- " + cat.AVISO_SENSIBILIDAD_CONCORDANCIA, "",
         "## Límites", "",
         "- Enlace exacto: un nombre escrito distinto en los dos formularios no enlaza; las "
         "díadas no son una muestra aleatoria de los niños.",
