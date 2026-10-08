@@ -84,14 +84,18 @@ def _cliente():
 def id_corrida_vigente(cli=None) -> int | None:
     """Id de la corrida de cuidadores publicada más reciente, o None."""
     cli = cli or _cliente()
+    # `publicada = true` también lo exige la base (RLS); aquí se repite por si
+    # el cliente ve todo (clave de servicio).
     filas = (cli.postgrest.schema(ESQUEMA).table("corridas").select("id")
-             .eq("modulo", MODULO).order("creada_en", desc=True).limit(1).execute().data)
+             .eq("modulo", MODULO).eq("publicada", True)
+             .order("creada_en", desc=True).limit(1).execute().data)
     return int(filas[0]["id"]) if filas else None
 
 
 def _traer_filas(cli) -> tuple[dict | None, list[dict]]:
     tabla = cli.postgrest.schema(ESQUEMA)
     corridas = (tabla.table("corridas").select("*").eq("modulo", MODULO)
+                .eq("publicada", True)
                 .order("creada_en", desc=True).limit(1).execute().data)
     if not corridas:
         return None, []
