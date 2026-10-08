@@ -172,7 +172,9 @@ AVISO_DESPLIEGUE = ("La triangulación solo funciona en la máquina que procesa 
 AVISO_ENLACE = ("Enlace exacto: el seudónimo HMAC del nombre normalizado del niño, calculado "
                 "con la misma clave local en los dos formularios, y verificado con el "
                 "colegio. No hay coincidencias aproximadas: un nombre escrito distinto no "
-                "enlaza. Los seudónimos no se guardan ni se muestran.")
+                "enlaza. Un seudónimo repetido dentro de un mismo colegio, en cualquiera de "
+                "los dos formularios, es ambiguo: se descarta y se cuenta. Los seudónimos no "
+                "se guardan ni se muestran.")
 AVISO_DIADAS = ("Las díadas solo existen en esta máquina. Toda cifra exige 10 o más díadas de "
                 "10 o más familias distintas; ninguna salida muestra una díada.")
 AVISO_SDQ = ("Cada informante se lee con sus propias bandas: autoinforme para el niño y "

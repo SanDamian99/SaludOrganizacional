@@ -139,3 +139,34 @@ def test_tabla_de_calidad_con_otros_de_10_o_mas_da_todo_exacto():
     assert valores[f"Díadas en {en.OTROS_COLEGIOS}"] == "12"
     assert valores["Díadas en JJC"] == "12"
     assert valores["Coincidencias exactas del seudónimo"] == "220"
+
+
+# ── seudónimos repetidos dentro de un colegio: ambiguos, se descartan ───────
+def test_un_seudonimo_repetido_en_el_colegio_de_estudiantes_se_descarta():
+    e = pd.DataFrame([_est("Ana Uno", "LauV"), _est("Ana Uno", "LauV", SDQ_Emo=3.0),
+                      _est("Luis Dos", "LauV")])
+    n = pd.DataFrame([_nino("Ana Uno", "LauV"), _nino("Luis Dos", "LauV", "C00000002")])
+    c = pd.DataFrame({"ID_cuidador": ["C00000001", "C00000002"]})
+    r = en.enlazar(e, n, c)
+    assert r.informe["descartadas_ambiguas"] == 1
+    assert r.informe["verificadas"] == 1 and len(r.diadas) == 1
+    assert r.diadas.loc[0, "familia"] == "C00000002"
+    assert r.informe["coincidencias_nombre"] == 2      # = verificadas + descartes
+
+
+def test_un_hijo_repetido_en_el_colegio_de_cuidadores_se_descarta():
+    e = pd.DataFrame([_est("Ana Uno", "LauV")])
+    n = pd.DataFrame([_nino("Ana Uno", "LauV"), _nino("Ana Uno", "LauV", "C00000002")])
+    c = pd.DataFrame({"ID_cuidador": ["C00000001", "C00000002"]})
+    r = en.enlazar(e, n, c)
+    assert r.informe["descartadas_ambiguas"] == 1 and r.informe["verificadas"] == 0
+    assert r.diadas.empty
+
+
+def test_el_mismo_seudonimo_en_dos_colegios_no_es_ambiguo():
+    e = pd.DataFrame([_est("Ana Uno", "LauV"), _est("Ana Uno", "JJC")])
+    n = pd.DataFrame([_nino("Ana Uno", "JJC")])
+    r = en.enlazar(e, n, pd.DataFrame({"ID_cuidador": ["C00000001"]}))
+    assert r.informe["descartadas_ambiguas"] == 0
+    assert r.informe["verificadas"] == 1 and r.diadas.loc[0, "Colegio"] == "JJC"
+    assert r.informe["descartadas_colegio_distinto"] == 1

@@ -8,7 +8,9 @@ Regla única, sin coincidencias aproximadas:
     Y  mismo código de colegio en los dos (y que sea un colegio reconocido).
 
 Un nombre escrito distinto («Nina» por «Niña» no lo arregla la normalización)
-no enlaza. Un mismo nombre en colegios distintos se descarta y se cuenta.
+no enlaza. Un mismo nombre en colegios distintos se descarta y se cuenta; un
+seudónimo repetido dentro de un colegio (en cualquiera de los dos lados) es
+ambiguo, se descarta entero y también se cuenta.
 
 `enlazar` devuelve las díadas (solo en memoria: nunca se guardan, se muestran
 ni se exportan) y un informe de calidad que solo tiene conteos y tasas:
@@ -51,22 +53,52 @@ def _concordancia(si: pd.Series, con_dato: pd.Series) -> dict:
     return dict(concordantes=int((si & con_dato).sum()), con_dato=int(con_dato.sum()))
 
 
+def _claves_repetidas(d: pd.DataFrame, columna: str) -> set:
+    """(seudónimo, colegio) que aparecen más de una vez en un mismo lado."""
+    c = d.groupby([columna, "Colegio"], dropna=False).size()
+    return set(c[c > 1].index)
+
+
+def _sin_claves(d: pd.DataFrame, columna: str, claves: set) -> pd.DataFrame:
+    if not claves:
+        return d
+    fuera = pd.Series([(i, c) in claves for i, c in zip(d[columna], d["Colegio"])],
+                      index=d.index)
+    return d[~fuera]
+
+
 def enlazar(estudiantes: pd.DataFrame, ninos: pd.DataFrame,
             cuidadores: pd.DataFrame) -> Enlace:
-    """Díadas verificadas con el colegio e informe agregado de la calidad del enlace."""
-    e = estudiantes[estudiantes[COLUMNA_NINO].notna()].drop_duplicates(COLUMNA_NINO)
+    """Díadas verificadas con el colegio e informe agregado de la calidad del enlace.
+
+    Un seudónimo repetido dentro del mismo colegio en cualquiera de los dos
+    lados (dos estudiantes o dos hijos con el mismo nombre normalizado) es
+    ambiguo: esa clave se descarta en los dos lados y se cuenta en
+    `descartadas_ambiguas` (nunca se elige «el primero»). Así
+    coincidencias = verificadas + colegio distinto + no reconocido + ambiguas.
+    """
+    e = estudiantes[estudiantes[COLUMNA_NINO].notna()].reset_index(drop=True)
     n = ninos[ninos["ID_nino"].notna() & ~ninos["ID_nino"].astype(str).str.startswith("sin-")]
-    n = n.drop_duplicates("ID_nino")
-    m = e.merge(n, left_on=COLUMNA_NINO, right_on="ID_nino", how="inner",
-                suffixes=("_e", "_c"), validate="one_to_one")
+    n = n.reset_index(drop=True)
+    rep_e, rep_n = _claves_repetidas(e, COLUMNA_NINO), _claves_repetidas(n, "ID_nino")
+    claves_e = set(zip(e[COLUMNA_NINO], e["Colegio"]))
+    claves_n = set(zip(n["ID_nino"], n["Colegio"]))
+    ambiguas = (rep_e | rep_n) & claves_e & claves_n
+    e1 = _sin_claves(e, COLUMNA_NINO, rep_e | rep_n)
+    n1 = _sin_claves(n, "ID_nino", rep_e | rep_n)
+    m = (e1.assign(_pe=e1.index).merge(n1.assign(_pn=n1.index), left_on=COLUMNA_NINO,
+                                       right_on="ID_nino", how="inner", suffixes=("_e", "_c"))
+         .reset_index(drop=True))
     reconocido = ~m["Colegio_e"].isin(cat.COLEGIOS_SIN_GRUPO)
     mismo = m["Colegio_e"] == m["Colegio_c"]
-    ok = m[mismo & reconocido]
+    ok = m[mismo & reconocido].reset_index(drop=True)
     informe = dict(
-        estudiantes_con_nombre=len(e), ninos_con_nombre=len(n),
-        coincidencias_nombre=len(m), verificadas=len(ok),
+        estudiantes_con_nombre=int(e[COLUMNA_NINO].nunique()),
+        ninos_con_nombre=int(n["ID_nino"].nunique()),
+        coincidencias_nombre=len(m) + len(ambiguas), verificadas=len(ok),
         descartadas_colegio_distinto=int((~mismo).sum()),
         descartadas_colegio_no_reconocido=int((mismo & ~reconocido).sum()),
+        descartadas_ambiguas=len(ambiguas),
         familias=int(ok["ID_cuidador"].nunique()) if len(ok) else 0,
         por_colegio={str(k): int(v) for k, v in ok["Colegio_e"].value_counts().items()},
         descartes_por_colegio={str(k): int(v) for k, v in
@@ -81,8 +113,8 @@ def enlazar(estudiantes: pd.DataFrame, ninos: pd.DataFrame,
     informe["grado"] = _concordancia(ok["Grado_e"] == ok["Grado_c"], ok["Grado_c"].notna())
 
     ids = ok["ID_cuidador"].to_numpy()
-    lado_e = e.set_index(COLUMNA_NINO).loc[ok[COLUMNA_NINO]].reset_index()
-    lado_c = n.set_index("ID_nino").loc[ok["ID_nino"]].reset_index()
+    lado_e = e.loc[ok["_pe"]].reset_index(drop=True)
+    lado_c = n.loc[ok["_pn"]].reset_index(drop=True)
     adulto = cuidadores.drop_duplicates("ID_cuidador").set_index("ID_cuidador")
     lado_a = adulto.reindex(ids).reset_index(drop=True)
     diadas = pd.concat([
