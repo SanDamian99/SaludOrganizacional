@@ -9,9 +9,14 @@ informes (acordado el 28 de septiembre de 2026).
 Reglas que este archivo respeta, las mismas de la vista comunidad:
   · Solo cifras agregadas de grupos con al menos `catalog.MIN_GROUP_N` casos.
     Nunca una fila, un nombre ni un grupo pequeño.
-  · Todos los textos sobre salud mental salen de `catalog` (MENSAJES,
-    RUTA_ATENCION, avisos). Aquí solo se añaden títulos, etiquetas y la
-    instrucción de impresión.
+  · Todos los textos sobre salud mental salen de `catalog` (MENSAJES, avisos)
+    y de `alertas_catalogo` (alertas y la ruta por rol). Aquí solo se añaden
+    títulos, etiquetas y la instrucción de impresión.
+  · Panel de alertas (estudiantes_alertas): en el informe del colegio, tabla
+    por colegio en el de la Secretaría y recuadro compacto en el resumen de una
+    página. Con alertas, la columna de muerte sale de las tablas. Todo va en
+    try/except: si el panel falla o el módulo de la vista es viejo, el informe
+    sale como antes de la fase 3.
   · Las cifras salen de las funciones de `estudiantes_comunidad`, así que el
     informe no puede decir algo distinto de lo que muestra la pantalla.
   · El informe de un colegio se compara con el total del municipio, nunca con
@@ -108,6 +113,67 @@ def _nivel_valido(a) -> bool:
 
 
 # ══ Piezas HTML ════════════════════════════════════════════════════════════
+def _va():
+    """Módulo del panel de alertas, o None (despliegue con módulos a medias)."""
+    try:
+        from src.ui.views import estudiantes_alertas as va
+        return va
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _seguro(funcion, *args, **kwargs) -> str:
+    """HTML del panel de alertas, o «» si algo falla: el informe nunca se cae por él."""
+    try:
+        return funcion(*args, **kwargs)
+    except Exception:                                      # noqa: BLE001
+        logging.getLogger(__name__).exception("No se pudo armar el panel de alertas")
+        return ""
+
+
+def _sin_muerte(a, columnas, panel_dibujado: bool) -> list[str]:
+    """Sin la columna de muerte si el panel de alertas la reemplaza (spec §5.4).
+
+    Solo cuando el panel salió de verdad (`panel_dibujado`, su HTML no vacío):
+    si falló, la columna se queda.
+    """
+    va = _va()
+    try:
+        reemplaza = (panel_dibujado and va is not None
+                     and va.hay_alerta(a, "desesperanza"))
+    except Exception:                                      # noqa: BLE001
+        reemplaza = False
+    return [k for k in columnas if not (reemplaza and k == "ideacion")]
+
+
+def _panel(a, rol: str, filtros: dict, compacto: bool = False) -> str:
+    va = _va()
+    return "" if va is None else _seguro(va.panel_html, a, rol, filtros, compacto=compacto)
+
+
+def _senales_secretaria(a) -> str:
+    va = _va()
+    return "" if va is None else _seguro(va.tabla_secretaria_html, a)
+
+
+def _css_senales(tipo: str) -> str:
+    va = _va()
+    if va is None:
+        return ""
+    return getattr(va, "CSS_PAGINA" if tipo == "pagina" else "CSS_INFORME", "")
+
+
+def _ruta(rol: str) -> list[tuple[str, str]]:
+    """La ruta por rol; si `estudiantes_comunidad` es un módulo viejo, la vigente."""
+    funcion = getattr(vc, "ruta_para_rol", None)
+    if funcion is None:
+        return list(cat.RUTA_ATENCION)
+    try:
+        return funcion(rol)
+    except Exception:                                      # noqa: BLE001
+        return list(cat.RUTA_ATENCION)
+
+
 def _e(texto) -> str:
     return escape(str(texto), quote=True)
 
@@ -264,8 +330,8 @@ def _tabla_comparativa(a, columna: str, indicadores: list[str], filtros: dict,
             + (f" {_e(nota)}" if nota else "") + "</p></section>")
 
 
-def _bloque_ruta() -> str:
-    filas = "".join(f"<li><b>{_e(n)}</b> — {_e(d)}</li>" for n, d in cat.RUTA_ATENCION)
+def _bloque_ruta(rol: str = "colegio") -> str:
+    filas = "".join(f"<li><b>{_e(n)}</b> — {_e(d)}</li>" for n, d in _ruta(rol))
     return f'<section class="ruta"><h2>Si un estudiante necesita ayuda</h2><ul>{filas}</ul></section>'
 
 
@@ -388,10 +454,10 @@ h2{font-size:13.5px;margin-bottom:4px}.sub{font-size:10.5px;margin-bottom:6px}
 """
 
 
-def _documento(titulo: str, cuerpo: str) -> str:
+def _documento(titulo: str, cuerpo: str, css_extra: str = "") -> str:
     return ("<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            f"<title>{_e(titulo)}</title><style>{_CSS}</style></head><body>"
+            f"<title>{_e(titulo)}</title><style>{_CSS}{css_extra}</style></head><body>"
             '<div class="imprimir"><p>' + _e(INSTRUCCION_IMPRESION) + "</p>"
             '<button type="button" onclick="window.print()">Imprimir</button></div>'
             f'<main class="hoja">{cuerpo}</main></body></html>')
@@ -420,7 +486,8 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
         filtros = {"nivel": nivel, "colegio": colegio, "grado": vc.TODOS}
         b = vc.bandas_sdq_total(a, filtros)
         total += vc.n_bandas(a, filtros)
-        fichas = vc.tarjetas(a, "colegio", filtros)
+        panel = _panel(a, "colegio", filtros)
+        fichas = vc.tarjetas(a, "colegio", filtros, panel_dibujado=bool(panel))
         tarjetas_html, comparaciones = [], []
         for t in fichas:
             cuerpo, comp = _cuerpo_tarjeta(a, t, filtros, "Colegio", con_municipio=True)
@@ -430,7 +497,8 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
                                       vc.prevalencia(a, t.clave, filtros),
                                       vc.prevalencia(a, t.clave, {})))
         grados = _tabla_comparativa(
-            a, "Grado", COLUMNAS_GRADO_COLEGIO, filtros, "Por grado en el colegio",
+            a, "Grado", _sin_muerte(a, COLUMNAS_GRADO_COLEGIO, bool(panel)), filtros,
+            "Por grado en el colegio",
             lambda g: g, nota="Los grados con menos de "
             f"{cat.MIN_GROUP_N} estudiantes no se muestran.")
         secciones.append(
@@ -438,6 +506,7 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
             f'{_e(vc.NIVELES_LABEL.get(nivel, nivel))}</h2>'
             + _resumen(comparaciones)
             + _bloque_bandas([("Colegio", b), ("Municipio", vc.bandas_sdq_total(a, {}))])
+            + panel
             + '<h2>Resultados y qué hacer</h2><div class="tarjetas">'
             + "".join(tarjetas_html) + "</div>"
             + grados
@@ -451,9 +520,9 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
               + '<p class="leer">Cada resultado trae la cifra del colegio, cómo se compara '
                 "con el total del municipio y qué puede hacer el colegio. Son cifras del "
                 "grupo: ningún dato corresponde a un estudiante.</p>"
-              + "".join(secciones) + _bloque_ruta()
+              + "".join(secciones) + _bloque_ruta("colegio")
               + _avisos(niveles, [vc.nota_base(analisis[n]) for n in niveles]))
-    return _documento(f"Informe Estudiantes 360 · {nombre}", cuerpo)
+    return _documento(f"Informe Estudiantes 360 · {nombre}", cuerpo, _css_senales("informe"))
 
 
 def _tamano_nivel(a) -> tuple[int, int]:
@@ -491,7 +560,8 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
         total += n_total
         en_cifras += n_nivel
         colegios.update(colegios_del_nivel(a))
-        fichas = vc.tarjetas(a, "municipio", {})
+        senales = _senales_secretaria(a)
+        fichas = vc.tarjetas(a, "municipio", {}, panel_dibujado=bool(senales))
         tarjetas_html = [_tarjeta_html(t, _cuerpo_tarjeta(a, t, {}, "Municipio",
                                                           con_municipio=False)[0])
                          for t in fichas]
@@ -506,10 +576,13 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
             + _bloque_bandas([("Municipio", vc.bandas_sdq_total(a, {}))])
             + '<h2>Resultados y qué hacer</h2><div class="tarjetas">'
             + "".join(tarjetas_html) + "</div>"
-            + _tabla_comparativa(a, "Colegio", list(COLUMNAS_TABLA), {}, "Por colegio",
-                                 nombre_colegio, nota=nota_peq)
-            + _tabla_comparativa(a, "Grado", list(COLUMNAS_TABLA), {}, "Por grado",
-                                 lambda g: g)
+            + senales
+            + _tabla_comparativa(a, "Colegio", _sin_muerte(a, list(COLUMNAS_TABLA),
+                                                             bool(senales)), {},
+                                 "Por colegio", nombre_colegio, nota=nota_peq)
+            + _tabla_comparativa(a, "Grado", _sin_muerte(a, list(COLUMNAS_TABLA),
+                                                           bool(senales)), {},
+                                 "Por grado", lambda g: g)
             + "</section>")
     meta = (f"{_texto_tamano(en_cifras, total)} · {len(colegios)} colegios con resultados · "
             f"{fecha_larga(fecha)}")
@@ -518,8 +591,9 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
               + '<p class="leer">Primero el total del municipio y qué hacer desde la política '
                 "pública; después, cómo se ubica cada colegio y cada grado frente a ese "
                 "total. Son cifras de grupo: ningún dato corresponde a un estudiante.</p>"
-              + "".join(secciones) + _bloque_ruta() + _avisos(niveles, notas_base))
-    return _documento("Informe Estudiantes 360 · Secretaría", cuerpo)
+              + "".join(secciones) + _bloque_ruta("municipio")
+              + _avisos(niveles, notas_base))
+    return _documento("Informe Estudiantes 360 · Secretaría", cuerpo, _css_senales("informe"))
 
 
 # ══ Resumen de una página (PDF) ═════════════════════════════════════════════
@@ -597,7 +671,9 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
         raise ValueError("No hay datos cargados todavía.")
     con_municipio = vc.hay_filtro(filtros)
     b = vc.bandas_sdq_total(analisis, filtros)
-    fichas = vc.tarjetas(analisis, rol, filtros)[:MAX_TARJETAS_PAGINA]
+    caja = _panel(analisis, rol, filtros, compacto=True)
+    fichas = vc.tarjetas(analisis, rol, filtros,
+                         panel_dibujado=bool(caja))[:MAX_TARJETAS_PAGINA]
 
     colegio = filtros.get("colegio", vc.TODOS)
     grado = filtros.get("grado", vc.TODOS)
@@ -620,17 +696,17 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
             bandas = ('<div class="bloque"><h2>Cómo está el grupo</h2>'
                       + "".join(_barra_bandas(e, x) for e, x in filas_bandas)
                       + _leyenda_bandas(filas_bandas[0][1]["etiquetas"]) + "</div>")
-        contenido = (bandas + '<h2>Lo más importante y qué hacer</h2><div class="tiles">'
+        contenido = (bandas + caja + '<h2>Lo más importante y qué hacer</h2><div class="tiles">'
                      + "".join(_tile_pagina(analisis, t, filtros, con_municipio)
                                for t in fichas) + "</div>")
     elif con_municipio and not vc.hay_datos_crudos(analisis):
-        contenido = f"<p>{_e(vc.SIN_SUBGRUPO_PUBLICADO)}</p>"
+        contenido = caja + f"<p>{_e(vc.SIN_SUBGRUPO_PUBLICADO)}</p>"
     else:
-        contenido = (f"<p>Este grupo tiene menos de {cat.MIN_GROUP_N} estudiantes, así que "
+        contenido = caja + (f"<p>Este grupo tiene menos de {cat.MIN_GROUP_N} estudiantes, así que "
                      "no se muestran sus resultados: con grupos tan pequeños se podría "
                      "reconocer a un estudiante. Sus respuestas sí cuentan en los totales.</p>")
 
-    ruta = "".join(f"<li><b>{_e(n)}</b> — {_e(d)}</li>" for n, d in cat.RUTA_ATENCION)
+    ruta = "".join(f"<li><b>{_e(n)}</b> — {_e(d)}</li>" for n, d in _ruta(rol))
     avisos = [cat.AVISO_TAMIZAJE]
     if con_municipio:
         avisos.append(NOTA_COMPARACION)
@@ -644,7 +720,8 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
               + '<div class="pie">' + "".join(f"<p>{_e(t)}</p>" for t in avisos) + "</div>")
     return ("<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\">"
             f"<title>Resumen Estudiantes 360 · {_e(titulo)}</title>"
-            f"<style>{_CSS_PAGINA}</style></head><body>{cuerpo}</body></html>")
+            f"<style>{_CSS_PAGINA}{_css_senales('pagina')}</style></head><body>{cuerpo}"
+            "</body></html>")
 
 
 def a_pdf(html: str) -> bytes | None:

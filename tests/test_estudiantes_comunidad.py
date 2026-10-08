@@ -232,6 +232,9 @@ def test_el_informe_no_etiqueta_resultados_con_lenguaje_clinico(analisis):
     revisados += [m.titulo for m in cat.MENSAJES.values()]
     revisados += [cat.AVISO_TAMIZAJE, cat.AVISO_PRIMARIA, cat.AVISO_NORMAS]
     revisados += [d for _, d in cat.RUTA_ATENCION]
+    # textos del panel de alertas (alertas_catalogo, revisados por el equipo)
+    from src.estudiantes import alertas_catalogo as ac
+    revisados += [ac.NO_ES_DIAGNOSTICO, ac.NOTA_AZAR]
     propio = md
     for texto in revisados:
         propio = propio.replace(texto, " ")

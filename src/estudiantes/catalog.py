@@ -412,12 +412,14 @@ MENSAJES: dict[str, Mensaje] = {
     ),
 }
 
-RUTA_ATENCION = [
-    ("Orientación escolar del colegio", "Primer contacto, siempre."),
-    ("Línea 106", "Atención psicológica gratuita, 24 horas."),
-    ("Secretaría de Salud de Chía", "Ruta de salud mental municipal."),
-    ("Comisaría de Familia", "Si hay riesgo en el hogar."),
-]
+# Alertas de grupo y rutas por rol (spec §5.4). Viven en un módulo propio:
+# tras un despliegue, un módulo nuevo se importa fresco aunque `catalog` siga
+# viejo en memoria, y la aplicación nunca lee `catalog.ALERTAS` directamente.
+from src.estudiantes.alertas_catalogo import ALERTAS, RUTAS  # noqa: E402,F401
+
+# Compatibilidad: la ruta vigente, igual para los tres roles mientras el equipo
+# no apruebe las de Chía. Lo nuevo usa `alertas_catalogo.ruta(rol, tipo)`.
+RUTA_ATENCION = list(RUTAS["colegio"]["estudiante"])
 
 AVISO_TAMIZAJE = ("Estos resultados son un tamizaje de grupo, no un diagnóstico individual. "
                   "Ningún dato corresponde a un estudiante identificable y los grupos con menos "

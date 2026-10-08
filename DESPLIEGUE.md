@@ -188,6 +188,28 @@ publica.
 **Después de fusionar a `main`, haz siempre *Manage app → Reboot app*.** Si no,
 la aplicación puede quedar con módulos viejos en memoria.
 
+## Publicar alertas
+
+Mientras no se publique una corrida nueva, el despliegue sigue con la tarjeta de
+muerte y sin panel de alertas.
+
+`--publicar-ya` **no sube** las filas `alerta` y `alerta_grupo` mientras
+`alertas_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS` no estén en `True`:
+avisa, publica el resto y el panel no aparece en público. `--ensayo` las deja en
+el JSON y avisa. Una corrida subida sin `--publicar-ya` sí las guarda (oculta):
+no se abre a mano antes de la aprobación.
+
+1. El equipo aprueba textos, umbrales y rutas. **Solo entonces** se ponen en
+   `True` `alertas_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS` (un commit
+   aparte, nunca antes de esa aprobación).
+2. Correr la migración `2026-10-07c` (SQL Editor → Run).
+3. `python -m src.estudiantes.publicar --ensayo` y revisar (tiene que salir con
+   código 0 y ya sin el aviso de alertas no aprobadas).
+4. Publicar con `--publicar-ya`.
+5. «Reboot app».
+6. Los mensajes por rol de las alertas se suben a `obs360.mensajes` en un paso
+   aparte, cuando el equipo apruebe los textos.
+
 ## Qué esperar del arranque
 
 La primera carga tarda unos segundos: lee la corrida completa y rearma las

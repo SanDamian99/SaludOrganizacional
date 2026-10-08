@@ -94,13 +94,13 @@ def test_tabla1_sin_datos_devuelve_tabla_vacia_con_columnas():
 
 
 # ══ (b) Paquete ZIP ═════════════════════════════════════════════════════════
-def test_paquete_zip_devuelve_bytes_con_los_ocho_archivos(corrida):
+def test_paquete_zip_devuelve_bytes_con_los_nueve_archivos(corrida):
     analisis, informes = corrida
     blob = vista.paquete_zip(analisis, informes)
     assert isinstance(blob, bytes) and len(blob) > 0
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         nombres = z.namelist()
-        assert len(vista.ARCHIVOS_PAQUETE) == 8
+        assert len(vista.ARCHIVOS_PAQUETE) == 9
         assert sorted(nombres) == sorted(vista.ARCHIVOS_PAQUETE)
         for nombre in nombres:
             assert z.read(nombre).decode("utf-8").strip(), f"{nombre} salió vacío"

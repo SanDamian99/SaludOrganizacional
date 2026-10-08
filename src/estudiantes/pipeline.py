@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import ingest, privacidad, scoring, stats, supresion
+from src.estudiantes import alertas, ingest, privacidad, scoring, stats, supresion
 
 # Fragmentos con los que se reconocen los dos formularios en disco. Se comparan
 # sobre el nombre normalizado porque macOS guarda los acentos descompuestos
@@ -76,6 +76,16 @@ class Analisis:
     # que no tiene fila por estudiante, pueda filtrar igual que la máquina que
     # procesa. Cada uno lleva `datos` vacío a propósito.
     subgrupos: dict = field(default_factory=dict)
+    # Alertas de grupo (spec §5.4, alertas.py). `cortes_alerta`: una fila por
+    # alerta con la forma de `cortes` (con casos, que nunca se publican); la
+    # tienen el nivel y cada subgrupo, y la supresión la trata como una familia
+    # más. `alertas`: la tabla plana por grupo que leen las vistas y que se
+    # publica, sin casos. Sensibilidad e ítems: solo locales, del nivel. Todas
+    # vacías en una corrida anterior a la fase 3.
+    cortes_alerta: pd.DataFrame = field(default_factory=pd.DataFrame)
+    alertas: pd.DataFrame = field(default_factory=pd.DataFrame)
+    alertas_sensibilidad: pd.DataFrame = field(default_factory=pd.DataFrame)
+    alertas_items: pd.DataFrame = field(default_factory=pd.DataFrame)
     # Base publicable (privacidad.Base). Solo existe con datos crudos; no se publica.
     base: object = None
 
@@ -92,6 +102,10 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
              n_boot: int = 300, avisos: list | None = None) -> Analisis:
     d = datos_puntuados[datos_puntuados["nivel"] == nivel].copy() \
         if "nivel" in datos_puntuados.columns else datos_puntuados.copy()
+    # Señal de alerta por estudiante (1 / 0 / NaN). Entra en la base publicable y
+    # en el todo o nada como cualquier otra columna, así que la auditoría de
+    # restas de n la cubre. Nunca se publica fila a fila.
+    d = alertas.marcar(d, nivel)
     claves = [k for k in CLAVES_PRINCIPALES if k in d.columns and d[k].notna().any()]
     orden_grados = (cat.ORDEN_GRADOS_SEC if nivel == cat.NIVEL_SECUNDARIA
                     else cat.ORDEN_GRADOS_PRI)
@@ -128,6 +142,7 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     a.fiabilidad = scoring.fiabilidad(dn, n_boot=n_boot)
     a.bandas = scoring.distribucion_bandas(dn, "self")
     a.cortes = scoring.sobre_cortes(dn)
+    a.cortes_alerta = alertas.cortes_alerta(dn, nivel)
     a.terciles = scoring.terciles(dn)
     if "RCADS_Dep" in claves:
         a.percentiles = scoring.percentiles_por_sexo(
@@ -173,6 +188,11 @@ def analizar(datos_puntuados: pd.DataFrame, nivel: str,
     # por resta. Se aplica aquí, antes de publicar y de mostrar, para que la
     # vista local y la corrida publicada vean lo mismo.
     supresion.aplicar(a)
+    # Después de la supresión: la tabla plana solo lleva lo que quedó publicable
+    # y el estado se calcula con esas cifras.
+    a.alertas = alertas.tabla(a)
+    a.alertas_sensibilidad = alertas.sensibilidad(dn, nivel, a.cortes_alerta)
+    a.alertas_items = alertas.distribucion_items(dn, nivel, a.cortes_alerta)
 
     if nivel == cat.NIVEL_PRIMARIA and cat.AVISO_PRIMARIA not in a.avisos:
         a.avisos.append(cat.AVISO_PRIMARIA)
@@ -217,6 +237,7 @@ def subanalizar(d: pd.DataFrame, nivel: str, claves: list[str], base=None) -> di
                          escalas=list(claves), muestra=dict(n=len(sub)))
             s.bandas = scoring.distribucion_bandas(sub, "self")
             s.cortes = scoring.sobre_cortes(sub)
+            s.cortes_alerta = alertas.cortes_alerta(sub, nivel)
             s.items_pssm = stats.medias_items(sub, "PSSM")
             s.contrastes = _contrastes(sub, claves)
             salida.setdefault(columna, {})[str(grupo)] = s

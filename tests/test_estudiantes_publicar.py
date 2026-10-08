@@ -139,7 +139,9 @@ def test_el_lote_real_solo_tiene_tipos_y_agrupaciones_previstas(lote_real):
                      "modelo", "tercil", "percentil", "icc", "contraste", "item",
                      "muestra", "solapamiento", "ingesta",
                      # resultados por colegio y por grado para el despliegue
-                     "banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo"}
+                     "banda_grupo", "corte_grupo", "contraste_grupo", "item_grupo",
+                       # alertas de grupo (fase 3), sin casos
+                       "alerta", "alerta_grupo"}
     for f in filas:
         assert f["nivel"] in ("secundaria", "primaria")
         assert isinstance(f["detalle"], dict)
@@ -160,7 +162,7 @@ def test_ninguna_fila_viene_de_datos_individuales(lote_real):
         if f["tipo"].endswith("_grupo"):
             por_grupo.setdefault((f["nivel"], f["agrupacion"], f["grupo"]), []).append(f)
     assert por_grupo
-    tope = 6 + 16 + 4 + 18   # bandas + cortes + contrastes + ítems del PSSM
+    tope = 6 + 16 + 4 + 18 + 2   # bandas + cortes + contrastes + ítems del PSSM + alertas
     for clave, propias in por_grupo.items():
         assert len(propias) <= tope, clave
     # y toda fila declara un N de grupo, no de individuo

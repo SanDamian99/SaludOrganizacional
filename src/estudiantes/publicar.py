@@ -6,7 +6,10 @@ Convierte los objetos `Analisis` en filas agregadas y las sube al esquema
 
 QUÉ SUBE
 Solo agregados: una fila por nivel, grupo, tipo e indicador. Ni una respuesta
-individual, ni un identificador, ni un nombre.
+individual, ni un identificador, ni un nombre. Las alertas de grupo (`alerta` y
+`alerta_grupo`, spec §5.4) llevan n, % e IC donde la supresión los deja, y el
+estado solo donde hay %; nunca casos. La sensibilidad y la distribución de los
+ítems de las alertas no se publican: son de la vista local de investigadores.
 
 GUARDAS, EN ESTE ORDEN
   1. `aplanar` construye las filas únicamente desde tablas ya agregadas del
@@ -29,6 +32,11 @@ GUARDAS, EN ESTE ORDEN
   5. La corrida entra oculta (`publicada = false`) y solo se abre con todos sus
      resultados dentro; al abrirla con `--publicar-ya` se despublican las demás
      corridas del módulo (y la política de lectura solo deja ver la última).
+  6. Mientras el equipo no apruebe textos y rutas de las alertas
+     (`alertas_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS`), `--publicar-ya`
+     no sube las filas `alerta` ni `alerta_grupo`: avisa y publica el resto (el
+     panel simplemente no aparece en público). `--ensayo` las deja en el JSON
+     y avisa.
 
 USO
     # ensayo: no toca la red, deja el lote en un JSON para revisarlo
@@ -70,6 +78,26 @@ PATRON_ID = re.compile(r"[ECN][0-9a-f]{8}", re.IGNORECASE)
 # Conteos de casos: nunca se publican (spec §5.4); con el % y el n son redundantes
 # y, en grupos pequeños, delatan. Ver supresion.py.
 CAMPOS_CONTEO_PROHIBIDOS = ("casos", "k_bajo", "k_alto")
+# Filas de las alertas de grupo (spec §5.4): solo salen al público con textos y
+# rutas aprobados por el equipo (alertas_catalogo).
+TIPOS_ALERTA = ("alerta", "alerta_grupo")
+AVISO_ALERTAS_NO_APROBADAS = (
+    "AVISO: las alertas de grupo no están aprobadas (alertas_catalogo.TEXTOS_APROBADOS y "
+    "RUTAS_VALIDADAS en False)")
+
+
+def alertas_aprobadas() -> bool:
+    """¿El equipo aprobó los textos y validó las rutas de las alertas? (spec §8)."""
+    try:
+        from src.estudiantes import alertas_catalogo as ac
+    except Exception:                                      # noqa: BLE001
+        return False
+    return (getattr(ac, "TEXTOS_APROBADOS", False) is True
+            and getattr(ac, "RUTAS_VALIDADAS", False) is True)
+
+
+def es_alerta(fila: dict) -> bool:
+    return str(fila.get("tipo", "")) in TIPOS_ALERTA
 
 
 def _num(v):
@@ -249,6 +277,9 @@ def aplanar(analisis: dict) -> list[dict]:
             for grupo, s in grupos.items():
                 filas.extend(_aplanar_subgrupo(nivel, columna, grupo, s))
 
+        # alertas de grupo (spec §5.4): sin casos; estado solo donde hay %
+        filas.extend(_aplanar_alertas(nivel, a))
+
         # descripción de la muestra, en una sola fila cuyo N es el del nivel
         if a.muestra:
             # La muestra va anidada en un solo campo: sus claves (n, sexo, edad…)
@@ -318,6 +349,37 @@ def _aplanar_subgrupo(nivel: str, columna: str, grupo: str, s) -> list[dict]:
             filas.append(_fila(nivel, "item_grupo", f["item"], f["n"], f["M"],
                                escala=cat.PSSM.nombre, DE=f["DE"], orientado=True,
                                **comun))
+    return filas
+
+
+def _aplanar_alertas(nivel: str, a) -> list[dict]:
+    """Filas `alerta` (nivel) y `alerta_grupo` desde `Analisis.alertas`. Nunca casos.
+
+    La tabla ya viene suprimida (supresion.aplicar) y con el estado calculado
+    solo con cifras publicadas (alertas.estado).
+    """
+    from src.estudiantes import alertas as al
+    from src.estudiantes import alertas_catalogo as ac
+    tabla = getattr(a, "alertas", None)
+    if not isinstance(tabla, pd.DataFrame) or tabla.empty:
+        return []
+    subgrupos = getattr(a, "subgrupos", None) or {}
+    filas: list[dict] = []
+    for f in tabla.to_dict("records"):
+        if int(f["n"]) < cat.MIN_GROUP_N or f["alerta"] not in ac.ALERTAS:
+            continue
+        nombre = ac.ALERTAS[f["alerta"]].nombre
+        comun = dict(escala=nombre, ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
+                     indicador=nombre, estado=str(f["estado"]))
+        if f["agrupacion"] == al.TOTAL:
+            filas.append(_fila(nivel, "alerta", f["alerta"], f["n"], f["pct"], **comun))
+            continue
+        s = (subgrupos.get(f["agrupacion"]) or {}).get(str(f["grupo"]))
+        if s is None or s.n < cat.MIN_GROUP_N:
+            continue
+        filas.append(_fila(nivel, "alerta_grupo", f["alerta"], f["n"], f["pct"],
+                           agrupacion=f["agrupacion"], grupo=str(f["grupo"]),
+                           n_grupo=s.n, **comun))
     return filas
 
 
@@ -405,6 +467,10 @@ def verificar(filas: list[dict]) -> None:
             if campo in (f.get("detalle") or {}):
                 problemas.append(f"fila {i} ({f['tipo']}/{f['clave']}): publica el conteo "
                                  f"«{campo}»; solo se publican proporciones y n")
+        if (str(f.get("tipo", "")).startswith("alerta") and f.get("valor") is None
+                and (f.get("detalle") or {}).get("estado", "sin_estado") != "sin_estado"):
+            problemas.append(f"fila {i} ({f['tipo']}/{f['clave']}/{f['grupo']}): una alerta "
+                             "sin porcentaje publicado no puede llevar estado")
         for campo in ("grupo", "clave"):
             valor = str(f.get(campo) or "")
             if PATRON_ID.fullmatch(valor):
@@ -425,7 +491,7 @@ def verificar_restas(analisis: dict) -> list[str]:
     1 a MIN_GROUP_N − 1; todas las columnas de los datos enmascarados, no solo
     las publicadas) y `supresion.auditar` (cifras que no delatan: cada
     proporción publicada tiene de MIN_CASOS a n − MIN_CASOS casos, y ninguna
-    suma o resta de proporciones publicadas deja un conjunto que no cumpla).
+    suma o resta de proporciones publicadas deja un conjunto que no cumpla; también las alertas de grupo, como una familia más).
     """
     problemas: list[str] = []
     for nivel, a in (analisis or {}).items():
@@ -499,6 +565,19 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
             f"menos de {supresion.MIN_CASOS} casos o menos de {supresion.MIN_CASOS} no "
             "casos:\n  - " + "\n  - ".join(restas[:20])
             + ("\n  … y más" if len(restas) > 20 else ""))
+    alertas_omitidas = 0
+    if publicar_ya and not alertas_aprobadas():
+        alertas_omitidas = sum(1 for f in filas if es_alerta(f))
+        filas = [f for f in filas if not es_alerta(f)]
+        if alertas_omitidas:
+            print(f"{AVISO_ALERTAS_NO_APROBADAS}: con --publicar-ya no se suben sus "
+                  f"{alertas_omitidas} filas. El resto se publica y el panel no aparece en "
+                  "público hasta que el equipo apruebe y se vuelva a publicar.",
+                  file=sys.stderr)
+    elif not alertas_aprobadas() and any(es_alerta(f) for f in filas):
+        print(f"{AVISO_ALERTAS_NO_APROBADAS}: la corrida queda oculta con sus filas de "
+              "alertas. No la abra a mano (UPDATE … publicada = true) hasta la aprobación: "
+              "publíquela de nuevo con --publicar-ya, que las omite.", file=sys.stderr)
     cli = cliente or _cliente()
     tabla = lambda t: cli.postgrest.schema(ESQUEMA).table(t)  # noqa: E731
 
@@ -550,7 +629,8 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
 
     return dict(corrida_id=corrida_id, version=corrida["version_analisis"],
                 filas=len(filas), publicada=publicada,
-                otras_corridas_despublicadas=otras_despublicadas)
+                otras_corridas_despublicadas=otras_despublicadas,
+                alertas_omitidas=alertas_omitidas)
 
 
 def mensajes_para_subir() -> list[dict]:
@@ -602,6 +682,10 @@ def main(argv=None) -> int:
           f"(el umbral es {cat.MIN_GROUP_N})")
 
     if args.ensayo:
+        n_alertas = sum(1 for f in filas if es_alerta(f))
+        if n_alertas and not alertas_aprobadas():
+            print(f"{AVISO_ALERTAS_NO_APROBADAS}: el JSON trae sus {n_alertas} filas para "
+                  "revisarlas, pero --publicar-ya no las subiría hasta la aprobación.")
         restas = verificar_restas(analisis)
         if restas:
             print("AVISO: la auditoría (restas y cifras que delatan) encontró problemas:\n  - "

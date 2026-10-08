@@ -82,6 +82,14 @@ o, si se quiere revisar antes, aprobar **esa misma corrida nueva** en el SQL
 Editor (`UPDATE obs360.corridas SET publicada = true WHERE id = <id de la
 corrida recién creada>;`).
 
+**Alertas de grupo.** Mientras el equipo no apruebe textos y rutas
+(`alertas_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS`, que solo se ponen en
+`True` después de esa aprobación), `--publicar-ya` no sube las filas `alerta`
+ni `alerta_grupo`: avisa y publica el resto, y el panel no aparece en público.
+`--ensayo` las deja en el JSON con un aviso. Una corrida subida sin
+`--publicar-ya` sí las guarda: **no aprobarla a mano** con el `UPDATE` de arriba
+antes de esa aprobación; volver a publicar con `--publicar-ya`.
+
 > **Atención: nunca aprobar una corrida vieja.** Las corridas anteriores a la
 > fase 1 (la 2 incluida) se generaron **sin** la base publicable por
 > colegio×grado ni el enmascaramiento todo-o-nada por columna: sus cifras
@@ -218,6 +226,23 @@ Archivo: `supabase/migraciones/2026-10-07-modulo-y-ultima-corrida.sql`.
 - **Compatibilidad:** el código funciona con o sin la migración, porque el filtro
   `modulo = 'estudiantes'` usa una columna que ya existe. Sin ella, simplemente no
   hay aislamiento entre módulos en el lado de la base.
+
+## Migración: alertas sin conteo de casos (7 oct 2026, c)
+
+Archivo: `supabase/migraciones/2026-10-07c-alertas-sin-casos.sql`.
+
+- **Qué hace:** ninguna fila nueva puede guardar un conteo de casos (`casos`,
+  `k_bajo`, `k_alto`) en `detalle`, y el estado de una alerta solo existe donde
+  hay porcentaje.
+- **`NOT VALID`:** las corridas viejas todavía guardan `casos` en las filas
+  «corte»; no se validan ni se tocan. La restricción rige para toda fila nueva.
+  Por eso `ALTER TABLE … VALIDATE CONSTRAINT` fallará mientras queden filas
+  viejas con `casos`: primero hay que borrar esas corridas viejas (sus filas de
+  `resultados` y la corrida). Nunca hacer `UPDATE` sobre filas viejas de
+  `resultados` para que pasen.
+- **Opcional pero recomendada:** publicar funciona sin ella, porque
+  `publicar.verificar` ya rechaza esos campos en Python; la migración es la
+  última barrera en la base.
 
 ## Lo que falta
 

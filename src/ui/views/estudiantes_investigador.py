@@ -49,8 +49,11 @@ COLUMNAS_TABLA1 = ["nivel", "clave", "escala", "n", "M", "DE", "Mdn", "min", "ma
                    "fuente_corte", "validada"]
 
 ARCHIVOS_PAQUETE = ["tabla1_descriptivos.csv", "bandas_y_cortes.csv", "correlaciones_bh.csv",
-                    "comparaciones_grupo.csv", "modelos.csv", "flujo_exclusiones.md",
-                    "metodologia.md", "version_analisis.txt"]
+                    "comparaciones_grupo.csv", "modelos.csv", "alertas.csv",
+                    "flujo_exclusiones.md", "metodologia.md", "version_analisis.txt"]
+
+PESTANAS = ["Muestra y exclusiones", "Tabla 1 · descriptivos", "Cortes y bandas",
+            "Correlaciones", "Por grupo", "Alertas", "Modelos", "Calidad de datos", "Exportar"]
 
 NOTA_ALPHA = ("α por debajo de 0,70 en naranja. En el SDQ autoinforme las subescalas de "
               "conducta y de problemas con pares suelen quedar bajas, como en casi toda la "
@@ -290,6 +293,70 @@ def icc_tabla(analisis) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
+def _tabla_de(analisis, campo: str, columnas: list[str]) -> pd.DataFrame:
+    partes = []
+    niveles = _como_dict(analisis)
+    for nivel in _niveles(niveles):
+        t = getattr(niveles[nivel], campo, None)
+        if isinstance(t, pd.DataFrame) and len(t):
+            partes.append(_con_nivel(t, nivel))
+    return (pd.concat(partes, ignore_index=True)[["nivel"] + columnas] if partes
+            else pd.DataFrame(columns=["nivel"] + columnas))
+
+
+COLUMNAS_ALERTAS_CSV = ["nivel", "alerta", "alerta_nombre", "agrupacion", "grupo", "n", "pct",
+                        "ic_inf", "ic_sup", "estado"]
+
+
+def alertas_tabla(analisis) -> pd.DataFrame:
+    """Alertas por grupo para `alertas.csv`: % con IC y estado, nunca casos (spec §5.4).
+
+    La columna se llama `alerta_nombre` y no `nombre`: ningún exportable lleva
+    una columna «nombre» (tests/test_estudiantes_investigador.py).
+    """
+    from src.estudiantes import alertas as al
+    from src.estudiantes import alertas_catalogo as ac
+    t = _tabla_de(analisis, "alertas", al.COLUMNAS_TABLA)
+    if t.empty:
+        return pd.DataFrame(columns=COLUMNAS_ALERTAS_CSV)
+    t["alerta_nombre"] = [ac.ALERTAS[k].nombre if k in ac.ALERTAS else k for k in t["alerta"]]
+    t["estado"] = [ac.ESTADOS.get(e, e) for e in t["estado"]]
+    return t[COLUMNAS_ALERTAS_CSV]
+
+
+def sensibilidad_tabla(analisis) -> pd.DataFrame:
+    """Solo local: no se publica ni va al ZIP."""
+    from src.estudiantes import alertas as al
+    return _tabla_de(analisis, "alertas_sensibilidad", al.COLUMNAS_SENSIBILIDAD)
+
+
+def items_alertas_tabla(analisis) -> pd.DataFrame:
+    """Solo local: no se publica ni va al ZIP."""
+    from src.estudiantes import alertas as al
+    return _tabla_de(analisis, "alertas_items", al.COLUMNAS_ITEMS)
+
+
+def _metodologia_alertas() -> list[str]:
+    from src.estudiantes import alertas_catalogo as ac
+    lineas = ["## Alertas de grupo («Señales para actuar a tiempo»)", ""]
+    for alerta in ac.ALERTAS.values():
+        lineas.append(f"- **{alerta.nombre}** ({' y '.join(alerta.niveles)}): {alerta.regla}"
+                      + (f" Límite: {alerta.limite}" if alerta.limite else ""))
+    lineas += ["", f"- {ac.REGLA_CIFRAS}",
+               "- La desesperanza implica RCADS 18 ≥ «Con frecuencia» (la tarjeta de muerte): "
+               "se suprime como un corte anidado en ese ítem y nunca se publica donde ese "
+               "corte está suprimido.",
+               "- «Prioridad»: el límite inferior del IC de Wilson del grupo queda por encima "
+               "del límite superior del resto del nivel (el nivel sin el grupo), calculado solo "
+               "con el % y el n publicados del grupo y del nivel. " + ac.NOTA_AZAR,
+               "- Nunca se publica ni se exporta el número de casos de una alerta.",
+               "- Sensibilidad (2, 3 y 4 ítems para el malestar; regla estricta frente a amplia "
+               "para la desesperanza) y distribución de los ítems: solo en la vista local de "
+               "investigadores, del nivel, y enteras o nada. No van a Supabase ni al ZIP.",
+               "- Textos y umbrales provisionales hasta la aprobación del equipo.", ""]
+    return lineas
+
+
 def flujo_exclusiones_md(informes: list | None) -> str:
     """Flujo de la muestra en Markdown, listo para el diagrama del artículo."""
     lineas = ["# Flujo de la muestra · Estudiantes 360", ""]
@@ -424,6 +491,7 @@ def metodologia_md(analisis, informes: list | None = None) -> str:
                ""]
     lineas += [flujo_exclusiones_md(informes).replace("# Flujo", "## Flujo", 1), ""]
 
+    lineas += _metodologia_alertas()
     lineas += ["## 6. Análisis estadístico", "",
                "- Proporciones con intervalo de confianza del 95 % de Wilson.",
                "- Correlaciones de Spearman con IC por transformación de Fisher y corrección "
@@ -503,6 +571,7 @@ def archivos_paquete(analisis, informes: list | None = None) -> dict[str, str]:
         "correlaciones_bh.csv": _csv(correlaciones_bh(analisis)),
         "comparaciones_grupo.csv": _csv(comparaciones_grupo(analisis)),
         "modelos.csv": _csv(modelos_tabla(analisis)),
+        "alertas.csv": _csv(alertas_tabla(analisis)),
         "flujo_exclusiones.md": flujo_exclusiones_md(informes),
         "metodologia.md": metodologia_md(analisis, informes),
         "version_analisis.txt": version_analisis_txt(analisis, informes),
@@ -510,7 +579,7 @@ def archivos_paquete(analisis, informes: list | None = None) -> dict[str, str]:
 
 
 def paquete_zip(analisis, informes: list | None = None) -> bytes:
-    """ZIP de la corrida con los ocho exportables, generado en memoria."""
+    """ZIP de la corrida con los nueve exportables, generado en memoria."""
     buffer = io.BytesIO()
     contenidos = archivos_paquete(analisis, informes)
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
@@ -877,6 +946,49 @@ def _tab_por_grupo(a) -> None:
                        "enmascarar no es excluir.")
 
 
+def _tab_alertas(a) -> None:
+    from src.estudiantes import alertas_catalogo as ac
+    st.subheader("Señales para actuar a tiempo · definiciones")
+    for alerta in ac.ALERTAS.values():
+        if getattr(a, "nivel", None) not in alerta.niveles:
+            continue
+        st.markdown(f"**{alerta.nombre}.** {alerta.regla}")
+        if alerta.limite:
+            st.caption(alerta.limite)
+    st.caption(ac.REGLA_CIFRAS)
+    if not ac.TEXTOS_APROBADOS:
+        st.warning("Textos y umbrales provisionales, pendientes de aprobación del equipo "
+                   "(spec §8).")
+    st.divider()
+    st.subheader("Prevalencia por grupo")
+    t = alertas_tabla(a)
+    if t.empty:
+        st.info("Esta corrida no trae alertas (es anterior a la fase 3).")
+    else:
+        st.dataframe(t.drop(columns=["nivel", "alerta"]), hide_index=True, width="stretch")
+        st.caption("Sin número de casos, nunca. " + ac.NOTA_AZAR)
+    st.divider()
+    st.subheader("Distribución de cada ítem · nivel (solo local)")
+    it = items_alertas_tabla(a)
+    if it.empty:
+        st.info("Solo con los datos locales: la corrida publicada no la trae.")
+    else:
+        st.dataframe(it.drop(columns=["nivel"]), hide_index=True, width="stretch")
+        st.caption("Un ítem sin cifras tiene alguna respuesta con menos de 3 estudiantes o con "
+                   "todos menos 2. Los ítems de la regla de una alerta publicada en el nivel "
+                   "no llevan cifras (columna «nota»): combinados con la alerta podrían "
+                   "identificar a alguien.")
+    st.divider()
+    st.subheader("Sensibilidad · umbrales y reglas (solo local)")
+    s = sensibilidad_tabla(a)
+    if s.empty:
+        st.info("Solo con los datos locales: la corrida publicada no la trae.")
+    else:
+        st.dataframe(s.drop(columns=["nivel"]), hide_index=True, width="stretch")
+        st.caption("Mismas filas para todas las variantes. Como están anidadas, se muestran "
+                   "todas o ninguna.")
+
+
 def _tab_modelos(a) -> None:
     st.subheader("Modelos · β estandarizados, EE robustos por colegio")
     modelos = getattr(a, "modelos", []) or []
@@ -998,6 +1110,7 @@ def _tab_exportar(analisis: dict, informes: list | None) -> None:
         "correlaciones_bh.csv": "Spearman con IC, p, q de Benjamini-Hochberg y N.",
         "comparaciones_grupo.csv": "Sexo, grado, colegio y edad con tamaño de efecto.",
         "modelos.csv": "Coeficientes estandarizados, EE robustos, p, R² y conglomerados.",
+        "alertas.csv": "Alertas por grupo: % con IC y estado donde se pueden mostrar; sin casos.",
         "flujo_exclusiones.md": "Diagrama de la muestra, paso por paso.",
         "metodologia.md": "Instrumentos, puntuación, cortes con fuente, exclusiones y límites.",
         "version_analisis.txt": "Fecha, N por nivel y hash de la estructura analizada.",
@@ -1055,8 +1168,7 @@ def render_investigador(analisis: dict, informes: list | None = None) -> None:
     if nivel == cat.NIVEL_PRIMARIA:
         st.warning(cat.AVISO_PRIMARIA)
 
-    tabs = st.tabs(["Muestra y exclusiones", "Tabla 1 · descriptivos", "Cortes y bandas",
-                    "Correlaciones", "Por grupo", "Modelos", "Calidad de datos", "Exportar"])
+    tabs = st.tabs(PESTANAS)
     with tabs[0]:
         _tab_muestra(a, informe, nivel)
     with tabs[1]:
@@ -1068,10 +1180,12 @@ def render_investigador(analisis: dict, informes: list | None = None) -> None:
     with tabs[4]:
         _tab_por_grupo(a)
     with tabs[5]:
-        _tab_modelos(a)
+        _tab_alertas(a)
     with tabs[6]:
-        _tab_calidad(a, informe)
+        _tab_modelos(a)
     with tabs[7]:
+        _tab_calidad(a, informe)
+    with tabs[8]:
         _tab_exportar(analisis, informes)
 
     st.caption(cat.AVISO_TAMIZAJE)

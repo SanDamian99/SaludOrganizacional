@@ -100,6 +100,12 @@ def _localizar(cols_norm: list[str], claves: tuple[str, ...]) -> int | None:
     return None
 
 
+def tiene_asterisco(columna) -> bool:
+    """¿El encabezado crudo marca el ítem con «*», al principio o al final? (spec §5.4)"""
+    texto = str(columna).strip()
+    return texto.startswith("*") or texto.endswith("*")
+
+
 def _bloque(cols_norm: list[str], prefijo: str) -> list[int]:
     return [i for i, c in enumerate(cols_norm) if c.startswith(prefijo)]
 
@@ -174,7 +180,7 @@ def cargar(ruta_o_df, nivel: str | None = None) -> tuple[pd.DataFrame, InformeIn
     # Conteos ANTES de limpiar: son los que cuentan los investigadores en la hoja
     inf.crudo_colegio_grado = {clave_celda(c, g): int(n) for (c, g), n in
                                d.groupby(["Colegio", "Grado"]).size().items()}
-    inf.items_marcados = [norm_txt(c) for c in raw.columns if str(c).strip().startswith("*")]
+    inf.items_marcados = [norm_txt(c) for c in raw.columns if tiene_asterisco(c)]
 
     # ID por hash; el nombre nunca sale de esta función
     if idx_ident["nombre"] is not None:

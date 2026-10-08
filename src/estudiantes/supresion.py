@@ -43,6 +43,17 @@ se publica. Tras la supresión primaria:
 Cada arreglo oculta al menos un agregado, así que el proceso termina; en el
 peor caso no se publica nada del indicador, que también cumple la regla.
 
+ALERTAS DE GRUPO (fase 3, alertas.py)
+Cada objeto (nivel y subgrupos) trae `cortes_alerta`, con la forma de `cortes`.
+Una alerta es una familia más con la misma jerarquía: binaria (n − k, k) o, si
+está anidada en un corte (desesperanza ⊆ RCADS18 ≥ «Con frecuencia»), repartida
+en (n − k_F, k_F − k, k) sobre la base de ese corte. La anidada se suprime
+después de su corte y parte de lo que este ocultó (`suprimir(previos=…)`): así
+nunca se publica donde el corte no se publica, y lo deducible de las dos juntas
+queda dentro de lo que audita `fugas` sobre el reparto de tres partes. Si las
+bases no coinciden en algún grupo, la alerta no se publica en ninguno (falla
+cerrado).
+
 CONTRASTES
 Los contrastes por tercil comparan dos proporciones (tercil bajo y alto del
 protector), cada una con su n. Se publican solo si las dos cumplen la regla.
@@ -300,14 +311,17 @@ def _n(jer, g, partes, largo) -> int:
     return int(_suma(jer.grupos.get(g, ()), partes, largo).sum())
 
 
-def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS) -> set:
+def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS,
+             previos=frozenset()) -> set:
     """Agregados que no se publican para un indicador (primaria + complementaria).
 
     `partes` = {átomo: (conteo de cada parte)}. Incluye los agregados sin
-    respuestas válidas (n = 0) y los que nunca se publican (R).
+    respuestas válidas (n = 0) y los que nunca se publican (R). `previos` son
+    agregados que ya vienen ocultos (p. ej. los de la familia en la que una
+    alerta está anidada): se parte de ellos y nunca se destapan.
     """
     largo = _largo(partes)
-    sup = set(jer.nunca)
+    sup = set(jer.nunca) | set(previos)
     for g, atomos in jer.grupos.items():
         if not partes_publicables(_suma(atomos, partes, largo), minimo):
             sup.add(g)
@@ -493,10 +507,14 @@ def partes_por_familia(cortes, bandas) -> dict[str, tuple]:
     return familias
 
 
-def _anular(obj, clave: str) -> int:
+TABLAS_FAMILIA = (("cortes", COLUMNAS_CORTE_NULAS), ("bandas", COLUMNAS_BANDA_NULAS))
+TABLAS_ALERTA = (("cortes_alerta", COLUMNAS_CORTE_NULAS),)
+
+
+def _anular(obj, clave: str, tablas=TABLAS_FAMILIA) -> int:
     """Deja en blanco las proporciones de `clave` en las tablas de `obj`. Filas tocadas."""
     tocadas = 0
-    for nombre, columnas in (("cortes", COLUMNAS_CORTE_NULAS), ("bandas", COLUMNAS_BANDA_NULAS)):
+    for nombre, columnas in tablas:
         t = getattr(obj, nombre, None)
         if _vacia(t):
             continue
@@ -537,6 +555,92 @@ def _objetos(a) -> dict:
     return objs
 
 
+def indices_atomos(base) -> dict:
+    """{átomo: índices de filas} de la base publicable (privacidad.Base)."""
+    from src.estudiantes import privacidad
+    con_celdas = {k.split(SEP, 1)[0] for k in base.celdas}
+    indices = {atomo_celda(k): idx for k, idx in base.celdas.items()}
+    indices.update({atomo_colegio(c): idx for c, idx in base.colegios.items()
+                    if c not in con_celdas})
+    if base.incluye_resto:
+        indices[RESTO] = base.nivel.difference(privacidad.union(base.colegios.values()))
+    return indices
+
+
+# ── alertas de grupo (fase 3): una familia binaria más, o anidada en un corte ──
+def _fila_alerta(t, clave: str):
+    if _vacia(t):
+        return None
+    filas = t[t["clave"].astype(str) == clave]
+    return None if filas.empty else filas.iloc[0]
+
+
+def _anidada_en(tablas, clave: str) -> str:
+    """Familia de cortes en la que está anidada la alerta («» si es binaria)."""
+    for t in tablas:
+        f = _fila_alerta(t, clave)
+        if f is not None and "anidada_en" in f.index and str(f["anidada_en"] or ""):
+            return str(f["anidada_en"])
+    return ""
+
+
+def partes_alerta(t_alerta, fam: dict, clave: str, familia: str) -> tuple | None:
+    """Partes de una alerta en un grupo, desde su tabla `cortes_alerta` (con conteos).
+
+    Binaria: (n − k, k). Anidada en la familia `familia` de los cortes (la
+    alerta implica el corte; p. ej. desesperanza ⊆ RCADS18 ≥ 2): la base del
+    corte se reparte en (n − k_F, k_F − k, k). None si no se puede repartir
+    así (bases distintas o alerta fuera del corte): la alerta no se publica.
+    """
+    f = _fila_alerta(t_alerta, clave)
+    n_a = 0 if f is None or pd.isna(f["n"]) else int(f["n"])
+    if f is not None and n_a and pd.isna(f["casos"]):
+        return None                       # ya suprimida: sin conteos
+    k_a = 0 if not n_a else int(f["casos"])
+    if not familia:
+        return (n_a - k_a, k_a)
+    fp = fam.get(familia, (0, 0))
+    if len(fp) != 2:
+        return None
+    n_f, k_f = int(sum(fp)), int(fp[1])
+    if n_f != n_a or k_a > k_f:
+        return None
+    return (n_f - k_f, k_f - k_a, k_a)
+
+
+def _publicado_alerta(obj, clave: str) -> bool:
+    f = _fila_alerta(getattr(obj, "cortes_alerta", None), clave)
+    return f is not None and not pd.isna(f["pct"])
+
+
+def _aplicar_alertas(jer, objs: dict, atomos: dict, fam: dict, sup_familias: dict,
+                     minimo: int, resumen: dict) -> None:
+    """Supresión de las alertas de grupo con la misma jerarquía que los cortes."""
+    tablas = {g: getattr(o, "cortes_alerta", None) for g, o in objs.items()}
+    claves = sorted({str(c) for t in tablas.values() if not _vacia(t) for c in t["clave"]})
+    for clave in claves:
+        familia = _anidada_en(tablas.values(), clave)
+        por_grupo = {g: partes_alerta(t, fam[g], clave, familia) for g, t in tablas.items()}
+        sup: set
+        if any(p is None for p in por_grupo.values()):
+            sup = set(objs)                       # falla cerrado: nada de esta alerta
+        else:
+            largo = 3 if familia else 2
+            cero = np.zeros(largo, dtype=np.int64)
+            partes = {a_: np.asarray(por_grupo[g]) for a_, g in atomos.items()}
+            resto = np.asarray(por_grupo[NIVEL]) - sum(partes.values(), cero)
+            if (resto < 0).any():
+                raise ValueError(f"{clave}: los subgrupos suman más que el nivel")
+            partes[RESTO] = resto
+            previos = sup_familias.get(familia, set()) if familia else set()
+            sup = suprimir(jer, {k: tuple(v) for k, v in partes.items()}, minimo,
+                           previos=previos)
+        for g in sup:
+            if g in objs and _anular(objs[g], clave, TABLAS_ALERTA):
+                clave_res = (g[0], f"alerta:{clave}")
+                resumen[clave_res] = resumen.get(clave_res, 0) + 1
+
+
 def aplicar(a, minimo: int = MIN_CASOS) -> dict:
     """Suprime, en el sitio, las proporciones de `a` y de sus subgrupos que delatan.
 
@@ -558,6 +662,7 @@ def aplicar(a, minimo: int = MIN_CASOS) -> dict:
     atomos.update({atomo_colegio(c): COLEGIO(c) for c in (sub.get("Colegio") or {})
                    if str(c) not in con_celdas})
     resumen: dict = {}
+    sup_familias: dict[str, set] = {}
     for clave in sorted({c for f in fam.values() for c in f}):
         largo = max(len(f[clave]) for f in fam.values() if clave in f)
         cero = np.zeros(largo, dtype=np.int64)
@@ -566,12 +671,16 @@ def aplicar(a, minimo: int = MIN_CASOS) -> dict:
         if (resto < 0).any():
             raise ValueError(f"{clave}: los subgrupos suman más que el nivel")
         partes[RESTO] = resto
-        for g in suprimir(jer, {k: tuple(v) for k, v in partes.items()}, minimo):
+        sup_familias[clave] = suprimir(jer, {k: tuple(v) for k, v in partes.items()}, minimo)
+        for g in sup_familias[clave]:
             if g in objs:
                 tocadas = _anular(objs[g], clave)
                 if tocadas:
                     clave_res = (g[0], clave)
                     resumen[clave_res] = resumen.get(clave_res, 0) + 1
+    # Alertas de grupo (fase 3): después de los cortes, porque una alerta anidada
+    # en un corte nunca se publica donde ese corte está suprimido.
+    _aplicar_alertas(jer, objs, atomos, fam, sup_familias, minimo, resumen)
     for g, o in objs.items():
         n = suprimir_contrastes(getattr(o, "contrastes", None), minimo)
         if n:
@@ -616,12 +725,7 @@ def auditar(a, minimo: int = MIN_CASOS) -> list[str]:
         return []
     jer = jerarquia(list(base.celdas), list(base.colegios), list(base.grados),
                     con_resto=base.incluye_resto)
-    con_celdas = {k.split(SEP, 1)[0] for k in base.celdas}
-    indices = {atomo_celda(k): idx for k, idx in base.celdas.items()}
-    indices.update({atomo_colegio(c): idx for c, idx in base.colegios.items()
-                    if c not in con_celdas})
-    if base.incluye_resto:
-        indices[RESTO] = base.nivel.difference(privacidad.union(base.colegios.values()))
+    indices = indices_atomos(base)
     fam = {}
     for at, idx in indices.items():
         sub = d.loc[d.index.intersection(idx)]
@@ -645,6 +749,7 @@ def auditar(a, minimo: int = MIN_CASOS) -> list[str]:
         for s in fugas(jer, partes, pub & set(jer.grupos), minimo):
             problemas.append(f"{clave}: una resta entre cifras publicadas deja un conjunto "
                              f"de {len(s)} grupo(s) con menos de {minimo} casos o no casos")
+    problemas += _auditar_alertas(a, jer, indices, fam, objs, minimo)
     problemas += auditar_solapamiento(getattr(a, "solapamiento", None) or {},
                                       d.loc[d.index.intersection(base.nivel)], minimo)
     for g, o in objs.items():
@@ -678,4 +783,46 @@ def auditar(a, minimo: int = MIN_CASOS) -> list[str]:
                 problemas.append(f"contraste {c['resultado']}–{c['protector']}: {g[0]} "
                                  f"{g[1] or ''} compara un tercil con menos de {minimo} "
                                  "casos o no casos")
+    return problemas
+
+
+def _auditar_alertas(a, jer, indices: dict, fam: dict, objs: dict,
+                     minimo: int = MIN_CASOS) -> list[str]:
+    """Las alertas publicadas, recalculadas desde `a.datos` (alertas.cortes_alerta)."""
+    from src.estudiantes import alertas
+    d = a.datos
+    tablas_atomo = {}
+    for at, idx in indices.items():
+        sub = d.loc[d.index.intersection(idx)]
+        tablas_atomo[at] = alertas.cortes_alerta(sub, a.nivel) if len(sub) else None
+    claves = sorted({str(c) for o in objs.values()
+                     if not _vacia(getattr(o, "cortes_alerta", None))
+                     for c in o.cortes_alerta["clave"]})
+    problemas: list[str] = []
+    for clave in claves:
+        familia = alertas.ANIDADA.get(clave, "")
+        pub = {g for g, o in objs.items() if _publicado_alerta(o, clave)}
+        if not pub:
+            continue
+        por_atomo = {at: partes_alerta(t, fam.get(at, {}), clave, familia)
+                     for at, t in tablas_atomo.items()}
+        if any(p is None for p in por_atomo.values()):
+            problemas.append(f"alerta {clave}: se publica aunque su base no coincide con la "
+                             f"del corte {familia} en algún grupo")
+            continue
+        largo = 3 if familia else 2
+        for g in sorted(pub, key=str):
+            if g not in jer.grupos:
+                problemas.append(f"alerta {clave}: {g[0]} {g[1]} publicado fuera de la base")
+                continue
+            if familia and not _publicado(objs[g], familia):
+                problemas.append(f"alerta {clave}: {g[0]} {g[1] or ''} publica la alerta con "
+                                 f"el corte {familia} suprimido")
+            if not partes_publicables(_suma(jer.grupos[g], por_atomo, largo), minimo):
+                problemas.append(f"alerta {clave}: {g[0]} {g[1] or ''} publica una proporción "
+                                 f"con menos de {minimo} casos o no casos")
+        for s_ in fugas(jer, por_atomo, pub & set(jer.grupos), minimo):
+            problemas.append(f"alerta {clave}: una resta entre cifras publicadas deja un "
+                             f"conjunto de {len(s_)} grupo(s) con menos de {minimo} casos o "
+                             "no casos")
     return problemas
