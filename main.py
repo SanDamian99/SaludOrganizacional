@@ -124,6 +124,12 @@ elif page == nav.PAGINA_CUIDADORES:
     from src.ui.cuidadores import render_cuidadores
     render_cuidadores()
 
+elif page == nav.PAGINA_TRIANGULACION:
+    # Fase 5: solo investigadores y solo con los archivos en local. Nunca se
+    # importa en el despliegue público, que se corta arriba.
+    from src.ui.triangulacion import render_triangulacion
+    render_triangulacion()
+
 elif page == nav.PAGINA_CHAT:
     from src.ui.chat import render_chat
     render_chat()

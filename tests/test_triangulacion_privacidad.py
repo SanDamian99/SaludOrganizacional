@@ -101,6 +101,4 @@ def test_nada_de_triangulacion_sube_a_supabase():
     prohibidos = re.compile(r"^\s*(from|import)\s+.*(supabase|publicar|lectura|almacen)",
                             re.MULTILINE)
     for f in archivos:
-        if not f.exists():          # las de la UI llegan en la Task 8
-            continue
         assert not prohibidos.search(f.read_text(encoding="utf-8")), f.name
