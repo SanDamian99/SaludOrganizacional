@@ -782,10 +782,24 @@ def publicado():
         return None
 
 
+def tiene_senales(ac) -> bool:
+    """True si la corrida trae las filas del total de las señales del adulto.
+
+    Sin ellas el panel no se dibuja; en público eso no se permite.
+    """
+    t = getattr(getattr(ac, "cuidador", None), "alertas", None)
+    return (isinstance(t, pd.DataFrame) and not t.empty and "agrupacion" in t.columns
+            and bool((t["agrupacion"] == al.TOTAL).any()))
+
+
 def render_publico() -> None:
-    """Página de Cuidadores en el despliegue público: solo la corrida publicada."""
+    """Página de Cuidadores en el despliegue público: solo la corrida publicada.
+
+    Nunca sin el panel de señales: una corrida sin sus filas (subida con
+    `--publicar-ya` antes de aprobar textos y ruta) cuenta como no publicada.
+    """
     ac = publicado()
-    if ac is None:
+    if ac is None or not tiene_senales(ac):
         st.title("👪 Cuidadores 360")
         st.info(cc.NO_PUBLICADO, icon="⏳")
         return

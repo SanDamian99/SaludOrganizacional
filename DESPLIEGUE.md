@@ -270,11 +270,21 @@ se toca. Informes para imprimir: `python -m scripts.generar_informes_cuidadores`
 (audita antes de escribir).
 
 En el despliegue público la página **solo aparece** cuando se cumplen las dos
-llaves: el equipo aprueba textos y ruta (`comunidad_catalogo.TEXTOS_APROBADOS`
-y `RUTAS_VALIDADAS` en True) y, después de publicar la corrida con
-`--publicar-ya`, pone `navegacion.CUIDADORES_PUBLICO = True` en un commit
-propio. Luego, «Reboot app». Si aun así no hubiera corrida, la página lo dice
-y no falla. En público solo se carga la vista de comunidad
+llaves, y en este orden:
+
+1. El equipo aprueba los textos y la ruta de atención.
+2. Solo después de esa aprobación, un commit propio pone en `True`
+   `comunidad_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS` (las dos).
+3. Con las dos banderas ya en `True`, se publica la corrida con
+   `--publicar-ya`. Una corrida publicada antes no trae las filas de las
+   señales del adulto: hay que volver a publicarla.
+4. Solo entonces, otro commit propio pone `navegacion.CUIDADORES_PUBLICO = True`.
+   Luego, «Reboot app».
+
+La página pública nunca se muestra sin el panel de señales: si la corrida
+publicada no trae sus filas (por ejemplo, se publicó antes del paso 3), dice
+«Cuidadores aún no está publicado», igual que sin corrida, y no falla. En
+público solo se carga la vista de comunidad
 (`cuidadores_comunidad.render_publico`); nunca la carga del formulario, el
 pipeline ni la vista de investigadores.
 
