@@ -165,6 +165,12 @@ def _tarjeta_html(t: vc.Tarjeta, cuerpo: str) -> str:
 def _cuerpo_tarjeta(a, t: vc.Tarjeta, filtros: dict, etiqueta_grupo: str,
                     con_municipio: bool) -> tuple[str, str]:
     """(HTML con cifra y barras, comparación con el municipio o '')."""
+    if getattr(t, "suprimida", False):
+        # Cifra suprimida por pocos casos: texto fijo, sin barra ni comparación
+        # (un «más alto que el municipio» también acotaría el número de casos).
+        return (f'<p class="cifra">{_e(t.cifra)}</p>'
+                f'<p class="etiqueta">{_e(t.etiqueta)}</p>'
+                f'<p class="margen">{_e(cat.CIFRAS_PEQUENAS)}</p>'), ""
     if t.clave in vc.INDICADORES:
         p = vc.prevalencia(a, t.clave, filtros)
         m = vc.prevalencia(a, t.clave, {}) if con_municipio else {}
@@ -413,7 +419,7 @@ def informe_colegio_html(analisis: dict, colegio: str, fecha: date | None = None
         a = analisis[nivel]
         filtros = {"nivel": nivel, "colegio": colegio, "grado": vc.TODOS}
         b = vc.bandas_sdq_total(a, filtros)
-        total += b["n"] if b else 0
+        total += vc.n_bandas(a, filtros)
         fichas = vc.tarjetas(a, "colegio", filtros)
         tarjetas_html, comparaciones = [], []
         for t in fichas:

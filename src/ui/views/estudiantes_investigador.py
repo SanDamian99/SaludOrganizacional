@@ -140,7 +140,8 @@ def _cortes_de_clave(a, clave: str) -> tuple[str, str, str]:
     if isinstance(cortes, pd.DataFrame) and not cortes.empty and "clave" in cortes.columns:
         filas = cortes[cortes["clave"] == clave]
         if not filas.empty:
-            pct = " · ".join(f"{v:.1f} %" for v in filas["pct"])
+            pct = " · ".join(_SIN_DATO if pd.isna(v) else f"{v:.1f} %"
+                             for v in filas["pct"])
             indicadores = " · ".join(str(v) for v in filas["indicador"])
             fuentes = " · ".join(dict.fromkeys(str(v) for v in filas["fuente"]))
             return pct, indicadores, fuentes
@@ -692,18 +693,36 @@ def _tab_tabla1(a, nivel: str) -> None:
                    + ", ".join(f"{r.escala} ({r.alpha:.2f})" for r in bajas.itertuples()))
 
 
+def figura_bandas(bandas: pd.DataFrame):
+    """Barras apiladas de las bandas del SDQ por escala.
+
+    Sin número de casos en el texto emergente (cifras que no delatan,
+    supresion.py); una escala con sus bandas suprimidas queda sin barra.
+    """
+    filas = []
+    for r in bandas.itertuples():
+        etiquetas = getattr(r, "etiquetas", cat.BANDAS_LABELS)
+        for i in range(4):
+            filas.append(dict(Escala=r.escala, Banda=etiquetas[i], idx=i,
+                              pct=getattr(r, f"pct_b{i}")))
+    largo = pd.DataFrame(filas)
+    largo["pct"] = pd.to_numeric(largo["pct"], errors="coerce")
+    fig = px.bar(largo, x="pct", y="Escala", color="Banda", orientation="h",
+                 text="pct", category_orders={"Escala": list(bandas["escala"])},
+                 color_discrete_sequence=["#1A7F4B", "#8AB833", "#FBBC04", "#C0392B"],
+                 labels={"pct": "% de la muestra"})
+    fig.update_traces(texttemplate="%{text:.0f}%",
+                      hovertemplate="%{y}<br>%{fullData.name}: %{x:.1f} %<extra></extra>")
+    fig.update_layout(barmode="stack", height=60 * len(bandas) + 140,
+                      xaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=30, b=10),
+                      legend=dict(orientation="h", y=-0.2))
+    return fig
+
+
 def _tab_cortes(a) -> None:
     st.subheader("Bandas del SDQ autoinforme")
     bandas = getattr(a, "bandas", pd.DataFrame())
     if isinstance(bandas, pd.DataFrame) and not bandas.empty:
-        filas = []
-        for r in bandas.itertuples():
-            etiquetas = getattr(r, "etiquetas", cat.BANDAS_LABELS)
-            for i in range(4):
-                filas.append(dict(Escala=r.escala, Banda=etiquetas[i],
-                                  idx=i, pct=getattr(r, f"pct_b{i}"),
-                                  n=getattr(r, f"n_b{i}")))
-        largo = pd.DataFrame(filas)
         tabla = bandas[["escala", "n"] + [f"pct_b{i}" for i in range(4)]
                        + ["pct_alto_o_muy_alto"]].rename(columns={
                            "escala": "Escala", "n": "N",
@@ -711,17 +730,7 @@ def _tab_cortes(a) -> None:
                            "pct_b2": "Alto", "pct_b3": "Muy alto",
                            "pct_alto_o_muy_alto": "Alto + muy alto"})
         st.dataframe(tabla, hide_index=True, width="stretch")
-        fig = px.bar(largo, x="pct", y="Escala", color="Banda", orientation="h",
-                     text="pct", custom_data=["n"],
-                     category_orders={"Escala": list(bandas["escala"])},
-                     color_discrete_sequence=["#1A7F4B", "#8AB833", "#FBBC04", "#C0392B"],
-                     labels={"pct": "% de la muestra"})
-        fig.update_traces(texttemplate="%{text:.0f}%",
-                          hovertemplate="%{y}<br>%{fullData.name}: %{x:.1f} %"
-                                        " (%{customdata[0]} casos)<extra></extra>")
-        fig.update_layout(barmode="stack", height=60 * len(bandas) + 140,
-                          xaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=30, b=10),
-                          legend=dict(orientation="h", y=-0.2))
+        fig = figura_bandas(bandas)
         st.plotly_chart(fig, width="stretch")
         st.caption("En la banda prosocial las etiquetas se leen al revés: la puntuación alta "
                    "es lo deseable, así que «bajo» y «muy bajo» son las bandas de alerta.")
@@ -735,8 +744,10 @@ def _tab_cortes(a) -> None:
         vista = cortes.copy()
         vista["IC 95 %"] = [_texto_ic(lo, hi, 1, " %")
                             for lo, hi in zip(vista["ic_inf"], vista["ic_sup"])]
-        vista = vista[["indicador", "n", "casos", "pct", "IC 95 %", "fuente"]].rename(
-            columns={"indicador": "Indicador", "n": "Base N", "casos": "Casos",
+        # Sin columna de casos: el número de casos no se muestra (supresion.py);
+        # un % vacío es una cifra suprimida por pocos casos.
+        vista = vista[["indicador", "n", "pct", "IC 95 %", "fuente"]].rename(
+            columns={"indicador": "Indicador", "n": "Base N",
                      "pct": "%", "fuente": "Fuente del corte"})
         st.dataframe(vista, hide_index=True, width="stretch")
     else:

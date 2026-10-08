@@ -19,7 +19,7 @@ import os
 import sys
 
 from src.core.rutas import carpeta_datos
-from src.estudiantes import lectura, pipeline
+from src.estudiantes import lectura, pipeline, publicar
 from src.estudiantes.ingest import nombre_colegio
 from src.ui.views import estudiantes_informe as inf
 
@@ -38,11 +38,19 @@ def cargar() -> dict:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     salida = argv[0] if argv else os.path.join(carpeta_datos(), "informes_estudiantes")
-    os.makedirs(salida, exist_ok=True)
     analisis = cargar()
     if not analisis:
         print("No hay resultados de estudiantes.")
         return 1
+    # La misma auditoría que antes de publicar (restas de N y cifras que no
+    # delatan): si algo falla, no se escribe ningún informe.
+    problemas = publicar.verificar_restas(analisis)
+    if problemas:
+        print(f"✗ No se escribió ningún informe: la auditoría encontró "
+              f"{len(problemas)} problema(s) de privacidad:\n  - "
+              + "\n  - ".join(problemas[:20]), file=sys.stderr)
+        return 2
+    os.makedirs(salida, exist_ok=True)
     for codigo in inf.colegios_con_informe(analisis):
         ruta = os.path.join(salida, f"informe_estudiantes_{codigo}.html")
         with open(ruta, "w", encoding="utf-8") as f:

@@ -19,7 +19,10 @@ GUARDAS, EN ESTE ORDEN
      programación y publicar «lo que se pueda» lo esconde.
   3. `verificar_restas` audita las restas entre nivel, colegios, grados y
      celdas colegio×grado (privacidad.auditar): si alguna diferencia deja un
-     grupo de 1 a MIN_GROUP_N − 1, no se publica nada.
+     grupo de 1 a MIN_GROUP_N − 1, no se publica nada. También audita las
+     cifras que no delatan (supresion.auditar): toda proporción publicada
+     tiene de MIN_CASOS a n − MIN_CASOS casos, también tras restar. El número
+     de casos no se publica nunca (`verificar` lo rechaza).
   4. El esquema tiene un CHECK de n >= 10 y de identificadores, y RLS sin
      política de escritura para el rol anónimo: la base rechazaría el error
      aunque las guardas anteriores fallaran.
@@ -51,7 +54,7 @@ import numpy as np
 import pandas as pd
 
 from src.estudiantes import catalog as cat
-from src.estudiantes import pipeline, privacidad
+from src.estudiantes import pipeline, privacidad, supresion
 
 # Columnas que no pueden aparecer en nada que se publique
 COLUMNAS_PROHIBIDAS = {"id", "nombre", "nombre_completo", "ts", "sede",
@@ -64,6 +67,9 @@ MODULO = "estudiantes"
 # CHECK `resultados_sin_id_estudiante` de la base (^[ECN][0-9a-f]{8}$, sin
 # distinguir mayúsculas).
 PATRON_ID = re.compile(r"[ECN][0-9a-f]{8}", re.IGNORECASE)
+# Conteos de casos: nunca se publican (spec §5.4); con el % y el n son redundantes
+# y, en grupos pequeños, delatan. Ver supresion.py.
+CAMPOS_CONTEO_PROHIBIDOS = ("casos", "k_bajo", "k_alto")
 
 
 def _num(v):
@@ -139,7 +145,7 @@ def aplanar(analisis: dict) -> list[dict]:
                 filas.append(_fila(
                     nivel, "corte", f["clave"], f["n"], f["pct"],
                     ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
-                    indicador=f["indicador"], casos=f["casos"], fuente=f["fuente"]))
+                    indicador=f["indicador"], fuente=f["fuente"]))
 
         # terciles y percentiles
         if a.terciles is not None and not a.terciles.empty:
@@ -213,8 +219,10 @@ def aplanar(analisis: dict) -> list[dict]:
                 filas.append(_fila(nivel, "icc", clave, n_nivel, valor,
                                    nota="Proporción de varianza entre colegios"))
 
-        # contrastes por tercil
+        # contrastes por tercil (los suprimidos por pocos casos no se suben)
         for c in (a.contrastes or []):
+            if c.get("suprimido"):
+                continue
             filas.append(_fila(nivel, "contraste", c["resultado"],
                                c["n_bajo"] + c["n_alto"], c["pct_tercil_bajo"],
                                escala=c["resultado_etiqueta"],
@@ -289,9 +297,10 @@ def _aplanar_subgrupo(nivel: str, columna: str, grupo: str, s) -> list[dict]:
                 continue
             filas.append(_fila(nivel, "corte_grupo", f["clave"], f["n"], f["pct"],
                                ic_inf=f["ic_inf"], ic_sup=f["ic_sup"],
-                               indicador=f["indicador"], casos=f["casos"],
-                               fuente=f["fuente"], **comun))
+                               indicador=f["indicador"], fuente=f["fuente"], **comun))
     for c in (s.contrastes or []):
+        if c.get("suprimido"):
+            continue
         if c["n_bajo"] < cat.MIN_GROUP_N or c["n_alto"] < cat.MIN_GROUP_N:
             continue
         filas.append(_fila(nivel, "contraste_grupo", c["resultado"],
@@ -392,6 +401,10 @@ def verificar(filas: list[dict]) -> None:
         for prohibida in COLUMNAS_PROHIBIDAS:
             if f'"{prohibida}"' in texto:
                 problemas.append(f"fila {i}: contiene la columna prohibida «{prohibida}»")
+        for campo in CAMPOS_CONTEO_PROHIBIDOS:
+            if campo in (f.get("detalle") or {}):
+                problemas.append(f"fila {i} ({f['tipo']}/{f['clave']}): publica el conteo "
+                                 f"«{campo}»; solo se publican proporciones y n")
         for campo in ("grupo", "clave"):
             valor = str(f.get(campo) or "")
             if PATRON_ID.fullmatch(valor):
@@ -406,10 +419,13 @@ def verificar(filas: list[dict]) -> None:
 
 
 def verificar_restas(analisis: dict) -> list[str]:
-    """Problemas de resta en cualquier nivel con datos (ver privacidad.auditar).
+    """Problemas de resta en cualquier nivel con datos.
 
-    Audita todas las columnas de análisis de los datos ya enmascarados, no solo
-    las publicadas: es más estricto y por eso más seguro.
+    Dos auditorías: `privacidad.auditar` (ninguna resta de N deja un grupo de
+    1 a MIN_GROUP_N − 1; todas las columnas de los datos enmascarados, no solo
+    las publicadas) y `supresion.auditar` (cifras que no delatan: cada
+    proporción publicada tiene de MIN_CASOS a n − MIN_CASOS casos, y ninguna
+    suma o resta de proporciones publicadas deja un conjunto que no cumpla).
     """
     problemas: list[str] = []
     for nivel, a in (analisis or {}).items():
@@ -417,6 +433,7 @@ def verificar_restas(analisis: dict) -> list[str]:
             continue
         problemas += [f"{nivel} · {p}" for p in
                       privacidad.auditar(a.datos, a.base, privacidad.columnas_de_analisis(a.datos))]
+        problemas += [f"{nivel} · {p}" for p in supresion.auditar(a)]
     return problemas
 
 
@@ -476,8 +493,11 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
     restas = verificar_restas(analisis)
     if restas:
         raise PublicacionInsegura(
-            "No se publicó nada: alguna resta entre cifras publicadas dejaría un grupo "
-            f"de menos de {cat.MIN_GROUP_N}:\n  - " + "\n  - ".join(restas[:20])
+            "No se publicó nada: la auditoría encontró cifras que delatan. Alguna resta "
+            f"entre cifras publicadas dejaría un grupo de menos de {cat.MIN_GROUP_N} "
+            f"respuestas, o alguna proporción publicada (directa o por resta) tendría "
+            f"menos de {supresion.MIN_CASOS} casos o menos de {supresion.MIN_CASOS} no "
+            "casos:\n  - " + "\n  - ".join(restas[:20])
             + ("\n  … y más" if len(restas) > 20 else ""))
     cli = cliente or _cliente()
     tabla = lambda t: cli.postgrest.schema(ESQUEMA).table(t)  # noqa: E731
@@ -550,7 +570,8 @@ def mensajes_para_subir() -> list[dict]:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--ensayo", action="store_true",
-                   help="no toca la red; deja el lote en un JSON")
+                   help="no toca la red; deja el lote en un JSON (se escribe aunque la "
+                        "auditoría falle, para revisarlo; en ese caso sale con código 2)")
     p.add_argument("--salida", default="lote_estudiantes.json",
                    help="ruta del JSON en modo ensayo")
     p.add_argument("--notas", default="", help="nota para la corrida")
@@ -583,7 +604,7 @@ def main(argv=None) -> int:
     if args.ensayo:
         restas = verificar_restas(analisis)
         if restas:
-            print("AVISO: la auditoría de restas encontró problemas:\n  - "
+            print("AVISO: la auditoría (restas y cifras que delatan) encontró problemas:\n  - "
                   + "\n  - ".join(restas))
         with open(args.salida, "w", encoding="utf-8") as fh:
             json.dump(dict(version=version_analisis(analisis),
