@@ -30,12 +30,17 @@ PAGINA_REPORTES = "Reportes"
 MENU = (PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES, PAGINA_TRIANGULACION,
         PAGINA_CHAT, PAGINA_CARGA, PAGINA_TENDENCIAS, PAGINA_REPORTES)
 
-# Las que ya tienen vista. Cuidadores entra en la fase 4 y Triangulación en la 5.
-DISPONIBLES = frozenset({PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CHAT,
-                         PAGINA_CARGA, PAGINA_TENDENCIAS, PAGINA_REPORTES})
+# Las que ya tienen vista. Cuidadores entra en la fase 4a (solo investigadores)
+# y Triangulación en la 5.
+DISPONIBLES = frozenset({PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES,
+                         PAGINA_CHAT, PAGINA_CARGA, PAGINA_TENDENCIAS, PAGINA_REPORTES})
 
 # Lo único que puede ver el público. Triangulación es solo para investigadores.
 PUBLICAS = (PAGINA_ESTUDIANTES, PAGINA_CUIDADORES)
+
+# Cuidadores es pública solo cuando el equipo aprueba sus textos y rutas y hay
+# una corrida de cuidadores publicada (spec §5.5). Lo cambia la fase 4b.
+CUIDADORES_PUBLICO = False
 
 _COMPLETO = "completo"
 _INVESTIGADOR = "investigador"
@@ -48,7 +53,11 @@ def _es_publico(modo: str) -> bool:
 
 def menu(modo: str) -> list[str]:
     """Páginas del menú en este modo, en orden."""
-    visibles = PUBLICAS if _es_publico(modo) else MENU
+    if _es_publico(modo):
+        visibles = [p for p in PUBLICAS
+                    if p != PAGINA_CUIDADORES or CUIDADORES_PUBLICO]
+    else:
+        visibles = MENU
     return [p for p in MENU if p in visibles and p in DISPONIBLES]
 
 
