@@ -1,0 +1,147 @@
+"""Cuidadores 360 · pipeline con dos marcos, base publicable y supresión (spec §4, §5.5)."""
+import copy
+
+import pandas as pd
+import pytest
+
+from src.cuidadores import catalog as cat
+from src.cuidadores import ingest, pipeline
+from src.estudiantes import catalog as cat_est
+from src.estudiantes import pipeline as pipe_est
+from src.estudiantes import supresion
+from tests import cuidadores_sinteticos as cs
+
+K = cs.CLAVE_PRUEBA.encode()
+
+
+@pytest.fixture(scope="module")
+def carga():
+    return ingest.cargar(cs.formulario(), k=K)
+
+
+@pytest.fixture(scope="module")
+def ac(carga):
+    return pipeline.analizar(carga, n_boot=20)
+
+
+def test_dos_marcos_con_la_clase_de_estudiantes(ac):
+    assert isinstance(ac.cuidador, pipe_est.Analisis) and isinstance(ac.nino, pipe_est.Analisis)
+    assert ac.cuidador.nivel == cat.MARCO_CUIDADOR and ac.nino.nivel == cat.MARCO_NINO
+    assert set(ac.marcos) == {cat.MARCO_CUIDADOR, cat.MARCO_NINO}
+    assert ac.cuidador.n == ac.informe.cuidadores_distintos
+    assert ac.nino.n == ac.informe.ninos_unicos
+    assert ac.olas == ["2025", "2026"]
+
+
+def test_grupos_publicados_segun_la_configuracion_sintetica(ac):
+    for a in ac.marcos.values():
+        sub = a.subgrupos
+        assert set(sub["Colegio×Grado"]) == {"LauV|Quinto", "LauV|Sexto", "LauV|Octavo",
+                                             "JJC|Décimo", "JJC|Cuarto"}
+        # SJMEB entero (sin celdas), La Balsa entera (sin grado del estudio)
+        assert set(sub["Colegio"]) == {"LauV", "JJC", "SJMEB", "LaBalsa"}
+        assert "CdP" not in sub["Colegio"] and "OTRO" not in sub["Colegio"]
+        assert not a.base.incluye_resto          # CdP 4 + OTRO 3 no llegan a 10
+
+
+def test_todo_grupo_publicado_tiene_10_o_mas_cuidadores_distintos(ac):
+    for a in ac.marcos.values():
+        d = a.datos
+        for agrupacion, grupos in a.subgrupos.items():
+            for grupo, s in grupos.items():
+                assert s.muestra["n_cuidadores"] >= cat.MIN_GROUP_N, (agrupacion, grupo)
+        for _, idx in [*a.base.celdas.items(), *a.base.colegios.items(), *a.base.grados.items()]:
+            assert d.loc[idx, "ID_cuidador"].nunique() >= cat.MIN_GROUP_N
+
+
+def test_ninguna_proporcion_publicada_delata(ac):
+    for a in ac.marcos.values():
+        assert a.supresion_aplicada
+        objetos = [a] + [s for g in a.subgrupos.values() for s in g.values()]
+        for o in objetos:
+            t = o.cortes
+            if t is None or t.empty:
+                continue
+            for _, f in t[t["pct"].notna()].iterrows():
+                assert supresion.proporcion_publicable(f["casos"], f["n"]), (o.n, f["clave"])
+
+
+def test_cortes_y_bandas_por_marco(ac):
+    claves_c = set(ac.cuidador.cortes["clave"])
+    assert {"EPDS_Total", "EPDS_Autolesion", "APQ_Fisico", "APQ_Grito"} <= claves_c
+    assert set(ac.nino.cortes["clave"]) == set(cat_est.BANDS_PARENT)
+    assert set(ac.nino.bandas["clave"]) == set(cat_est.BANDS_PARENT)
+    assert ac.cuidador.bandas.empty
+
+
+def test_puntuaciones_disponibles(ac):
+    assert set(ac.cuidador.descriptivos["clave"]) == set(cat.CLAVES_CUIDADOR)
+    assert set(ac.nino.descriptivos["clave"]) == set(cat.CLAVES_NINO)
+
+
+def test_los_datos_enmascarados_no_llevan_nombres_ni_telefono(ac):
+    for a in ac.marcos.values():
+        texto = a.datos.astype(str).to_csv()
+        for prohibido in cs.textos_prohibidos():
+            assert prohibido not in texto
+
+
+def test_filtro_de_ola(carga):
+    a25 = pipeline.analizar(carga, ola="2025", n_boot=10)
+    a26 = pipeline.analizar(carga, ola="2026", n_boot=10)
+    assert a25.ola == "2025" and set(a25.cuidador.datos["Ola"]) == {"2025"}
+    assert set(a26.nino.datos["Ola"]) == {"2026"}
+    assert a25.cuidador.n + a26.cuidador.n == ac_n_sin_dedup(carga)
+
+
+def ac_n_sin_dedup(carga) -> int:
+    r = carga.respuestas
+    return int(r.groupby("Ola")["ID_cuidador"].nunique().sum())
+
+
+def test_items_locales_sin_conteos(ac):
+    assert len(ac.items_apq) == 25 and "casos" not in ac.items_apq.columns
+    assert len(ac.items_estres) == 39 and "casos" not in ac.items_estres.columns
+    notas = ac.items_estres.set_index("item")["nota"]
+    assert notas[22] == "elección forzada partida" and notas[36] == "redactado en positivo"
+
+
+def test_localizar_formulario(tmp_path):
+    assert pipeline.localizar_formulario(str(tmp_path)) is None
+    ruta = cs.escribir(tmp_path / "Cuidando al Cuidador - Parentalidad (respuestas).xlsx")
+    (tmp_path / "otro.xlsx").write_bytes(b"")
+    assert pipeline.localizar_formulario(str(tmp_path)) == ruta
+    assert pipeline.localizar_formulario(str(tmp_path / "no-existe")) is None
+
+
+def test_cargar_y_analizar_desde_disco(tmp_path, monkeypatch):
+    monkeypatch.setenv("OBS360_CLAVE_HMAC", cs.CLAVE_PRUEBA)
+    ruta = cs.escribir(tmp_path / "Cuidando al Cuidador (respuestas).xlsx")
+    ac = pipeline.cargar_y_analizar(ruta, n_boot=10)
+    assert ac.cuidador.n == ac.informe.cuidadores_distintos
+
+
+def test_sin_archivo_hay_un_error_claro(monkeypatch, tmp_path):
+    monkeypatch.setenv("OBS360_DATOS_DIR", str(tmp_path))
+    with pytest.raises(FileNotFoundError, match="Cuidando al Cuidador"):
+        pipeline.cargar_y_analizar()
+
+
+def test_estudiantes_no_cambia_al_correr_cuidadores(carga):
+    """Regresión: cuidadores lee el catálogo de estudiantes pero nunca lo modifica."""
+    antes = copy.deepcopy((cat_est.BANDS_PARENT, cat_est.BANDS_SELF, cat_est.COMPUESTAS,
+                           cat_est.MIN_GROUP_N, cat_est.ORDEN_GRADOS_PRI,
+                           cat_est.ORDEN_GRADOS_SEC, [e.key for e in cat_est.ESCALAS]))
+    pipeline.analizar(carga, n_boot=5)
+    despues = (cat_est.BANDS_PARENT, cat_est.BANDS_SELF, cat_est.COMPUESTAS,
+               cat_est.MIN_GROUP_N, cat_est.ORDEN_GRADOS_PRI, cat_est.ORDEN_GRADOS_SEC,
+               [e.key for e in cat_est.ESCALAS])
+    assert antes == despues
+
+
+def test_items_publicables_quita_el_conteo_y_los_pct_que_delatan():
+    t = pd.DataFrame({"item": [1, 2, 3], "n": [20, 20, 20], "casos": [10, 2, 18],
+                      "pct": [50.0, 10.0, 90.0]})
+    p = pipeline._items_publicables(t)
+    assert "casos" not in p.columns
+    assert p["pct"].tolist()[0] == 50.0 and p["pct"].isna().tolist()[1:] == [True, True]
