@@ -44,6 +44,17 @@ def test_senales_adulto_solo_epds(ac):
     assert "Total" in set(t["agrupacion"])
 
 
+def test_autolesion_solo_en_el_total(ac):
+    assert "EPDS_Autolesion" in set(ac.cuidador.subgrupos["Colegio"]["LauV"].cortes["clave"])
+    t = vi.senales_adulto(ac)
+    assert set(t.loc[t["clave"] == "EPDS_Autolesion", "agrupacion"]) == {"Total"}
+    assert "EPDS_Autolesion" not in set(vi.cortes_por_grupo(ac)["clave"])
+    z = zipfile.ZipFile(io.BytesIO(vi.paquete_zip(ac)))
+    por_grupo = z.read("cortes_por_grupo.csv").decode("utf-8")
+    assert "EPDS_Autolesion" not in por_grupo
+    assert "EPDS_Autolesion" in z.read("cortes_y_bandas.csv").decode("utf-8")
+
+
 def test_conteos_pequenos_se_enmascaran():
     t = vi.tabla_conteos({"LauV": 35, "CdP": 4}, "Colegio")
     assert t.set_index("Colegio")["Cuidadores"].to_dict() == {"LauV": "35", "CdP": "<10"}

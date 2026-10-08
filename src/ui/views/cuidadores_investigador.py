@@ -44,6 +44,9 @@ PASOS_EXCLUSION = [
 ]
 
 _SIN_DATO = "—"
+# Indicadores que solo se muestran y exportan en el total del marco (spec §5.5:
+# la autolesión, solo a nivel municipio), nunca por colegio, grado ni celda.
+SOLO_EN_EL_TOTAL = ("EPDS_Autolesion",)
 SOLO_TODAS = ("Con una ola elegida no se exporta nada: el paquete solo se descarga con «Todas» "
               "las olas. La vista de una ola muestra solo el total de cada marco y oculta toda "
               "cifra que, restada de «Todas», dejaría ver a menos de 10 cuidadores o a menos "
@@ -137,6 +140,8 @@ def cortes_por_grupo(ac) -> pd.DataFrame:
         for agrupacion, grupos in (getattr(a, "subgrupos", None) or {}).items():
             for grupo, s in grupos.items():
                 t = _limpia(getattr(s, "cortes", None))
+                if not t.empty and "clave" in t.columns:
+                    t = t[~t["clave"].isin(SOLO_EN_EL_TOTAL)]
                 if t.empty:
                     continue
                 t.insert(0, "grupo", grupo)
@@ -165,7 +170,7 @@ def comparaciones_grupo(ac) -> pd.DataFrame:
 
 
 def senales_adulto(ac) -> pd.DataFrame:
-    """Ánimo (EPDS) y autolesión (ítem 10) en el total y en cada grupo con cifra."""
+    """Ánimo (EPDS) en el total y en cada grupo con cifra; autolesión (ítem 10), solo total."""
     t = cortes_por_grupo(ac)
     nivel = _con_marco(getattr(ac.cuidador, "cortes", None), cat.MARCO_CUIDADOR)
     if not nivel.empty:
@@ -395,8 +400,8 @@ def _tab_senales(ac) -> None:
     st.info(cat.AVISO_EPDS)
     _df(senales_adulto(ac))
     st.caption("Definiciones provisionales (spec §5.5): ánimo = EPDS ≥ 13; autolesión = "
-               "ítem 10 distinto de «No, nunca». En la vista de comunidad (4b) la autolesión "
-               "solo se mostrará a nivel municipio.")
+               "ítem 10 distinto de «No, nunca». La autolesión solo se muestra en el total, "
+               "aquí y en la vista de comunidad (4b), nunca por colegio, grado ni celda.")
 
 
 def _tab_items(ac) -> None:
