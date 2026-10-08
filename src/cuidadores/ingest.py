@@ -335,3 +335,44 @@ def cargar(fuente, k: bytes | None = None) -> Carga:
                                       sorted(inf.etiquetas_no_mapeadas.items()))
                           + ". Quedan como faltantes.")
     return Carga(respuestas=respuestas.reset_index(drop=True), ninos=ninos, informe=inf)
+
+
+# ── deduplicación ───────────────────────────────────────────────────────────
+def deduplicar(carga: Carga, ola: str | None = None
+               ) -> tuple[pd.DataFrame, pd.DataFrame, InformeCuidadores]:
+    """(cuidadores, niños, informe) sin repetidos; `ola` filtra antes de deduplicar."""
+    import copy
+    inf = copy.deepcopy(carga.informe)
+    resp, ninos = carga.respuestas, carga.ninos
+    if ola:
+        resp = resp[resp[OLA_COLUMNA] == ola]
+        ninos = ninos[ninos[OLA_COLUMNA] == ola]
+
+    # Cuidadores: la respuesta más reciente (el último envío si empatan).
+    orden = resp.sort_values(["ts", "_fila"], na_position="first")
+    cuid = orden.drop_duplicates("ID_cuidador", keep="last")
+    inf.cuidadores_distintos = len(cuid)
+    inf.respuestas_repetidas_cuidador = len(resp) - len(cuid)
+    inf.cuidadores_en_dos_olas = int(
+        (resp.groupby("ID_cuidador")[OLA_COLUMNA].nunique() > 1).sum())
+
+    # Niños: ola más reciente → mamá, papá, otro → primer envío → hijo 1 antes que 2.
+    n = ninos.assign(_prio=ninos["Quien"].map(cat.PRIORIDAD_QUIEN).fillna(9),
+                     _ola_orden=pd.to_numeric(ninos[OLA_COLUMNA], errors="coerce").fillna(-1))
+    n = n.sort_values(["_ola_orden", "_prio", "ts", "_fila", "Orden_hijo"],
+                      ascending=[False, True, True, True, True], na_position="last")
+    grupos = n.groupby("ID_nino")
+    inf.mismo_nino_misma_respuesta = int(
+        (grupos["_fila"].count() - grupos["_fila"].nunique()).sum())
+    inf.mismo_nino_otro_cuidador = int((grupos["ID_cuidador"].nunique() > 1).sum())
+    inf.mismo_nino_entre_olas = int((grupos[OLA_COLUMNA].nunique() > 1).sum())
+    ninos_u = n.drop_duplicates("ID_nino", keep="first").drop(columns=["_prio", "_ola_orden"])
+    inf.ninos_unicos = len(ninos_u)
+
+    inf.grados = ninos_u["Grado_detalle"].map(
+        lambda g: g if g in cat.GRADOS_ESTUDIO or g == cat.SIN_DATO else cat.FUERA_DE_RANGO
+    ).value_counts().to_dict()
+    inf.colegios_cuidador = cuid["Colegio"].value_counts().to_dict()
+    inf.colegios_nino = ninos_u["Colegio"].value_counts().to_dict()
+    return (cuid.drop(columns=["_fila"]).reset_index(drop=True),
+            ninos_u.drop(columns=["_fila"]).reset_index(drop=True), inf)
