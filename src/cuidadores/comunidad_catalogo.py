@@ -209,6 +209,21 @@ CIFRAS_PEQUENAS = ("En este grupo las cifras son muy pequeñas para mostrarse si
 NOTA_TABLA = ("Porcentaje del colegio con señales y su margen de error. El número de "
               "cuidadores con señales no se publica nunca.")
 
+# Estados del panel: los de estudiantes (`alertas_catalogo`), con la
+# referencia adaptada a cuidadores, donde no hay niveles. Provisionales hasta
+# la aprobación del equipo, como el resto de este catálogo.
+NO_ES_DIAGNOSTICO = "No es un diagnóstico: indica dónde mirar primero."
+NOTA_AZAR = ("Con muchas comparaciones, alguna «Prioridad» puede deberse al azar; sirve para "
+             "orientar, no para concluir.")
+QUE_ES_PRIORIDAD = ("«Prioridad»: en este grupo las señales son más frecuentes que en el resto "
+                    "del municipio, aun contando el margen de error.")
+QUE_ES_PRESENTE = ("«Para tener presente»: las señales aparecen, como en casi todos los grupos, "
+                   "sin diferenciarse del resto del municipio.")
+QUE_ES_SIN_ESTADO = ("«Sin estado»: con cifras tan pequeñas no se muestra ni el porcentaje ni la "
+                     "comparación, para no identificar a nadie. La ruta sigue aplicando.")
+QUE_ES_REFERENCIA = ("«Para tener presente», sin comparación: es el total del municipio, o un "
+                     "grupo que es casi todo el municipio y no deja un resto con qué compararlo.")
+
 # ── Ruta, avisos y textos de la página ──────────────────────────────────────
 TITULO_RUTA = "Si un cuidador necesita ayuda"
 

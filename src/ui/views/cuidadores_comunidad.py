@@ -433,6 +433,18 @@ def senales(ac, rol: str, filtros: dict | None = None) -> list[va.Senal]:
     return salida
 
 
+def explicaciones(lista) -> list[str]:
+    """Qué quiere decir cada estado de `lista` (y nada más), con los textos de cuidadores."""
+    textos = {al.PRIORIDAD: cc.QUE_ES_PRIORIDAD, al.PRESENTE: cc.QUE_ES_PRESENTE,
+              al.REFERENCIA: cc.QUE_ES_REFERENCIA, al.SIN_ESTADO: cc.QUE_ES_SIN_ESTADO}
+    vistos: list[str] = []
+    for s in lista:
+        texto = textos[va.estado_valido(s.estado)]
+        if texto not in vistos:
+            vistos.append(texto)
+    return vistos
+
+
 def _e(texto) -> str:
     return escape(str(texto), quote=True)
 
@@ -472,7 +484,7 @@ def panel_html(ac, rol: str, filtros: dict | None = None, compacto: bool = False
                        f'<p>{_e(s.frase)}{nota}</p>'
                        + (f"<p>{listas.strip()}</p>" if listas else "") + margen + hacer
                        + "</div>")
-    notas = [ac_est.NO_ES_DIAGNOSTICO, ac_est.NOTA_AZAR]
+    notas = [cc.NO_ES_DIAGNOSTICO, cc.NOTA_AZAR]
     if rol == "colegio":
         notas.insert(0, cc.ESTADO_GENERAL_COLEGIO)
     return (f'<section class="senales"><h2>{_e(cc.TITULO_PANEL)}</h2>' + "".join(bloques)
@@ -507,7 +519,7 @@ def tabla_secretaria_html(ac) -> str:
     return (f'<section class="bloque senales"><h2>{_e(cc.TITULO_PANEL)} · por colegio</h2>'
             f'<div class="desliza"><table class="senales-tabla"><thead><tr><th></th>'
             f'<th>{_e(nombre)}</th></tr></thead><tbody>{cuerpo}</tbody><tfoot>{total}</tfoot>'
-            f'</table></div><p class="nota">{_e(cc.NOTA_TABLA)} {_e(ac_est.NOTA_AZAR)}</p>'
+            f'</table></div><p class="nota">{_e(cc.NOTA_TABLA)} {_e(cc.NOTA_AZAR)}</p>'
             "</section>")
 
 
@@ -526,7 +538,7 @@ def render_panel(ac, rol: str, filtros: dict | None = None) -> bool:
         st.markdown(f"#### {cc.TITULO_PANEL}")
         for s in lista:
             st.markdown(f"{va._chip_html(s)} **{_e(s.nombre)}**", unsafe_allow_html=True)
-            st.markdown(f"{s.frase} {ac_est.NO_ES_DIAGNOSTICO}")
+            st.markdown(f"{s.frase} {cc.NO_ES_DIAGNOSTICO}")
             if s.alerta in al.SOLO_TOTAL:
                 st.caption(cc.NOTA_SOLO_MUNICIPIO)
             for titulo, nombres in s.listas:
@@ -541,9 +553,9 @@ def render_panel(ac, rol: str, filtros: dict | None = None) -> bool:
                 if s.visible:
                     st.caption(f"{s.pct:.0f} % · margen de error {s.ic_inf:.0f}–"
                                f"{s.ic_sup:.0f} % · base de {s.n} cuidadores")
-            for texto in va.explicaciones(lista):
+            for texto in explicaciones(lista):
                 st.caption(texto)
-            st.caption(ac_est.NOTA_AZAR)
+            st.caption(cc.NOTA_AZAR)
     return any(s.alerta == cat.ANIMO for s in lista)
 
 
