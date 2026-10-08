@@ -8,4 +8,9 @@ Módulos: `catalog` (escalas y mapas por posición), `ingest` (consentimiento,
 seudónimos, colegio, grado, ola, hijo 2 y deduplicación), `scoring`
 (puntuaciones desde el texto crudo), `privacidad` (base publicable contando
 cuidadores distintos) y `pipeline` (`AnalisisCuidadores`).
+
+Fase 4b: `comunidad_catalogo` (textos provisionales de la comunidad), `alertas`
+(señales del adulto por grupo, sin casos), `comunidad` (copia para la comunidad
+y la publicación), `auditoria` (lo que se publica, contando cuidadores
+distintos), `publicar` y `lectura` (Supabase, `modulo = "cuidadores"`).
 """

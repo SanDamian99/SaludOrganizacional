@@ -244,6 +244,19 @@ Archivo: `supabase/migraciones/2026-10-07c-alertas-sin-casos.sql`.
   `publicar.verificar` ya rechaza esos campos en Python; la migración es la
   última barrera en la base.
 
+## Cuidadores 360 (fase 4b): sin migración nueva
+
+Publicar cuidadores no necesita ningún cambio en la base: usa las tablas de
+siempre con `modulo = 'cuidadores'` y `nivel = 'cuidadores'` (que el CHECK ya
+admite desde la migración 2026-10-07). El marco (cuidador o niño) va en
+`detalle.marco`. Requisitos: las migraciones 2026-10-07 y 2026-10-07b aplicadas
+(la última corrida publicada **por módulo**); la 2026-10-07c es la última
+barrera contra conteos de casos y se recomienda antes de la primera corrida.
+
+- **Verificar después de publicar:** `SELECT modulo, id, creada_en FROM
+  obs360.ultima_corrida;` debe dar una fila de `estudiantes` y otra de
+  `cuidadores`. La de estudiantes no cambia al publicar cuidadores.
+
 ## Lo que falta
 
 1. **Correr la migración y publicar una corrida nueva** de la fase 1
