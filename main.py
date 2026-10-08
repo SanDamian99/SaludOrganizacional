@@ -118,6 +118,12 @@ elif page == nav.PAGINA_ESTUDIANTES:
     from src.ui.estudiantes import render_estudiantes
     render_estudiantes()
 
+elif page == nav.PAGINA_CUIDADORES:
+    # Fase 4a: solo la vista de investigadores, con los archivos en local. Nunca
+    # se importa en el despliegue público, que se corta arriba.
+    from src.ui.cuidadores import render_cuidadores
+    render_cuidadores()
+
 elif page == nav.PAGINA_CHAT:
     from src.ui.chat import render_chat
     render_chat()

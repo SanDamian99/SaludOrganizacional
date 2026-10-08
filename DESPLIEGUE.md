@@ -153,6 +153,24 @@ es peor que no medir.
 la segunda administra el proyecto. Las dos se quedan en el equipo de quien
 publica.
 
+`OBS360_CLAVE_HMAC` tampoco: **nunca va en los secretos del despliegue**
+(ni en `.streamlit/secrets.toml` de Streamlit Cloud, ni en variables de
+entorno de un servidor público). Es la clave local con la que Cuidadores 360
+(y la triangulación de la fase 5) convierte nombres en seudónimos HMAC (`C…`
+para el cuidador, `N…` para el niño). Solo la necesita la máquina que procesa
+los formularios; un despliegue nunca lee archivos crudos.
+
+- **Los seudónimos `C…` y `N…` nunca van a Supabase** ni a ningún archivo
+  publicado o compartido: solo existen en memoria, en la máquina local. Lo que
+  se publica son agregados.
+- **Respaldo privado de la clave.** Si se pierde, se puede crear otra y la
+  aplicación sigue funcionando, pero los seudónimos ya no se pueden
+  reproducir: el mismo nombre da otro `C…`/`N…`, así que no se pueden enlazar
+  cuidadores ni niños con cargas anteriores (por ejemplo, entre olas o en la
+  triangulación de la fase 5). Guarde una copia en un gestor de contraseñas o
+  bóveda privada del equipo de investigación, nunca en el repositorio, en un
+  correo ni en los secretos del despliegue.
+
 ## Pasos
 
 1. **Subir y aprobar la corrida.** Desde la máquina que tiene los formularios:
@@ -229,6 +247,12 @@ la carpeta hermana `../datos_fuente_360` (subcarpetas `estudiantes`, `docentes`,
 `src/core/rutas.py` es el único que lo sabe; la aplicación local, el publicador
 de estudiantes y las pruebas le preguntan a él. En el despliegue esa carpeta no
 existe y la aplicación lee Supabase, que es lo previsto.
+
+**Cuidadores 360 (fase 4a)** solo funciona con el archivo en local
+(`cuidadores/Cuidando al Cuidador … .xlsx`) y la clave `OBS360_CLAVE_HMAC`. En
+los despliegues la página dice «Cuidadores aún no está publicado»; en el
+público ni siquiera aparece en el menú hasta que la fase 4b ponga
+`navegacion.CUIDADORES_PUBLICO = True`.
 
 ## Antes de dar por terminado
 
