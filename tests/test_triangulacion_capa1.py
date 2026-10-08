@@ -144,7 +144,9 @@ def test_toda_cifra_mostrada_tiene_10_o_mas(capa):
 
 def test_cuidadores_cuentan_distintos(fuentes_sint):
     tablas = c1.marcos(fuentes_sint)
-    assert tablas[cat.CUIDADOR]["Grado"].notna().all()
+    for m in (cat.CUIDADOR, cat.NINO):                       # solo átomos en los grados
+        for a in c1.atomos(tablas[m], m):
+            assert tablas[m].loc[a.idx, "Grado"].notna().all()
     for a in c1.atomos(tablas[cat.NINO], cat.NINO):
         if a.nombre != c1.RESTO:
             assert tablas[cat.NINO].loc[a.idx, "ID_cuidador"].nunique() >= cat.MIN_GROUP_N
@@ -154,3 +156,68 @@ def test_clasificacion_tiene_todos_los_pares_por_colegio(capa):
     assert len(capa.clasificacion) == len(cat.PARES) * len(capa.colegios)
     assert set(capa.clasificacion["clasificacion"]) <= {
         cat.COINCIDENCIA, cat.TENSION, cat.SIN_DIFERENCIA, cat.COOCURRENCIA, cat.SIN_DATO}
+
+
+# ── I1: los átomos son exactamente la base que publica cada módulo ──────────
+from src.estudiantes import catalog as cat_est          # noqa: E402
+from src.estudiantes import privacidad as pe            # noqa: E402
+from tests import triangulacion_span as span             # noqa: E402
+
+
+def _estudiantes_dos_niveles() -> pd.DataFrame:
+    """Primaria: A con celdas y B (4) solo: su R no entra. Secundaria: A con
+    celdas, C (6) y D (6): su R (12, de 2 colegios) sí entra. Combinando los dos
+    niveles, R = B + C + D entraría y B (4) saldría restando."""
+    filas = []
+    plan = ((cat_est.NIVEL_PRIMARIA, "A", "Cuarto", 12), (cat_est.NIVEL_PRIMARIA, "A", "Quinto", 12),
+            (cat_est.NIVEL_PRIMARIA, "B", "Cuarto", 4),
+            (cat_est.NIVEL_SECUNDARIA, "A", "Sexto", 12),
+            (cat_est.NIVEL_SECUNDARIA, "A", "Séptimo", 12),
+            (cat_est.NIVEL_SECUNDARIA, "C", "Sexto", 6), (cat_est.NIVEL_SECUNDARIA, "D", "Sexto", 6))
+    for nivel, colegio, grado, n in plan:
+        for i in range(n):
+            filas.append(dict(nivel=nivel, Colegio=colegio, Grado=grado,
+                              SDQ_Total=float((7 * len(filas)) % 23)))
+    return pd.DataFrame(filas)
+
+
+def test_atomos_de_estudiantes_por_nivel():
+    d = _estudiantes_dos_niveles()
+    lista = c1.atomos(d, cat.ESTUDIANTE)
+    restos = [a for a in lista if a.nombre == c1.RESTO]
+    assert len(restos) == 1                                  # solo el R de secundaria
+    assert set(d.loc[restos[0].idx, "Colegio"]) == {"C", "D"}
+    assert not (d.loc[pe.union(a.idx for a in lista), "Colegio"] == "B").any()
+
+
+def test_capa1_y_estudiantes_juntos_no_deducen_piezas_pequenas():
+    d = _estudiantes_dos_niveles()
+    c = cat.POR_CLAVE["est_sdq_total"]
+    lista = c1.atomos(d, cat.ESTUDIANTE)
+    conjuntos = (span.conjuntos_capa1(d, lista, c, {"Colegio": ["A"], "Grado": []})
+                 + span.conjuntos_modulo(d, cat.ESTUDIANTE, c.columna))
+    assert span.piezas_deducibles(d, conjuntos, None) == 0
+
+
+def _cuidadores_con_grado_fuera() -> pd.DataFrame:
+    """Colegios A y B con celdas en los grados del estudio; E sin celdas (12
+    cuidadores, 3 con el hijo fuera de los grados) se publica entero."""
+    filas = []
+    for colegio, grado, n in (("A", "Sexto", 12), ("A", None, 3), ("B", "Sexto", 11),
+                              ("E", "Sexto", 5), ("E", "Quinto", 4), ("E", None, 3)):
+        for i in range(n):
+            filas.append(dict(Colegio=colegio, Grado=grado, ID_cuidador=f"c{len(filas)}",
+                              PSS_Total=float((5 * len(filas)) % 17)))
+    return pd.DataFrame(filas)
+
+
+def test_cuidadores_el_filtro_de_grado_quita_atomos_enteros():
+    d = _cuidadores_con_grado_fuera()
+    lista = c1.atomos(d, cat.CUIDADOR)
+    assert {a.nombre for a in lista} == {"A|Sexto", "B|Sexto"}   # E (mixto) y R salen enteros
+    for a in lista:
+        assert d.loc[a.idx, "Grado"].notna().all()
+    c = cat.POR_CLAVE["cui_pss"]
+    conjuntos = (span.conjuntos_capa1(d, lista, c, {"Colegio": ["A", "B"], "Grado": ["Sexto"]})
+                 + span.conjuntos_modulo(d, cat.CUIDADOR, c.columna))
+    assert span.piezas_deducibles(d, conjuntos, "ID_cuidador") == 0

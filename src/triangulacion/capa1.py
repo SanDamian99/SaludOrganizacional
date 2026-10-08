@@ -12,17 +12,22 @@ Qué entra:
   · Colegios publicables (§5.1) en estudiantes, cuidadores y docentes a la
     vez: con los datos de octubre de 2026, LauV, JJC, SJMEB y La Balsa.
   · Cuidadores: solo los de niños en los grados del estudio (marcos cuidador
-    y niño con grado). En los dos, el mínimo cuenta cuidadores distintos.
+    y niño). En los dos, el mínimo cuenta cuidadores distintos.
   · Por grado: solo estudiantes y cuidadores (los docentes no tienen grado).
 
-Cifras que no delatan. Cada marco se parte en ÁTOMOS con la base publicable de
-su módulo (§5.1): las celdas colegio × grado con 10 o más, los colegios
-publicados enteros (sin celdas) y el resto R, que solo entra si su módulo lo
-admite. En docentes, que no tienen grado, los átomos son los colegios con 10
-o más y R. Colegios, grados y «resto del municipio» son uniones de átomos, así
-que toda suma o resta de cifras mostradas también lo es. Por constructo, un
-átomo con 1 a 9 unidades con dato sale (todo o nada), y en un constructo
-binario también si tiene menos de 3 casos o no casos (filas o unidades).
+Cifras que no delatan, tampoco junto a lo que publica cada módulo. Cada marco
+se parte en ÁTOMOS que son EXACTAMENTE las unidades de la base publicable de
+su módulo (§5.1): estudiantes por nivel, como `estudiantes.pipeline` (celdas
+colegio × grado con 10 o más, colegios publicados enteros y el R de cada nivel
+solo si ese nivel lo incluye); cuidadores y niños sobre el marco completo,
+como `cuidadores.pipeline`, y después el filtro de grados quita átomos enteros
+(los que tienen alguna fila fuera de los grados del estudio). En docentes,
+sin módulo publicado, los átomos son los colegios con 10 o más y R. Colegios,
+grados y «resto del municipio» son uniones de átomos del módulo, así que toda
+suma o resta de cifras mostradas aquí o en el módulo también lo es. Por
+constructo, un átomo con 1 a 9 unidades con dato sale (todo o nada, igual que
+el todo o nada del módulo), y en un constructo binario también si tiene menos
+de 3 casos o no casos (filas o unidades).
 
 Clasificación (solo pares del mismo objeto): «tensión» si los dos IC excluyen
 el cero en direcciones opuestas (orientadas: positivo = mejor que el resto),
@@ -80,14 +85,14 @@ def n_unidades(d: pd.DataFrame, marco: str) -> int:
 
 
 def marcos(fuentes) -> dict:
-    """Las tablas de cada marco (cuidadores y niños: solo grados del estudio)."""
-    out = {}
-    for m in (cat.ESTUDIANTE, cat.CUIDADOR, cat.NINO, cat.DOCENTE):
-        d = fuentes.marco(m)
-        if m in (cat.CUIDADOR, cat.NINO):
-            d = d[d["Grado"].notna()]
-        out[m] = d.reset_index(drop=True)
-    return out
+    """Las tablas de cada marco, como las recibe su módulo (índice 0..n−1).
+
+    Cuidadores y niños NO se filtran por grado aquí: la base publicable se arma
+    sobre el marco completo, como en `cuidadores.pipeline.analizar`, y el filtro
+    de los grados del estudio quita átomos enteros (`atomos`).
+    """
+    return {m: fuentes.marco(m).reset_index(drop=True)
+            for m in (cat.ESTUDIANTE, cat.CUIDADOR, cat.NINO, cat.DOCENTE)}
 
 
 def conteos_por_colegio(tablas: dict) -> dict:
@@ -103,19 +108,9 @@ def _resto_suficiente(d: pd.DataFrame, idx, marco: str) -> bool:
     return priv_est._resto_suficiente(d.loc[idx, "Colegio"], cat.MIN_GROUP_N)
 
 
-def atomos(d: pd.DataFrame, marco: str) -> list[Atomo]:
-    """Átomos de un marco: unidades de su base publicable y el resto R si entra."""
+def _atomos_de_base(d: pd.DataFrame, base) -> list[Atomo]:
+    """Unidades de una base publicable (celdas y colegios enteros) y su R si entra."""
     salida: list[Atomo] = []
-    if marco == cat.DOCENTE:
-        for colegio, g in d.groupby("Colegio"):
-            if colegio not in cat.COLEGIOS_SIN_GRUPO and len(g) >= cat.MIN_GROUP_N:
-                salida.append(Atomo(str(colegio), str(colegio), None, g.index))
-        resto = d.index.difference(priv_est.union(a.idx for a in salida))
-        if _resto_suficiente(d, resto, marco):
-            salida.append(Atomo(RESTO, None, None, resto))
-        return salida
-    base = (priv_cuid.base_publicable(d) if marco in (cat.CUIDADOR, cat.NINO)
-            else priv_est.base_publicable(d))
     for nombre, idx in priv_est.unidades(base):
         if priv_est.SEP in str(nombre):
             colegio, grado = priv_est.partir_celda(nombre)
@@ -126,6 +121,38 @@ def atomos(d: pd.DataFrame, marco: str) -> list[Atomo]:
         resto = base.nivel.difference(priv_est.union(a.idx for a in salida))
         if len(resto):
             salida.append(Atomo(RESTO, None, None, resto))
+    return salida
+
+
+def atomos(d: pd.DataFrame, marco: str) -> list[Atomo]:
+    """Átomos de un marco: exactamente las unidades que publica su módulo.
+
+    · Estudiantes: la base de `estudiantes.privacidad` POR NIVEL, como
+      `estudiantes.pipeline.analizar` (celdas, colegios enteros y el R de cada
+      nivel solo si ese nivel lo incluye).
+    · Cuidadores y niños: la base de `cuidadores.privacidad` sobre el marco
+      completo, como `cuidadores.pipeline.analizar`; después el filtro de los
+      grados del estudio deja solo los átomos con todas sus filas en esos
+      grados (un átomo entra o sale entero, nunca se recorta).
+    · Docentes (sin módulo publicado): los colegios con 10 o más y R.
+    Así todo conjunto de la capa 1 es unión de átomos del módulo.
+    """
+    if marco == cat.DOCENTE:
+        salida: list[Atomo] = []
+        for colegio, g in d.groupby("Colegio"):
+            if colegio not in cat.COLEGIOS_SIN_GRUPO and len(g) >= cat.MIN_GROUP_N:
+                salida.append(Atomo(str(colegio), str(colegio), None, g.index))
+        resto = d.index.difference(priv_est.union(a.idx for a in salida))
+        if _resto_suficiente(d, resto, marco):
+            salida.append(Atomo(RESTO, None, None, resto))
+        return salida
+    if marco in (cat.CUIDADOR, cat.NINO):
+        lista = _atomos_de_base(d, priv_cuid.base_publicable(d))
+        return [a for a in lista if d.loc[a.idx, "Grado"].notna().all()]
+    partes = ([g for _, g in d.groupby("nivel", sort=True)] if "nivel" in d.columns else [d])
+    salida = []
+    for g in partes:
+        salida += _atomos_de_base(g, priv_est.base_publicable(g))
     return salida
 
 

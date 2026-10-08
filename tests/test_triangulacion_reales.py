@@ -107,3 +107,14 @@ def test_tabla_de_calidad_legible(tri):
     t = en.tabla_calidad(tri.enlace)
     valores = dict(zip(t["indicador"], t["valor"]))
     assert valores["Díadas en LaBalsa"] == "<10" and valores["Díadas en SJMEB"] == "<10"
+
+
+def test_capa1_junto_a_los_modulos_no_deduce_piezas_pequenas(fuentes_reales, tri):
+    """Capa 1 + lo que publican estudiantes (por nivel) y cuidadores: 0 piezas de 1 a 9."""
+    from src.triangulacion import capa1 as c1
+    from tests import triangulacion_span as span
+    deducibles = span.auditar_capa1(c1.marcos(fuentes_reales), tri.capa1)
+    hay_constructos = len(deducibles) > 0
+    total = int(sum(deducibles.values()))
+    assert hay_constructos
+    assert total == 0

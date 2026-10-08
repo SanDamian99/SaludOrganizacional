@@ -136,11 +136,15 @@ def metodologia_md(t) -> str:
         "= d ± 1,96 · √(s²₁/n₁ + s²₂/n₂) / DE. En los constructos binarios la media es una "
         "proporción y se muestra como %.", "",
         cat.AVISO_RESTO, "",
-        "Átomos: las unidades de la base publicable de cada módulo (celdas colegio × grado "
-        "con 10 o más, colegios publicados enteros y el resto R si su módulo lo admite; en "
-        "docentes, los colegios con 10 o más y R). Por constructo, un átomo con 1 a 9 "
-        "unidades con dato, o con menos de 3 casos o no casos, sale: toda suma o resta de "
-        "cifras mostradas es unión de átomos que cumplen la regla.", "",
+        "Átomos: exactamente las unidades que publica el módulo de cada actor. "
+        "Estudiantes: la base publicable de cada nivel por separado (celdas colegio × grado "
+        "con 10 o más, colegios publicados enteros y el resto R de ese nivel solo si el "
+        "nivel lo incluye). Cuidadores: la base del marco completo, y el filtro de los "
+        "grados del estudio quita átomos enteros (los que tienen alguna fila fuera de esos "
+        "grados). Docentes: los colegios con 10 o más y R. Por constructo, un átomo con 1 a "
+        "9 unidades con dato, o con menos de 3 casos o no casos, sale: toda suma o resta de "
+        "cifras mostradas aquí o publicadas por los módulos es unión de átomos que cumplen "
+        "la regla.", "",
         cat.AVISO_CLASIFICACION, "", cat.AVISO_COOCURRENCIA, "", cat.AVISO_GRADO, "",
         "Docentes: archivo codificado por scripts/preparar_docentes.py; colegio unido con "
         "core.colegios.codigo_desde_nombre. Clima laboral = apoyo del líder (7 ítems, 0–5); "
@@ -168,8 +172,9 @@ def metodologia_md(t) -> str:
         "díadas no son una muestra aleatoria de los niños.",
         "- Cada cuidador aporta su respuesta más reciente; si respondió en dos olas, la del "
         "niño puede ser de otra ola.",
-        "- La protección contra restas se garantiza dentro de la triangulación; no se "
-        "auditan restas contra otras vistas locales.",
+        "- La protección contra restas cubre la triangulación junto con lo que publican los "
+        "módulos de estudiantes y cuidadores (auditoría lineal en las pruebas); no cubre "
+        "otras vistas locales.",
     ]
     return "\n".join(lineas) + "\n"
 
