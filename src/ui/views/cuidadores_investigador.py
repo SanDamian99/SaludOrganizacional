@@ -44,6 +44,12 @@ PASOS_EXCLUSION = [
 ]
 
 _SIN_DATO = "—"
+SOLO_TODAS = ("Con una ola elegida no se exporta nada: el paquete solo se descarga con «Todas» "
+              "las olas. La vista de una ola muestra solo el total de cada marco y oculta toda "
+              "cifra que, restada de «Todas», dejaría ver a menos de 10 cuidadores o a menos "
+              "de 3 casos o no casos.")
+SOLO_TOTAL_OLA = ("Con una ola elegida no se desagrega por colegio, grado ni celda: solo se "
+                  "muestra el total de cada marco.")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -255,7 +261,14 @@ def version_analisis_txt(ac) -> str:
     ]) + "\n"
 
 
+def exportable(ac) -> bool:
+    """El paquete solo se exporta con «Todas» las olas."""
+    return getattr(ac, "ola", None) is None
+
+
 def archivos_paquete(ac) -> dict[str, str]:
+    if not exportable(ac):
+        return {}
     return {
         "tabla1_descriptivos.csv": _csv(tabla1(ac)),
         "cortes_y_bandas.csv": _csv(cortes_y_bandas(ac)),
@@ -269,6 +282,8 @@ def archivos_paquete(ac) -> dict[str, str]:
 
 
 def paquete_zip(ac) -> bytes:
+    if not exportable(ac):
+        raise ValueError("El paquete de Cuidadores 360 solo se exporta con «Todas» las olas.")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for nombre, contenido in archivos_paquete(ac).items():
@@ -343,6 +358,9 @@ def _tab_correlaciones(a) -> None:
 
 
 def _tab_por_grupo(ac, a, marco: str) -> None:
+    if not exportable(ac):
+        st.caption(SOLO_TOTAL_OLA)
+        return
     t = comparaciones_grupo(ac)
     _df(t[t["marco"] == marco].drop(columns=["marco"]) if not t.empty else t)
     st.markdown("**Cortes por colegio, grado y celda**")
@@ -398,6 +416,9 @@ def _tab_calidad(ac, a) -> None:
 
 
 def _tab_exportar(ac) -> None:
+    if not exportable(ac):
+        st.caption(SOLO_TODAS)
+        return
     st.caption("Todo es agregado: ni filas, ni identificadores, ni conteos de casos.")
     contenidos = archivos_paquete(ac)
     columnas = st.columns(2)
@@ -422,7 +443,7 @@ def render_investigador(ac) -> None:
                      format_func=lambda m: cat.NOMBRES_MARCO[m], key="cuid_marco")
     a = ac.marcos[marco]
     if ac.ola:
-        st.caption(f"Ola {ac.ola}. {cat.AVISO_OLA}")
+        st.caption(f"Ola {ac.ola}. {cat.AVISO_OLA} {SOLO_TOTAL_OLA}")
     tabs = st.tabs(PESTANAS)
     with tabs[0]:
         _tab_muestra(a, ac.informe, marco)

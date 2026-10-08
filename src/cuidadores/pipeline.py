@@ -14,7 +14,12 @@ calculado sobre la base publicable que cuenta cuidadores distintos
 (`estudiantes.supresion.aplicar`). Así la vista de investigadores, la de
 comunidad (4b) y la publicación (4b) leen lo mismo que en estudiantes.
 
-`ola` filtra antes de deduplicar. Solo existe en local: no se publica por ola.
+`ola` filtra DESPUÉS de deduplicar sobre todas las olas, así que la vista de
+una ola es un subconjunto exacto de «Todas». Con una ola elegida solo hay el
+total de cada marco, y cada cifra se publica solo si ni la ola ni su resta
+con lo publicado en «Todas» (`ComparadorOla`) tienen menos de 10 cuidadores
+distintos o menos de 3 casos o no casos. Solo existe en local: no se
+publica por ola y el paquete solo se exporta con «Todas».
 """
 from __future__ import annotations
 
@@ -119,8 +124,22 @@ def _por_sexo(dn: pd.DataFrame, claves: list[str]) -> pd.DataFrame:
     return t
 
 
+def partes_por_banda(d: pd.DataFrame, key: str) -> pd.Series:
+    """Banda (0–3) del SDQ de padres de cada fila con dato en `key`."""
+    return d[key].dropna().map(lambda x: cat_est.banda_de(x, key, "parent"))
+
+
+def bandas_con_cuidadores_distintos(parte: pd.Series, ids: pd.Series,
+                                    minimo: int = supresion.MIN_CASOS) -> bool:
+    """Cada banda tiene ≥ `minimo` cuidadores distintos dentro y fuera (vacío = seguro)."""
+    return parte.empty or all(
+        ids.loc[parte.index[parte == j]].nunique() >= minimo
+        and ids.loc[parte.index[parte != j]].nunique() >= minimo for j in range(4))
+
+
 def regla_cuidadores_distintos(d: pd.DataFrame, base, claves,
-                               minimo: int = supresion.MIN_CASOS) -> dict:
+                               minimo: int = supresion.MIN_CASOS,
+                               atomos: dict | None = None) -> dict:
     """{clave: regla(conjunto de átomos) -> bool} para el marco de niños.
 
     En el marco de niños dos filas pueden ser hermanos: 3 niños «caso» pueden
@@ -130,31 +149,32 @@ def regla_cuidadores_distintos(d: pd.DataFrame, base, claves,
     fuera de ella. `supresion.aplicar` la exige en lo publicado, en los
     márgenes y en todo lo deducible, junto con la regla por conteos.
     """
-    atomos = supresion.indices_atomos(base)
+    atomos = supresion.indices_atomos(base) if atomos is None else atomos
     reglas: dict = {}
     for key in claves:
         if key not in d.columns or key not in cat_est.BANDS_PARENT:
             continue
-        v = d[key].dropna()
-        parte = v.map(lambda x, k=key: cat_est.banda_de(x, k, "parent"))
+        parte = partes_por_banda(d, key)
         ids = d.loc[parte.index, privacidad.UNIDAD]
         memo: dict = {}
 
         def regla(conjunto, parte=parte, ids=ids, memo=memo) -> bool:
             if conjunto not in memo:
                 idx = priv_est.union(atomos[a] for a in conjunto if a in atomos)
-                p = parte.loc[parte.index.intersection(idx)]
-                memo[conjunto] = p.empty or all(
-                    ids.loc[p.index[p == j]].nunique() >= minimo
-                    and ids.loc[p.index[p != j]].nunique() >= minimo for j in range(4))
+                memo[conjunto] = bandas_con_cuidadores_distintos(
+                    parte.loc[parte.index.intersection(idx)], ids, minimo)
             return memo[conjunto]
         reglas[key] = regla
     return reglas
 
 
 def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
-                   avisos: list | None = None) -> pipe_est.Analisis:
-    """Un marco ya puntuado → `Analisis` sobre la base publicable, con supresión."""
+                   avisos: list | None = None, solo_nivel: bool = False) -> pipe_est.Analisis:
+    """Un marco ya puntuado → `Analisis` sobre la base publicable, con supresión.
+
+    `solo_nivel` (vista de una ola): solo el total del marco; ni colegios, ni
+    grados, ni celdas, ni comparaciones entre grupos.
+    """
     d = d.reset_index(drop=True)
     claves_marco = cat.CLAVES_NINO if marco == cat.MARCO_NINO else cat.CLAVES_CUIDADOR
     claves = scoring.disponibles(d, claves_marco)
@@ -180,6 +200,13 @@ def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
         a.correlaciones["etiqueta_a"] = a.correlaciones["a"].map(cat.label)
         a.correlaciones["etiqueta_b"] = a.correlaciones["b"].map(cat.label)
     a.matriz = stats.matriz_correlaciones(dn, corr)
+    if solo_nivel:
+        a.enmascarados = {"Grado": [], "Colegio": []}
+        extra = (regla_cuidadores_distintos(dm, base, claves,
+                                            atomos={supresion.RESTO: base.nivel})
+                 if marco == cat.MARCO_NINO else None)
+        supresion.aplicar(a, extra_por_clave=extra)
+        return a
     en_grados = dm.loc[priv_est.union(base.grados.values())]
     en_colegios = dm.loc[priv_est.union(base.colegios.values())]
     a.por_grado, _ = stats.comparar_por_grupo(en_grados, claves, "Grado",
@@ -231,16 +258,193 @@ def _items_publicables(t: pd.DataFrame, umbral: int | None = None,
     return t
 
 
-def analizar(carga: ingest.Carga, ola: str | None = None, n_boot: int = 300
-             ) -> AnalisisCuidadores:
-    cuid, ninos, informe = ingest.deduplicar(carga, ola)
-    cuid_p = scoring.puntuar_cuidadores(cuid)
-    ninos_p = scoring.puntuar_ninos(ninos)
-    avisos_c = [cat.AVISO_EPDS, cat.AVISO_APQ, cat.AVISO_MSPSS]
-    avisos_n = [cat.AVISO_SDQ_EDAD, cat.AVISO_ARI]
-    a_c = analizar_marco(cuid_p, cat.MARCO_CUIDADOR, n_boot=n_boot, avisos=avisos_c)
-    a_n = analizar_marco(ninos_p, cat.MARCO_NINO, n_boot=n_boot, avisos=avisos_n)
-    dn = a_c.datos.loc[a_c.base.nivel]
+# ══ Vista de una ola: solo el total, y solo lo que no se deduce restando ═══
+CLAVE_FILA = {cat.MARCO_CUIDADOR: "ID_cuidador", cat.MARCO_NINO: "ID_nino"}
+COLUMNAS_MEDIA = ("M", "DE", "Mdn", "min", "max", "P25", "P75")
+
+
+def _nivel_enmascarado(d: pd.DataFrame, clave_fila: str) -> tuple[pd.DataFrame, object]:
+    """(datos enmascarados indexados por la clave de fila, base publicable)."""
+    d = d.reset_index(drop=True)
+    base = privacidad.base_publicable(d)
+    dm, _ = privacidad.aplicar_todo_o_nada(d, base)
+    dm.index = d[clave_fila].to_numpy()
+    return dm, base
+
+
+def _validas(df: pd.DataFrame, cols: list[str]) -> set:
+    if df.empty or any(c not in df.columns for c in cols):
+        return set()
+    return set(df.index[df[cols].notna().all(axis=1)])
+
+
+@dataclass
+class ComparadorOla:
+    """Lo que alguien deduce restando la vista de una ola de lo publicado con «Todas».
+
+    La ola es un subconjunto de «Todas» (se deduplica primero y luego se
+    filtra), así que cada resta es un conjunto real de filas, con los mismos
+    valores. Para una columna (o un par) da los conjuntos deducibles:
+      · Todas − ola (el complemento);
+      · Todas − ola − otras olas (lo que queda sin ola o fuera de las bases);
+      · cada colegio, grado o celda de «Todas» que contiene a toda la ola,
+        menos la ola.
+    None (falla cerrado) si alguna ola tiene con dato una fila que «Todas»
+    no tiene en su base: la resta ya no es un conjunto.
+    """
+    marco: str
+    ola: str
+    todas: pd.DataFrame                 # «Todas» enmascarado, indexado por clave de fila
+    nivel: pd.Index                     # claves del total de «Todas»
+    grupos: list                        # claves de cada colegio, grado y celda de «Todas»
+    olas: dict                          # ola → total enmascarado de esa ola (por clave)
+
+    @property
+    def propia(self) -> pd.DataFrame:
+        return self.olas[self.ola]
+
+    def deducibles(self, cols: list[str]) -> list[pd.DataFrame] | None:
+        import itertools
+        tv = _validas(self.todas.loc[self.nivel], cols)
+        wv = {o: _validas(df, cols) for o, df in self.olas.items()}
+        if not wv[self.ola] <= tv:
+            return None
+        conjuntos = [tv - wv[self.ola]]
+        otras = [o for o in wv if o != self.ola]
+        for r in range(1, len(otras) + 1):
+            for comb in itertools.combinations(otras, r):
+                if any(not wv[o] <= tv for o in comb):
+                    return None
+                conjuntos.append(tv - wv[self.ola] - set().union(*(wv[o] for o in comb)))
+        for g in self.grupos:
+            gv = _validas(self.todas.loc[g], cols)
+            if wv[self.ola] and wv[self.ola] <= gv:
+                conjuntos.append(gv - wv[self.ola])
+        return [self.todas.loc[sorted(c)] for c in conjuntos]
+
+    def media_ok(self, cols: list[str]) -> bool:
+        """Una media (o una correlación) se publica si la ola y cada resta tienen ≥ 10."""
+        w = self.propia
+        if len({*w.loc[sorted(_validas(w, cols)), privacidad.UNIDAD]}) < cat.MIN_GROUP_N:
+            return False
+        conjuntos = self.deducibles(cols)
+        return conjuntos is not None and all(
+            D.empty or D[privacidad.UNIDAD].nunique() >= cat.MIN_GROUP_N for D in conjuntos)
+
+    def proporcion_ok(self, cols: list[str], partes) -> bool:
+        """`partes(D)` → reparto del indicador en D. Regla de 3 en la ola y en cada resta."""
+        if not self.media_ok(cols):
+            return False
+        w = self.propia.loc[sorted(_validas(self.propia, cols))]
+        for D in [w] + self.deducibles(cols):
+            if D.empty:
+                continue
+            p = partes(D)
+            if p is None or not supresion.partes_publicables(p):
+                return False
+            if self.marco == cat.MARCO_NINO and cols[0] in cat_est.BANDS_PARENT:
+                b = partes_por_banda(D.reset_index(drop=True), cols[0])
+                ids = D.reset_index(drop=True).loc[b.index, privacidad.UNIDAD]
+                if not bandas_con_cuidadores_distintos(b, ids):
+                    return False
+        return True
+
+
+def _partes_familia(marco: str, clave: str):
+    def partes(D: pd.DataFrame):
+        D = D.reset_index(drop=True)
+        if marco == cat.MARCO_NINO:
+            fam = supresion.partes_por_familia(scoring.sobre_cortes_nino(D),
+                                               scoring.bandas_nino(D))
+        else:
+            fam = supresion.partes_por_familia(scoring.sobre_cortes_cuidador(D), None)
+        return fam.get(clave)
+    return partes
+
+
+def _anular_filas(t: pd.DataFrame, filas, columnas) -> None:
+    for c in columnas:
+        if c in t.columns:
+            t[c] = t[c].astype(float)
+            t.loc[filas, c] = float("nan")
+
+
+def restringir_a_ola(a: pipe_est.Analisis, comp: ComparadorOla) -> None:
+    """Deja en la vista de una ola solo lo que ni ella ni sus restas delatan (en el sitio)."""
+    claves_fam = set()
+    for t in (a.cortes, a.bandas):
+        if t is not None and not t.empty and "clave" in t.columns:
+            claves_fam |= set(map(str, t["clave"]))
+    for clave in sorted(claves_fam):
+        if not comp.proporcion_ok([clave], _partes_familia(comp.marco, clave)):
+            supresion._anular(a, clave)
+    for nombre, columnas in (("descriptivos", COLUMNAS_MEDIA),
+                             ("fiabilidad", ("alpha", "ic_inf", "ic_sup")),
+                             ("terciles", ("corte_bajo", "corte_alto"))):
+        t = getattr(a, nombre, None)
+        if t is None or t.empty:
+            continue
+        malas = [i for i, k in t["clave"].items() if not comp.media_ok([str(k)])]
+        _anular_filas(t, malas, columnas)
+    if a.correlaciones is not None and not a.correlaciones.empty:
+        ok = [comp.media_ok([str(x), str(y)])
+              for x, y in zip(a.correlaciones["a"], a.correlaciones["b"])]
+        a.correlaciones = a.correlaciones[ok].reset_index(drop=True)
+    if a.matriz is not None and not a.matriz.empty:
+        m = a.matriz.astype(float)
+        for x in m.index:
+            for y in m.columns:
+                if x != y and not comp.media_ok([str(x), str(y)]):
+                    m.loc[x, y] = float("nan")
+        a.matriz = m
+
+
+def _items_de_ola(t: pd.DataFrame, comp: ComparadorOla, bloque: cat.Bloque,
+                  umbral: int) -> pd.DataFrame:
+    """Ítems de la vista de una ola: % y media solo si ninguna resta delata."""
+    if t.empty:
+        return t
+    t = t.copy()
+    for i, f in t.iterrows():
+        col = f"{bloque.prefijo}{int(f['item'])}"
+
+        def partes(D, col=col):
+            k = int((D[col] >= umbral).sum())
+            return (len(D) - k, k)
+        if not comp.proporcion_ok([col], partes):
+            _anular_filas(t, [i], ("pct",))
+        if not comp.media_ok([col]):
+            _anular_filas(t, [i], ("M", "DE"))
+    return t
+
+
+def de_la_ola(todas: pd.DataFrame, nivel: pd.Index, ola: str) -> pd.DataFrame:
+    """Filas de una ola dentro del total publicado de «Todas», con sus valores enmascarados.
+
+    Así cada cifra con dato en la ola también tiene dato en «Todas» y cada
+    resta es un conjunto de filas.
+    """
+    t = todas.loc[nivel]
+    return t[t[ingest.OLA_COLUMNA] == ola].reset_index(drop=True)
+
+
+def comparador(d_todas: pd.DataFrame, marco: str, ola: str, olas: list) -> ComparadorOla:
+    """`ComparadorOla` de un marco ya puntuado, con las vistas de todas las olas."""
+    clave = CLAVE_FILA[marco]
+    dm, base = _nivel_enmascarado(d_todas, clave)
+    claves_fila = dm.index.to_numpy()
+    nivel = pd.Index(claves_fila[base.nivel])
+    grupos = [pd.Index(claves_fila[idx])
+              for grupos in (base.celdas, base.colegios, base.grados) for idx in grupos.values()]
+    niveles = {}
+    for o in olas:
+        dw, bw = _nivel_enmascarado(de_la_ola(dm, nivel, o), clave)
+        niveles[o] = dw.loc[dw.index[bw.nivel]] if len(dw) else dw
+    return ComparadorOla(marco=marco, ola=ola, todas=dm, nivel=nivel, grupos=grupos,
+                         olas=niveles)
+
+
+def _items(dn: pd.DataFrame, informe) -> tuple[pd.DataFrame, pd.DataFrame]:
     items_apq = scoring.distribucion_items(dn, cat.APQ, informe.enunciados.get("APQ"),
                                            umbral=cat.APQ_UMBRAL)
     items_estres = scoring.distribucion_items(dn, cat.EP, informe.enunciados.get("EP"),
@@ -249,13 +453,47 @@ def analizar(carga: ingest.Carga, ola: str | None = None, n_boot: int = 300
         items_estres["nota"] = items_estres["item"].map(
             lambda i: "elección forzada partida" if i in cat.EP_ELECCION_FORZADA
             else ("redactado en positivo" if i in cat.EP_POSITIVO else ""))
+    return items_apq, items_estres
+
+
+def analizar(carga: ingest.Carga, ola: str | None = None, n_boot: int = 300
+             ) -> AnalisisCuidadores:
+    """Los dos marcos. Con `ola`, la vista de esa ola (solo el total; ver `ComparadorOla`).
+
+    Se deduplica siempre sobre todas las olas (la respuesta más reciente de
+    cada cuidador y de cada niño) y después se filtra: la vista de una ola es
+    un subconjunto exacto de «Todas».
+    """
+    cuid, ninos, informe = ingest.deduplicar(carga)
+    cuid_p = scoring.puntuar_cuidadores(cuid)
+    ninos_p = scoring.puntuar_ninos(ninos)
     olas = sorted(o for o in carga.respuestas["Ola"].dropna().unique() if o != cat.SIN_DATO)
+    avisos_c = [cat.AVISO_EPDS, cat.AVISO_APQ, cat.AVISO_MSPSS]
+    avisos_n = [cat.AVISO_SDQ_EDAD, cat.AVISO_ARI]
+    umbral_ep = cat.MAP_ACUERDO["de acuerdo"]
+    escala_apq = (cat.APQ.valor_min, cat.APQ.valor_max)
+    escala_ep = (cat.EP.valor_min, cat.EP.valor_max)
+    if ola is None:
+        a_c = analizar_marco(cuid_p, cat.MARCO_CUIDADOR, n_boot=n_boot, avisos=avisos_c)
+        a_n = analizar_marco(ninos_p, cat.MARCO_NINO, n_boot=n_boot, avisos=avisos_n)
+        items_apq, items_estres = _items(a_c.datos.loc[a_c.base.nivel], informe)
+    else:
+        ola = str(ola)
+        olas_vista = sorted(set(olas) | {ola})
+        comp_c = comparador(cuid_p, cat.MARCO_CUIDADOR, ola, olas_vista)
+        comp_n = comparador(ninos_p, cat.MARCO_NINO, ola, olas_vista)
+        a_c = analizar_marco(de_la_ola(comp_c.todas, comp_c.nivel, ola), cat.MARCO_CUIDADOR,
+                             n_boot=n_boot, avisos=avisos_c, solo_nivel=True)
+        a_n = analizar_marco(de_la_ola(comp_n.todas, comp_n.nivel, ola), cat.MARCO_NINO,
+                             n_boot=n_boot, avisos=avisos_n, solo_nivel=True)
+        restringir_a_ola(a_c, comp_c)
+        restringir_a_ola(a_n, comp_n)
+        items_apq, items_estres = _items(a_c.datos.loc[a_c.base.nivel], informe)
+        items_apq = _items_de_ola(items_apq, comp_c, cat.APQ, cat.APQ_UMBRAL)
+        items_estres = _items_de_ola(items_estres, comp_c, cat.EP, umbral_ep)
     return AnalisisCuidadores(cuidador=a_c, nino=a_n, informe=informe, ola=ola, olas=olas,
-                              items_apq=_items_publicables(
-                                  items_apq, cat.APQ_UMBRAL, (cat.APQ.valor_min, cat.APQ.valor_max)),
-                              items_estres=_items_publicables(
-                                  items_estres, cat.MAP_ACUERDO["de acuerdo"],
-                                  (cat.EP.valor_min, cat.EP.valor_max)))
+                              items_apq=_items_publicables(items_apq, cat.APQ_UMBRAL, escala_apq),
+                              items_estres=_items_publicables(items_estres, umbral_ep, escala_ep))
 
 
 def cargar_y_analizar(ruta: str | None = None, ola: str | None = None,

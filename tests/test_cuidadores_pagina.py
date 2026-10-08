@@ -40,6 +40,7 @@ def test_con_datos_muestra_las_pestanas_y_el_filtro_de_ola(monkeypatch, tmp_path
     assert list(ola.options) == ["Todas", "2025", "2026"]
     ola.set_value("2026").run()
     assert not at.exception
+    assert any(vi.SOLO_TODAS == c.value for c in at.caption)
     at.radio(key="cuid_marco").set_value(cat.MARCO_NINO).run()
     assert not at.exception
     pantalla = " ".join(str(e.value) for e in at.markdown) + \

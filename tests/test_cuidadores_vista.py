@@ -66,3 +66,13 @@ def test_metodologia_declara_lo_pendiente(ac):
     for fragmento in ("Columna 6", "libro de códigos", "5 / 4 / 3", "OBS360_CLAVE_HMAC",
                       "periodo perinatal", "501", "fuera del rango"):
         assert fragmento in md, fragmento
+
+
+def test_con_una_ola_no_se_exporta_ni_se_desagrega():
+    ac_ola = pipeline.analizar(ingest.cargar(cs.formulario(), k=K), ola="2026", n_boot=5)
+    assert not vi.exportable(ac_ola)
+    with pytest.raises(ValueError, match="Todas"):
+        vi.paquete_zip(ac_ola)
+    assert vi.archivos_paquete(ac_ola) == {}
+    assert vi.cortes_por_grupo(ac_ola).empty and vi.comparaciones_grupo(ac_ola).empty
+    assert "Todas" in vi.SOLO_TODAS

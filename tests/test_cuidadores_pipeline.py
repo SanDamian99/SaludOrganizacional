@@ -88,16 +88,17 @@ def test_los_datos_enmascarados_no_llevan_nombres_ni_telefono(ac):
 
 
 def test_filtro_de_ola(carga):
+    """La ola es un subconjunto del total de «Todas»: se deduplica, se arma la base y se filtra."""
+    todas = pipeline.analizar(carga, n_boot=5)
     a25 = pipeline.analizar(carga, ola="2025", n_boot=10)
     a26 = pipeline.analizar(carga, ola="2026", n_boot=10)
     assert a25.ola == "2025" and set(a25.cuidador.datos["Ola"]) == {"2025"}
     assert set(a26.nino.datos["Ola"]) == {"2026"}
-    assert a25.cuidador.n + a26.cuidador.n == ac_n_sin_dedup(carga)
-
-
-def ac_n_sin_dedup(carga) -> int:
-    r = carga.respuestas
-    return int(r.groupby("Ola")["ID_cuidador"].nunique().sum())
+    for marco in (cat.MARCO_CUIDADOR, cat.MARCO_NINO):
+        nivel = len(todas.marcos[marco].base.nivel)
+        assert a25.marcos[marco].n + a26.marcos[marco].n == nivel
+    ids_t = set(todas.cuidador.datos["ID_cuidador"])
+    assert set(a25.cuidador.datos["ID_cuidador"]) <= ids_t
 
 
 def test_items_locales_sin_conteos(ac):
@@ -249,3 +250,80 @@ def test_marco_nino_cuenta_cuidadores_distintos_entre_casos():
     pub = [not pd.isna(o.bandas.set_index("clave").loc["SDQ_Emo", "pct_b0"])
            for o in (a, sub["Colegio"]["JJC"], sub["Colegio"]["SJMEB"])]
     assert not all(pub)
+
+
+# ── C1: con una ola elegida, solo el total y solo si no se deduce el resto ─
+def _carga_una_fuera(carga_ola_unica: str = "2026"):
+    """Todas las respuestas en 2026 salvo un cuidador (sin repetidos) en 2025.
+
+    Equivale a CND (Todas n = 70, ola n = 69): restar la ola de «Todas»
+    dejaría ver la respuesta de una sola persona.
+    """
+    raw = cs.formulario()
+    ts = raw.columns[0]
+    raw[ts] = raw[ts].str.replace(r"^2025-09-1", "2026-03-1", regex=True)
+    raw.loc[0, ts] = "2026-03-10 08:00:00"
+    raw.loc[raw[ts].str.startswith("2025"), ts] = "2026-03-12 08:00:00"
+    raw.loc[40, ts] = "2025-09-15 09:00:00"
+    return ingest.cargar(raw, k=K)
+
+
+def _publicadas(a) -> list:
+    t = a.cortes
+    return [] if t is None or t.empty else t.loc[t["pct"].notna(), "clave"].tolist()
+
+
+def test_ola_casi_igual_a_todas_no_publica_nada():
+    c = _carga_una_fuera()
+    todas = pipeline.analizar(c, n_boot=5)
+    ola = pipeline.analizar(c, ola="2026", n_boot=5)
+    assert ola.cuidador.n == len(todas.cuidador.base.nivel) - 1
+    for a in ola.marcos.values():
+        assert a.subgrupos == {} and a.por_colegio.empty and a.por_grado.empty
+        assert a.por_sexo.empty and a.icc == {}
+        assert _publicadas(a) == []
+        if not a.bandas.empty:
+            assert a.bandas["pct_b0"].isna().all()
+        # Solo queda la media cuya resta está vacía (el ARI existe solo en 2026: la
+        # cifra de la ola es la misma que la de «Todas» y no deja ver a nadie).
+        d_t = todas.marcos[a.nivel].descriptivos.set_index("clave")["n"]
+        con_m = a.descriptivos[a.descriptivos["M"].notna()]
+        assert all(d_t[k] == n for k, n in zip(con_m["clave"], con_m["n"]))
+        assert set(con_m["clave"]) <= {"ARI_Total"}
+        assert a.descriptivos.loc[a.descriptivos["M"].isna(), "DE"].isna().all()
+        assert a.terciles.empty or a.terciles["corte_bajo"].isna().all()
+        assert a.correlaciones.empty or (a.correlaciones["b"] == "ARI_Total").all()
+        f = a.fiabilidad
+        assert f.loc[f["alpha"].notna(), "clave"].isin(["ARI_Total"]).all()
+    for t in (ola.items_apq, ola.items_estres):
+        assert t["pct"].isna().all() and t["M"].isna().all()
+    # «Todas» sí publica (la ola vacía no cambia nada en la vista general).
+    assert _publicadas(todas.cuidador)
+
+
+def test_ola_de_una_persona_no_publica_nada():
+    ola = pipeline.analizar(_carga_una_fuera(), ola="2025", n_boot=5)
+    for a in ola.marcos.values():
+        assert _publicadas(a) == []
+        assert a.descriptivos.empty or a.descriptivos["M"].isna().all()
+
+
+def test_ola_publica_solo_el_total_y_con_complemento_seguro(carga):
+    todas = pipeline.analizar(carga, n_boot=5)
+    ola = pipeline.analizar(carga, ola="2026", n_boot=5)
+    algo = False
+    for marco, a in ola.marcos.items():
+        assert a.subgrupos == {} and a.por_colegio.empty
+        t = todas.marcos[marco].cortes.set_index("indicador")
+        for _, f in a.cortes[a.cortes["pct"].notna()].iterrows():
+            algo = True
+            g = t.loc[f["indicador"]]
+            assert g["n"] - f["n"] == 0 or g["n"] - f["n"] >= cat.MIN_GROUP_N, f["clave"]
+            if not pd.isna(g["casos"]) and g["n"] > f["n"]:
+                assert supresion.proporcion_publicable(g["casos"] - f["casos"],
+                                                       g["n"] - f["n"]), f["clave"]
+        d = todas.marcos[marco].descriptivos.set_index("clave")
+        for _, f in a.descriptivos[a.descriptivos["M"].notna()].iterrows():
+            resta = d.loc[f["clave"], "n"] - f["n"]
+            assert resta == 0 or resta >= cat.MIN_GROUP_N, f["clave"]
+    assert algo
