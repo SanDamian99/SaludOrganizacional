@@ -76,3 +76,18 @@ def test_con_una_ola_no_se_exporta_ni_se_desagrega():
     assert vi.archivos_paquete(ac_ola) == {}
     assert vi.cortes_por_grupo(ac_ola).empty and vi.comparaciones_grupo(ac_ola).empty
     assert "Todas" in vi.SOLO_TODAS
+
+
+def test_flujo_de_la_muestra_con_una_ola_cuadra():
+    carga = ingest.cargar(cs.formulario(), k=K)
+    todas = pipeline.analizar(carga, n_boot=5)
+    ola = pipeline.analizar(carga, ola="2025", n_boot=5)
+    md = vi.flujo_exclusiones_md(ola.informe, ola)
+    assert "Archivo completo" in md and "Ola 2025" in md
+    for marco, a in ola.marcos.items():
+        f = ola.flujo_ola[marco]
+        assert f["distintos"] == todas.marcos[marco].n
+        assert f["en_base"] == len(todas.marcos[marco].base.nivel)
+        assert f["distintos"] - f["fuera_de_base"] - f["otras_olas"] == a.n
+        assert f"quedan {a.n}" in md
+    assert "## Ola" not in vi.flujo_exclusiones_md(todas.informe, todas)

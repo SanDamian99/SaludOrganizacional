@@ -177,10 +177,12 @@ def senales_adulto(ac) -> pd.DataFrame:
     return t[t["clave"].isin(["EPDS_Total", "EPDS_Autolesion"])].reset_index(drop=True)
 
 
-def flujo_exclusiones_md(informe) -> str:
+def flujo_exclusiones_md(informe, ac=None) -> str:
+    """Flujo de la muestra. Con una ola elegida, añade cómo se llega a la ola desde «Todas»."""
     if informe is None:
         return ""
-    lineas = ["# Flujo de la muestra · Cuidadores 360", ""]
+    lineas = ["# Flujo de la muestra · Cuidadores 360", "",
+              "Archivo completo (todas las olas):", ""]
     restantes = int(informe.filas_archivo)
     lineas.append(f"- {PASOS_EXCLUSION[0][1]}: {restantes}")
     for campo, etiqueta in PASOS_EXCLUSION[1:]:
@@ -197,6 +199,21 @@ def flujo_exclusiones_md(informe) -> str:
                f"- Niños únicos analizados: {informe.ninos_unicos}", "",
                "Prioridad al deduplicar niños: la ola más reciente; luego mamá, papá, otro "
                "cuidador; luego el primer envío. Cuidadores: la respuesta más reciente."]
+    flujo = getattr(ac, "flujo_ola", None) or {}
+    if getattr(ac, "ola", None) and flujo:
+        lineas += ["", f"## Ola {ac.ola}", "",
+                   "Se deduplica sobre todas las olas y luego se filtra: la ola es parte del "
+                   "total publicable de «Todas».", ""]
+        for marco, nombre in ((cat.MARCO_CUIDADOR, "Cuidadores"), (cat.MARCO_NINO, "Niños")):
+            f = flujo.get(marco)
+            if not f:
+                continue
+            quedan = f["en_base"]
+            lineas += [f"- {nombre} distintos (todas las olas): {f['distintos']}",
+                       f"- − Fuera del total publicable de «Todas»: {f['fuera_de_base']} → "
+                       f"quedan {quedan}",
+                       f"- − Su respuesta más reciente es de otra ola: {f['otras_olas']} → "
+                       f"quedan {quedan - f['otras_olas']}"]
     return "\n".join(lineas) + "\n"
 
 
@@ -275,7 +292,7 @@ def archivos_paquete(ac) -> dict[str, str]:
         "cortes_por_grupo.csv": _csv(cortes_por_grupo(ac)),
         "correlaciones_bh.csv": _csv(correlaciones(ac)),
         "comparaciones_grupo.csv": _csv(comparaciones_grupo(ac)),
-        "flujo_exclusiones.md": flujo_exclusiones_md(ac.informe),
+        "flujo_exclusiones.md": flujo_exclusiones_md(ac.informe, ac),
         "metodologia.md": metodologia_md(ac),
         "version_analisis.txt": version_analisis_txt(ac),
     }
@@ -303,7 +320,8 @@ def _df(t: pd.DataFrame) -> None:
         st.dataframe(t, hide_index=True, width="stretch")
 
 
-def _tab_muestra(a, informe, marco: str) -> None:
+def _tab_muestra(ac, a, marco: str) -> None:
+    informe = ac.informe
     m = getattr(a, "muestra", {}) or {}
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Filas analizadas", m.get("n", a.n))
@@ -329,7 +347,7 @@ def _tab_muestra(a, informe, marco: str) -> None:
     st.caption(cat.AVISO_MINIMO)
     st.divider()
     st.subheader("Flujo de la muestra")
-    st.markdown(flujo_exclusiones_md(informe))
+    st.markdown(flujo_exclusiones_md(informe, ac))
 
 
 def _tab_tabla1(ac, marco: str) -> None:
@@ -392,6 +410,7 @@ def _tab_items(ac) -> None:
 
 def _tab_calidad(ac, a) -> None:
     inf = ac.informe
+    st.caption("Calidad de datos del archivo completo (todas las olas).")
     c1, c2, c3 = st.columns(3)
     c1.metric("Edades no numéricas", inf.edad_no_numerica)
     c2.metric("Edades fuera de 4–17", inf.edad_fuera_de_rango)
@@ -446,7 +465,7 @@ def render_investigador(ac) -> None:
         st.caption(f"Ola {ac.ola}. {cat.AVISO_OLA} {SOLO_TOTAL_OLA}")
     tabs = st.tabs(PESTANAS)
     with tabs[0]:
-        _tab_muestra(a, ac.informe, marco)
+        _tab_muestra(ac, a, marco)
     with tabs[1]:
         _tab_tabla1(ac, marco)
     with tabs[2]:

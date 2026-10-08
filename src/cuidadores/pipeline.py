@@ -54,6 +54,9 @@ class AnalisisCuidadores:
     # parental, ya filtrados por la regla de cifras pequeñas.
     items_apq: pd.DataFrame = field(default_factory=pd.DataFrame)
     items_estres: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # Solo con una ola: {marco: distintos (todas las olas), en_base (total publicable de
+    # «Todas»), fuera_de_base, otras_olas}; distintos − fuera − otras = n de la ola.
+    flujo_ola: dict = field(default_factory=dict)
 
     @property
     def marcos(self) -> dict:
@@ -473,6 +476,7 @@ def analizar(carga: ingest.Carga, ola: str | None = None, n_boot: int = 300
     umbral_ep = cat.MAP_ACUERDO["de acuerdo"]
     escala_apq = (cat.APQ.valor_min, cat.APQ.valor_max)
     escala_ep = (cat.EP.valor_min, cat.EP.valor_max)
+    flujo: dict = {}
     if ola is None:
         a_c = analizar_marco(cuid_p, cat.MARCO_CUIDADOR, n_boot=n_boot, avisos=avisos_c)
         a_n = analizar_marco(ninos_p, cat.MARCO_NINO, n_boot=n_boot, avisos=avisos_n)
@@ -489,9 +493,16 @@ def analizar(carga: ingest.Carga, ola: str | None = None, n_boot: int = 300
         restringir_a_ola(a_c, comp_c)
         restringir_a_ola(a_n, comp_n)
         items_apq, items_estres = _items(a_c.datos.loc[a_c.base.nivel], informe)
+        flujo = {}
+        for marco, d, comp, a in ((cat.MARCO_CUIDADOR, cuid_p, comp_c, a_c),
+                                  (cat.MARCO_NINO, ninos_p, comp_n, a_n)):
+            flujo[marco] = dict(distintos=len(d), en_base=len(comp.nivel),
+                                fuera_de_base=len(d) - len(comp.nivel),
+                                otras_olas=len(comp.nivel) - a.n)
         items_apq = _items_de_ola(items_apq, comp_c, cat.APQ, cat.APQ_UMBRAL)
         items_estres = _items_de_ola(items_estres, comp_c, cat.EP, umbral_ep)
     return AnalisisCuidadores(cuidador=a_c, nino=a_n, informe=informe, ola=ola, olas=olas,
+                              flujo_ola=flujo,
                               items_apq=_items_publicables(items_apq, cat.APQ_UMBRAL, escala_apq),
                               items_estres=_items_publicables(items_estres, umbral_ep, escala_ep))
 
