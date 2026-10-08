@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 
 from src.cuidadores import catalog as cat
@@ -431,18 +432,23 @@ def de_la_ola(todas: pd.DataFrame, nivel: pd.Index, ola: str) -> pd.DataFrame:
     return t[t[ingest.OLA_COLUMNA] == ola].reset_index(drop=True)
 
 
+def _posiciones(idx) -> np.ndarray:
+    """Índices de una base sobre datos con índice 0..n−1, como enteros (también vacíos)."""
+    return np.asarray(idx, dtype=np.int64)
+
+
 def comparador(d_todas: pd.DataFrame, marco: str, ola: str, olas: list) -> ComparadorOla:
     """`ComparadorOla` de un marco ya puntuado, con las vistas de todas las olas."""
     clave = CLAVE_FILA[marco]
     dm, base = _nivel_enmascarado(d_todas, clave)
     claves_fila = dm.index.to_numpy()
-    nivel = pd.Index(claves_fila[base.nivel])
-    grupos = [pd.Index(claves_fila[idx])
+    nivel = pd.Index(claves_fila[_posiciones(base.nivel)])
+    grupos = [pd.Index(claves_fila[_posiciones(idx)])
               for grupos in (base.celdas, base.colegios, base.grados) for idx in grupos.values()]
     niveles = {}
     for o in olas:
         dw, bw = _nivel_enmascarado(de_la_ola(dm, nivel, o), clave)
-        niveles[o] = dw.loc[dw.index[bw.nivel]] if len(dw) else dw
+        niveles[o] = dw.iloc[_posiciones(bw.nivel)]
     return ComparadorOla(marco=marco, ola=ola, todas=dm, nivel=nivel, grupos=grupos,
                          olas=niveles)
 
