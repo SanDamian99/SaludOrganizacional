@@ -14,7 +14,10 @@ cada umbral de `MIN_GROUP_N` se cuenta con `nunique` de `ID_cuidador`:
   · «OTRO» (colegio escrito a mano que no se reconoce) y «SIN_DATO» no son
     colegios: nunca forman celda ni colegio y solo cuentan en el total;
   · todo o nada por indicador: una unidad con 1 a 9 cuidadores con dato en un
-    indicador pierde ese indicador.
+    indicador pierde ese indicador;
+  · regla de 3 en el marco de niños: los casos y los no casos de cada
+    proporción publicada o deducible vienen de ≥ 3 cuidadores distintos
+    (`pipeline.regla_cuidadores_distintos`, exigida por `supresion.aplicar`).
 
 Devuelve un `estudiantes.privacidad.Base`, así que `filas`, `relaciones`,
 `unidades`, `estudiantes.supresion` y la vista lo usan sin cambios. En el

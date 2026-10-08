@@ -1,6 +1,7 @@
 """Cuidadores 360 · pipeline con dos marcos, base publicable y supresión (spec §4, §5.5)."""
 import copy
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -179,3 +180,72 @@ def test_items_publicables_quita_la_media_que_acota_los_casos():
     p = pipeline._items_publicables(t, umbral=3, escala=(1, 5))
     assert pd.isna(p["M"].iloc[0]) and pd.isna(p["pct"].iloc[0])
     assert p["M"].iloc[1] == 3.1 and p["pct"].iloc[1] == 50.0
+
+
+# ── I2: en el marco de niños, la regla de 3 cuenta cuidadores distintos ───
+def _ninos_dos_hermanos() -> pd.DataFrame:
+    """3 colegios × quinto, 12 cuidadores cada uno; en LauV dos cuidadores tienen 2 hijos.
+
+    En LauV los 3 niños en la banda «alta» del SDQ emocional son de solo 2
+    cuidadores (los dos hijos del primero y el primero del segundo).
+    """
+    filas = []
+    for col in ("LauV", "JJC", "SJMEB"):
+        for i in range(12):
+            for h in range(2 if (col == "LauV" and i < 2) else 1):
+                filas.append(dict(ID_cuidador=f"C{col}{i}", ID_nino=f"N{col}{i}{h}",
+                                  Colegio=col, Grado="Quinto", Quien="Mamá", Ola="2026",
+                                  ts=pd.Timestamp("2026-03-01"), Sexo="Niña", Edad=9.0,
+                                  Grado_detalle="Quinto", Orden_hijo=h + 1, _edad_estado="ok"))
+    d = pd.DataFrame(filas)
+    rng = np.random.default_rng(3)              # el resto varía (Kruskal-Wallis lo exige)
+    for c in cat_est.SDQ.columnas:
+        d[c] = rng.integers(0, 3, len(d)).astype(float)
+    for i in range(1, 8):
+        d[f"ARI{i}"] = rng.integers(0, 3, len(d)).astype(float)
+    emo = [f"SDQ{i}" for i in cat_est.subescala("SDQ_Emo").items]
+    d[emo] = 0.0
+
+    def puntaje(ix, total):
+        vals = [2] * (total // 2) + [1] * (total % 2)
+        for c, v in zip(emo, vals + [0] * (5 - len(vals))):
+            d.loc[ix, c] = float(v)
+    for col in ("LauV", "JJC", "SJMEB"):
+        for j, ix in enumerate(d.index[d["Colegio"] == col]):
+            if j < 3:
+                puntaje(ix, 5)          # banda alta
+            elif j < 6:
+                puntaje(ix, 8)          # muy alta
+            elif j < 9:
+                puntaje(ix, 4)          # ligeramente elevada
+    return d
+
+
+def _cuidadores_por_banda(d: pd.DataFrame, key: str) -> list[int]:
+    b = d[key].dropna().map(lambda x: cat_est.banda_de(x, key, "parent"))
+    ids = d.loc[b.index, "ID_cuidador"]
+    return [int(ids[b == j].nunique()) for j in range(4)]
+
+
+def test_marco_nino_cuenta_cuidadores_distintos_entre_casos():
+    from src.cuidadores import scoring
+    d = scoring.puntuar_ninos(_ninos_dos_hermanos())
+    assert _cuidadores_por_banda(d[d["Colegio"] == "LauV"], "SDQ_Emo")[2] == 2
+    a = pipeline.analizar_marco(d, cat.MARCO_NINO, n_boot=5)
+    sub = a.subgrupos
+    for o in (sub["Colegio"]["LauV"], sub["Colegio×Grado"]["LauV|Quinto"]):
+        fila = o.bandas.set_index("clave").loc["SDQ_Emo"]
+        assert pd.isna(fila["pct_b2"]) and pd.isna(fila["pct_b0"])
+        assert pd.isna(o.cortes.set_index("clave").loc["SDQ_Emo", "pct"])
+    # Lo publicado cumple la regla también en cuidadores distintos…
+    objetos = {("total", None): a, **{("Colegio", c): s for c, s in sub["Colegio"].items()}}
+    filas = {("total", None): a.base.nivel,
+             **{("Colegio", c): idx for c, idx in a.base.colegios.items()}}
+    for g, o in objetos.items():
+        fila = o.bandas.set_index("clave").loc["SDQ_Emo"]
+        if not pd.isna(fila["pct_b0"]):
+            assert min(_cuidadores_por_banda(a.datos.loc[filas[g]], "SDQ_Emo")) >= 3, g
+    # …y LauV no se deduce restando: total − JJC − SJMEB no puede quedar publicado entero.
+    pub = [not pd.isna(o.bandas.set_index("clave").loc["SDQ_Emo", "pct_b0"])
+           for o in (a, sub["Colegio"]["JJC"], sub["Colegio"]["SJMEB"])]
+    assert not all(pub)

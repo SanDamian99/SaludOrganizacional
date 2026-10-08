@@ -25,6 +25,7 @@ import pandas as pd
 
 from src.cuidadores import catalog as cat
 from src.cuidadores import ingest, privacidad, scoring
+from src.estudiantes import catalog as cat_est
 from src.estudiantes import pipeline as pipe_est
 from src.estudiantes import privacidad as priv_est
 from src.estudiantes import stats, supresion
@@ -118,6 +119,39 @@ def _por_sexo(dn: pd.DataFrame, claves: list[str]) -> pd.DataFrame:
     return t
 
 
+def regla_cuidadores_distintos(d: pd.DataFrame, base, claves,
+                               minimo: int = supresion.MIN_CASOS) -> dict:
+    """{clave: regla(conjunto de átomos) -> bool} para el marco de niños.
+
+    En el marco de niños dos filas pueden ser hermanos: 3 niños «caso» pueden
+    venir de 2 cuidadores. Un conjunto de átomos de la base (celdas, colegios
+    sin celdas y resto) es seguro si sus filas con dato están vacías o si cada
+    banda del SDQ de padres tiene ≥ `minimo` cuidadores distintos dentro y
+    fuera de ella. `supresion.aplicar` la exige en lo publicado, en los
+    márgenes y en todo lo deducible, junto con la regla por conteos.
+    """
+    atomos = supresion.indices_atomos(base)
+    reglas: dict = {}
+    for key in claves:
+        if key not in d.columns or key not in cat_est.BANDS_PARENT:
+            continue
+        v = d[key].dropna()
+        parte = v.map(lambda x, k=key: cat_est.banda_de(x, k, "parent"))
+        ids = d.loc[parte.index, privacidad.UNIDAD]
+        memo: dict = {}
+
+        def regla(conjunto, parte=parte, ids=ids, memo=memo) -> bool:
+            if conjunto not in memo:
+                idx = priv_est.union(atomos[a] for a in conjunto if a in atomos)
+                p = parte.loc[parte.index.intersection(idx)]
+                memo[conjunto] = p.empty or all(
+                    ids.loc[p.index[p == j]].nunique() >= minimo
+                    and ids.loc[p.index[p != j]].nunique() >= minimo for j in range(4))
+            return memo[conjunto]
+        reglas[key] = regla
+    return reglas
+
+
 def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
                    avisos: list | None = None) -> pipe_est.Analisis:
     """Un marco ya puntuado → `Analisis` sobre la base publicable, con supresión."""
@@ -162,7 +196,9 @@ def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
     }
     a.icc = {k: stats.icc_entre_grupos(dn, k) for k in claves}
     a.subgrupos = _subgrupos(dm, marco, claves, base)
-    supresion.aplicar(a)
+    extra = (regla_cuidadores_distintos(dm, base, claves) if marco == cat.MARCO_NINO
+             else None)
+    supresion.aplicar(a, extra_por_clave=extra)
     return a
 
 

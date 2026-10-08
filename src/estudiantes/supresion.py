@@ -249,7 +249,8 @@ def _subconjuntos(c: int):
         yield [i for i in range(c) if m >> i & 1]
 
 
-def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[frozenset]:
+def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS,
+          extra=None) -> list[frozenset]:
     """Conjuntos de átomos deducibles de los agregados `pub` que incumplen la regla.
 
     Lista vacía = nada de lo publicado deja, sumando o restando, un conjunto
@@ -257,13 +258,25 @@ def fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS) -> list[fr
     Falla cerrado: un componente de más de MAX_ENUMERAR átomos ligados, que no
     se revisa entero, cuenta como hallazgo (el componente completo).
     """
-    pequenas, grandes = _fugas(jer, partes, pub, minimo)
+    pequenas, grandes = _fugas(jer, partes, pub, minimo, extra)
     return pequenas + grandes
 
 
-def _fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS
+def _seguro(atomos, partes: dict, largo: int, minimo: int, extra) -> bool:
+    """Un conjunto de átomos es seguro: cumple la regla por conteos y, si hay, `extra`."""
+    if not union_segura(_suma(atomos, partes, largo), minimo):
+        return False
+    return extra is None or bool(extra(frozenset(atomos)))
+
+
+def _fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS, extra=None
            ) -> tuple[list[frozenset], list[frozenset]]:
-    """(conjuntos que incumplen, componentes demasiado grandes para revisar)."""
+    """(conjuntos que incumplen, componentes demasiado grandes para revisar).
+
+    `extra(conjunto de átomos) -> bool` es una regla adicional sobre el mismo
+    conjunto (p. ej. cuidadores distintos entre casos y no casos, en el marco
+    de niños de Cuidadores 360). Sin ella, solo cuentan los conteos.
+    """
     largo = _largo(partes)
     vivos = sorted(a for a, p in partes.items() if sum(int(x) for x in p) > 0)
     if not vivos:
@@ -288,7 +301,7 @@ def _fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS
     determinados = ([j for j in range(len(vivos))] if z.shape[0] == 0 else
                     [j for j in range(len(vivos)) if not np.any(np.abs(z[:, j]) > _TOL)])
     for j in determinados:
-        if not union_segura(P[j], minimo):
+        if not _seguro({vivos[j]}, partes, largo, minimo, extra):
             salida.append(frozenset({vivos[j]}))
     grandes: list[frozenset] = []
     if z.shape[0]:
@@ -300,7 +313,7 @@ def _fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS
                 idx = [comp[i] for i in sub]
                 if np.any(np.abs(z[:, idx].sum(axis=1)) > 1e-7):
                     continue
-                if not union_segura(P[idx].sum(axis=0), minimo):
+                if not _seguro({vivos[j] for j in idx}, partes, largo, minimo, extra):
                     salida.append(frozenset(vivos[j] for j in idx))
     salida.sort(key=lambda s: (int(_suma(s, partes, largo).sum()), sorted(s)))
     return salida, grandes
@@ -312,18 +325,21 @@ def _n(jer, g, partes, largo) -> int:
 
 
 def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS,
-             previos=frozenset()) -> set:
+             previos=frozenset(), extra=None) -> set:
     """Agregados que no se publican para un indicador (primaria + complementaria).
 
     `partes` = {átomo: (conteo de cada parte)}. Incluye los agregados sin
     respuestas válidas (n = 0) y los que nunca se publican (R). `previos` son
     agregados que ya vienen ocultos (p. ej. los de la familia en la que una
-    alerta está anidada): se parte de ellos y nunca se destapan.
+    alerta está anidada): se parte de ellos y nunca se destapan. `extra`
+    (conjunto de átomos → bool) es una regla más que debe cumplir todo lo
+    publicado y todo lo deducible (ver `_fugas`).
     """
     largo = _largo(partes)
     sup = set(jer.nunca) | set(previos)
     for g, atomos in jer.grupos.items():
-        if not partes_publicables(_suma(atomos, partes, largo), minimo):
+        if not partes_publicables(_suma(atomos, partes, largo), minimo) or (
+                extra is not None and not extra(frozenset(atomos))):
             sup.add(g)
 
     # 1. márgenes, hasta un punto fijo
@@ -335,7 +351,7 @@ def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS,
                 continue
             cubiertos = frozenset().union(*[jer.grupos[h] for h in hijos if h not in sup])
             u = jer.grupos[padre] - cubiertos
-            if union_segura(_suma(u, partes, largo), minimo):
+            if _seguro(u, partes, largo, minimo, extra):
                 continue
             candidatos = [h for h in hijos if h not in sup and _n(jer, h, partes, largo) > 0]
             if candidatos:
@@ -348,7 +364,7 @@ def suprimir(jer: Jerarquia, partes: dict, minimo: int = MIN_CASOS,
     vivos = [a for a, p in partes.items() if sum(int(x) for x in p) > 0]
     while True:
         pub = publicados(jer, sup)
-        encontradas, grandes = _fugas(jer, partes, pub, minimo)
+        encontradas, grandes = _fugas(jer, partes, pub, minimo, extra)
         if grandes:
             # Falla cerrado: se oculta el agregado publicado más pequeño que
             # toca el componente, hasta que se pueda revisar entero (o no quede
@@ -663,12 +679,17 @@ def _aplicar_alertas(jer, objs: dict, atomos: dict, fam: dict, sup_familias: dic
                 resumen[clave_res] = resumen.get(clave_res, 0) + 1
 
 
-def aplicar(a, minimo: int = MIN_CASOS) -> dict:
+def aplicar(a, minimo: int = MIN_CASOS, extra_por_clave: dict | None = None) -> dict:
     """Suprime, en el sitio, las proporciones de `a` y de sus subgrupos que delatan.
 
     Trabaja solo con tablas agregadas: las partes de cada átomo salen de las
     tablas de su celda o colegio, y las del resto R, del nivel menos todos
     ellos. Devuelve {(tipo, agrupación): filas suprimidas}.
+
+    `extra_por_clave` = {clave: regla(conjunto de átomos) -> bool}: una regla
+    más por familia, que la supresión primaria, los márgenes y la auditoría
+    exacta exigen a la vez que la de conteos (Cuidadores 360 la usa para
+    contar cuidadores distintos en el marco de niños).
     """
     if getattr(a, "supresion_aplicada", False):
         return {}                 # idempotente: los conteos ya no están
@@ -693,7 +714,8 @@ def aplicar(a, minimo: int = MIN_CASOS) -> dict:
         if (resto < 0).any():
             raise ValueError(f"{clave}: los subgrupos suman más que el nivel")
         partes[RESTO] = resto
-        sup_familias[clave] = suprimir(jer, {k: tuple(v) for k, v in partes.items()}, minimo)
+        sup_familias[clave] = suprimir(jer, {k: tuple(v) for k, v in partes.items()}, minimo,
+                                       extra=(extra_por_clave or {}).get(clave))
         for g in sup_familias[clave]:
             if g in objs:
                 tocadas = _anular(objs[g], clave)
