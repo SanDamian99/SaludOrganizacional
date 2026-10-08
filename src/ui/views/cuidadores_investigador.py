@@ -82,8 +82,17 @@ def _csv(df: pd.DataFrame) -> str:
     return "" if df.empty else df.to_csv(index=False)
 
 
+def _entero(valor) -> int | None:
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+
+
 def conteo_legible(valor) -> str:
-    """Conteos de grupo: por debajo del mínimo, «<10»."""
+    """Conteos de grupo: por debajo del mínimo, «<10» (también si ya llega así publicado)."""
+    if isinstance(valor, str) and valor.strip().startswith("<"):
+        return valor.strip()
     try:
         v = int(valor)
     except (TypeError, ValueError):
@@ -188,12 +197,17 @@ def flujo_exclusiones_md(informe, ac=None) -> str:
         return ""
     lineas = ["# Flujo de la muestra · Cuidadores 360", "",
               "Archivo completo (todas las olas):", ""]
-    restantes = int(informe.filas_archivo)
-    lineas.append(f"- {PASOS_EXCLUSION[0][1]}: {restantes}")
+    # Desde la corrida publicada, un conteo de 1 a 9 llega como «<10»: se muestra
+    # tal cual y lo que se deduciría de él queda «—».
+    restantes = _entero(informe.filas_archivo)
+    lineas.append(f"- {PASOS_EXCLUSION[0][1]}: {informe.filas_archivo}")
     for campo, etiqueta in PASOS_EXCLUSION[1:]:
-        quitadas = int(getattr(informe, campo, 0) or 0)
-        restantes -= quitadas
-        lineas.append(f"- − {etiqueta}: {quitadas} → quedan {restantes}")
+        valor = getattr(informe, campo, 0) or 0
+        quitadas = _entero(valor)
+        restantes = (restantes - quitadas
+                     if restantes is not None and quitadas is not None else None)
+        lineas.append(f"- − {etiqueta}: {valor} → quedan "
+                      f"{restantes if restantes is not None else _SIN_DATO}")
     lineas += [f"- Cuidadores distintos analizados: {informe.cuidadores_distintos}", "",
                "## Niños", "",
                f"- Filas de niño (hijo 1 y hijo 2): {informe.filas_nino}",

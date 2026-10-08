@@ -216,6 +216,8 @@ def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
     a.por_grado, _ = stats.comparar_por_grupo(en_grados, claves, "Grado",
                                               list(cat.GRADOS_ESTUDIO))
     a.por_colegio, _ = stats.comparar_por_grupo(en_colegios, claves, "Colegio")
+    a.por_grado = medias_de_grupo_publicables(a.por_grado)
+    a.por_colegio = medias_de_grupo_publicables(a.por_colegio)
     for t in (a.por_grado, a.por_colegio):
         if not t.empty:
             t["escala"] = t["clave"].map(cat.label)
@@ -225,12 +227,103 @@ def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
         "Grado": sorted(set(map(str, d["Grado"].dropna().unique())) - set(base.grados)),
         "Colegio": sorted(set(map(str, d["Colegio"].dropna().unique())) - set(base.colegios)),
     }
-    a.icc = {k: stats.icc_entre_grupos(dn, k) for k in claves}
+    a.icc = {k: icc_publicable(dm, base, k) for k in claves}
     a.subgrupos = _subgrupos(dm, marco, claves, base)
     extra = (regla_cuidadores_distintos(dm, base, claves) if marco == cat.MARCO_NINO
              else None)
     supresion.aplicar(a, extra_por_clave=extra)
     return a
+
+
+def icc_publicable(d: pd.DataFrame, base, clave: str) -> float:
+    """CCI entre colegios sobre la base publicable, contando cuidadores distintos.
+
+    Solo las filas que cada colegio publica (`base.colegios`, sin sus grados
+    pequeños) y solo los colegios con ≥ MIN_GROUP_N cuidadores distintos con
+    dato en `clave`: en el marco de niños las filas son niños, no cuidadores.
+    """
+    if clave not in d.columns:
+        return float("nan")
+    partes = []
+    for idx in (getattr(base, "colegios", None) or {}).values():
+        sub = d.loc[d.index.intersection(idx)]
+        sub = sub[sub[clave].notna()]
+        if sub[privacidad.UNIDAD].nunique() >= cat.MIN_GROUP_N:
+            partes.append(sub)
+    if len(partes) < 2:
+        return float("nan")
+    return stats.icc_entre_grupos(pd.concat(partes), clave)
+
+
+# ── medias por colegio y por grado que acotan un corte ────────────────────
+def _cortes_de_media(clave: str) -> list[tuple]:
+    """(mín, máx, corte, casos_altos, entera) de cada corte publicado de la escala.
+
+    EPDS ≥ 10 y ≥ 13 (entera); SDQ de padres «alto o muy alto» (banda ≥ 2;
+    prosocial: banda ≥ 2 es ≤ 6) (entera); MSPSS < 3 (media de ítems, continua).
+    Las escalas sin corte no acotan nada.
+    """
+    p = cat.PUNTUACIONES_POR_CLAVE.get(clave)
+    if p is None:
+        return []
+    lo, hi = p.rango
+    if clave == "EPDS_Total":
+        return [(lo, hi, cat.EPDS_POSIBLE, True, True), (lo, hi, cat.EPDS_PROBABLE, True, True)]
+    if clave.startswith("MSPSS_"):
+        return [(lo, hi, 3, False, False)]
+    if p.marco == cat.MARCO_NINO and clave in cat_est.BANDS_PARENT:
+        banda_2 = cat_est.BANDS_PARENT[clave][2]
+        if clave == "SDQ_Pro":
+            return [(lo, hi, banda_2[1], False, True)]
+        return [(lo, hi, banda_2[0], True, True)]
+    return []
+
+
+def _cotas_continuas(media, n, lo, hi, umbral, holgura) -> tuple[int, int]:
+    """(máx. casos, máx. no casos) con caso = valor < `umbral` en una escala continua.
+
+    Un caso aporta como mucho `umbral` a Σ = M·n y un no caso al menos
+    `umbral`: k ≤ (máx·n − Σ)/(máx − umbral), n − k ≤ (Σ − mín·n)/(umbral − mín).
+    """
+    n = int(n)
+    k = np.floor((hi * n - (float(media) + holgura) * n) / (hi - umbral) + 1e-9)
+    nk = np.floor(((float(media) - holgura) * n - lo * n) / (umbral - lo) + 1e-9)
+    return int(min(k, n)), int(min(nk, n))
+
+
+def media_acota_corte(clave: str, media, n, minimo: int = supresion.MIN_CASOS,
+                      holgura: float = supresion.REDONDEO_MEDIA) -> bool:
+    """True si la media de un grupo obliga a < `minimo` casos o no casos de algún corte."""
+    if media is None or pd.isna(media) or n is None or pd.isna(n) or not n:
+        return False
+    for lo, hi, corte, altos, entera in _cortes_de_media(str(clave)):
+        if entera:
+            if supresion.media_delata(media, n, lo, hi, corte, casos_altos=altos,
+                                      minimo=minimo, holgura=holgura):
+                return True
+        elif min(_cotas_continuas(media, n, lo, hi, corte, holgura)) < minimo:
+            return True
+    return False
+
+
+def medias_de_grupo_publicables(t: pd.DataFrame) -> pd.DataFrame:
+    """`comparar_por_grupo` sin las medias que acotan un corte (`media_acota_corte`)."""
+    if t is None or t.empty or "clave" not in t.columns:
+        return t
+    t = t.copy()
+    for col in [c for c in t.columns if c.startswith("M·")]:
+        n_col = "n·" + col[2:]
+        if n_col not in t.columns:
+            continue
+        quitar = [i for i, f in t.iterrows() if media_acota_corte(f["clave"], f[col], f[n_col])]
+        if quitar:
+            t[col] = t[col].astype(float)
+            t.loc[quitar, col] = float("nan")
+            de_col = "DE·" + col[2:]
+            if de_col in t.columns:
+                t[de_col] = t[de_col].astype(float)
+                t.loc[quitar, de_col] = float("nan")
+    return t
 
 
 def _items_publicables(t: pd.DataFrame, umbral: int | None = None,

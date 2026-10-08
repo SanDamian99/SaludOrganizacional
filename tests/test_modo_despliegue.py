@@ -104,7 +104,9 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
     for modulo in ("triangulacion", "cuidadores_investigador"):
         assert modulo not in antes, f"{modulo} se importa antes del corte público"
 
-    # Cuidadores 360 (fase 4a) solo se enruta después del corte, para investigadores
+    # Cuidadores 360: en público solo la vista de comunidad (fase 4b), leída de la
+    # corrida publicada; la página local y la de investigadores, después del corte
+    assert "from src.ui.views.cuidadores_comunidad import render_publico" in antes
     assert "src.ui.cuidadores" not in antes and "src.cuidadores" not in antes
     assert "from src.ui.cuidadores import render_cuidadores" in despues
 

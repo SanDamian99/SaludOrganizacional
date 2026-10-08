@@ -1172,7 +1172,8 @@ def _selector_grupo(analisis, columna: str, etiqueta: str,
         estado.sembrar(clave, estado.COLEGIO, [TODOS] + opciones)
     if st.session_state.get(clave, TODOS) not in [TODOS] + opciones:
         st.session_state[clave] = TODOS     # el grado elegido no existe en este colegio
-    valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave)
+    cambio = estado.al_cambiar(clave, estado.COLEGIO) if columna == "Colegio" else None
+    valor = st.sidebar.selectbox(etiqueta, [TODOS] + opciones, key=clave, on_change=cambio)
     # Si este nivel no ofrece el colegio compartido, el widget muestra «Todos»
     # sin que la persona lo haya elegido: no se pisa el compartido, para que al
     # volver a un nivel que sí lo tiene siga elegido. Un «Todos» elegido a
@@ -1202,7 +1203,8 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     estado.sembrar("est_com_rol", estado.ROL, list(cat.ROLES))
     rol = st.radio("Estoy viendo esto como", list(cat.ROLES),
                    format_func=lambda r: cat.ROLES[r], horizontal=True,
-                   key="est_com_rol")
+                   key="est_com_rol",
+                   on_change=estado.al_cambiar("est_com_rol", estado.ROL))
     estado.guardar(estado.ROL, rol)
 
     st.sidebar.markdown("### Estudiantes · vista comunidad")

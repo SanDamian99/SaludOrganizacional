@@ -248,11 +248,45 @@ la carpeta hermana `../datos_fuente_360` (subcarpetas `estudiantes`, `docentes`,
 de estudiantes y las pruebas le preguntan a él. En el despliegue esa carpeta no
 existe y la aplicación lee Supabase, que es lo previsto.
 
-**Cuidadores 360 (fase 4a)** solo funciona con el archivo en local
-(`cuidadores/Cuidando al Cuidador … .xlsx`) y la clave `OBS360_CLAVE_HMAC`. En
-los despliegues la página dice «Cuidadores aún no está publicado»; en el
-público ni siquiera aparece en el menú hasta que la fase 4b ponga
-`navegacion.CUIDADORES_PUBLICO = True`.
+**Cuidadores 360 (fases 4a y 4b).** En local (archivo
+`cuidadores/Cuidando al Cuidador … .xlsx` y clave `OBS360_CLAVE_HMAC`) la
+página tiene dos vistas, como Estudiantes: comunidad (colegio, familia,
+municipio) e investigadores (con el filtro de ola, que nunca se publica). Sin
+archivo, la página lee la corrida publicada de cuidadores (solo agregados de
+todas las olas); sin corrida dice «Cuidadores aún no está publicado».
+
+Publicar (en la máquina que procesa, con la clave):
+
+```bash
+python -m src.cuidadores.publicar --ensayo --salida /tmp/lote_cuidadores.json   # revisar
+python -m src.cuidadores.publicar --notas "cuidadores" --publicar-ya
+```
+
+`--ensayo` sale con código 2 si la auditoría encuentra algo. Mientras
+`comunidad_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS` sean False,
+`--publicar-ya` no sube las filas de las señales del adulto. Publicar
+cuidadores solo cierra las corridas viejas de cuidadores: la de estudiantes no
+se toca. Informes para imprimir: `python -m scripts.generar_informes_cuidadores`
+(audita antes de escribir).
+
+En el despliegue público la página **solo aparece** cuando se cumplen las dos
+llaves, y en este orden:
+
+1. El equipo aprueba los textos y la ruta de atención.
+2. Solo después de esa aprobación, un commit propio pone en `True`
+   `comunidad_catalogo.TEXTOS_APROBADOS` y `RUTAS_VALIDADAS` (las dos).
+3. Con las dos banderas ya en `True`, se publica la corrida con
+   `--publicar-ya`. Una corrida publicada antes no trae las filas de las
+   señales del adulto: hay que volver a publicarla.
+4. Solo entonces, otro commit propio pone `navegacion.CUIDADORES_PUBLICO = True`.
+   Luego, «Reboot app».
+
+La página pública nunca se muestra sin el panel de señales: si la corrida
+publicada no trae sus filas (por ejemplo, se publicó antes del paso 3), dice
+«Cuidadores aún no está publicado», igual que sin corrida, y no falla. En
+público solo se carga la vista de comunidad
+(`cuidadores_comunidad.render_publico`); nunca la carga del formulario, el
+pipeline ni la vista de investigadores.
 
 **Triangulación 360 (fase 5)** solo funciona en la máquina que tiene los tres
 archivos (estudiantes, cuidadores y docentes, de preferencia el codificado por

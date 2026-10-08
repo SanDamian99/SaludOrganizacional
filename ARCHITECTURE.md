@@ -593,11 +593,11 @@ trabajo, así que la suite corre en cualquier máquina.
 
 ---
 
-## Módulo Cuidadores 360 (fase 4a)
+## Módulo Cuidadores 360 (fases 4a y 4b)
 
-Formulario «Cuidando al Cuidador» (209 columnas, dos olas). Solo local y solo
-para investigadores; la vista de comunidad, los informes y la publicación son
-de la fase 4b.
+Formulario «Cuidando al Cuidador» (209 columnas, dos olas). La fase 4a lo carga,
+lo puntúa y lo muestra a investigadores en local; la 4b añade la vista de
+comunidad, los informes y la publicación de agregados.
 
 ```
 src/core/seudonimo.py      HMAC-SHA256 con clave local (OBS360_CLAVE_HMAC):
@@ -613,15 +613,33 @@ src/cuidadores/
 ├── privacidad.py          Base publicable contando cuidadores distintos.
 └── pipeline.py            AnalisisCuidadores: marcos «cuidador» y «nino», cada
                            uno un estudiantes.pipeline.Analisis con supresión.
-src/ui/cuidadores.py                    Página: archivo local, clave y filtro de ola.
+src/cuidadores/ (fase 4b)
+├── comunidad_catalogo.py  Textos de la comunidad (provisionales): tarjetas, señales
+│                          del adulto, autocuidado de familia, ruta y avisos.
+├── alertas.py             «Ánimo» (EPDS ≥ 13) por grupo y «Autolesión» solo en el
+│                          total, desde los cortes ya suprimidos; estado sin casos.
+├── comunidad.py           preparar(): copia para la comunidad y la publicación
+│                          (sin autolesión por grupo, sin nada por ola).
+├── auditoria.py           Restas contando cuidadores distintos, cifras que no
+│                          delatan (con la puntuación de cuidadores) y autolesión.
+├── publicar.py            Lote agregado (nivel «cuidadores», marco en detalle),
+│                          ensayo y publicación por módulo.
+└── lectura.py             Rearma la corrida publicada (despliegues).
+src/ui/cuidadores.py                    Página local: selector de vista y fuente.
 src/ui/views/cuidadores_investigador.py Pestañas y paquete exportable.
+src/ui/views/cuidadores_comunidad.py    Vista de comunidad y página pública.
+src/ui/views/cuidadores_informe.py      Informes del colegio y de la Secretaría y
+                                        resumen de una página (PDF).
+scripts/generar_informes_cuidadores.py  Informes HTML, con auditoría previa.
 ```
 
 - **Nada individual.** Los nombres solo se leen para el seudónimo; el teléfono
   no se lee. El mínimo de 10 cuenta cuidadores distintos, también en el marco
   de niños. Toda proporción pasa por `estudiantes/supresion.py`.
-- **Sin publicación todavía.** `navegacion.CUIDADORES_PUBLICO = False`: el
-  despliegue público no muestra ni importa nada de cuidadores.
+- **Publicación (4b).** Solo agregados de todas las olas, auditados antes de
+  subir; la autolesión solo en el total; ningún conteo de casos. El público ve
+  la página solo con `navegacion.CUIDADORES_PUBLICO = True` y el catálogo de la
+  comunidad aprobado; aun entonces solo importa `views/cuidadores_comunidad`.
 
 ---
 
