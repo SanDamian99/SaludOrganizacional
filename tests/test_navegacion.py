@@ -24,15 +24,18 @@ def test_ya_no_existe_la_pagina_dashboard():
     assert "Dashboard" not in nav.MENU
 
 
-def test_triangulacion_aun_no_sale_en_el_menu():
-    """Triangulación llega en la fase 5."""
-    for m in (COMPLETO, INVESTIGADOR, COMUNIDAD):
-        assert nav.PAGINA_TRIANGULACION not in nav.menu(m)
+def test_triangulacion_solo_para_investigadores():
+    """Fase 5: completo e investigador la ven; comunidad nunca (spec §5.3 y §5.6)."""
+    assert nav.PAGINA_TRIANGULACION in nav.DISPONIBLES
+    assert nav.PAGINA_TRIANGULACION in nav.menu(COMPLETO)
+    assert nav.PAGINA_TRIANGULACION in nav.menu(INVESTIGADOR)
+    assert nav.PAGINA_TRIANGULACION not in nav.menu(COMUNIDAD)
+    assert nav.PAGINA_TRIANGULACION not in nav.menu("cualquier-cosa")
 
 
 def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
-    esperado = ["Docentes", "Estudiantes 360", "Cuidadores 360", "Chat con IA",
-                "Cargar Datos", "Análisis de tendencias", "Reportes"]
+    esperado = ["Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
+                "Chat con IA", "Cargar Datos", "Análisis de tendencias", "Reportes"]
     assert nav.menu(COMPLETO) == esperado
     assert nav.menu(INVESTIGADOR) == esperado
 
@@ -44,6 +47,11 @@ def test_comunidad_solo_ve_paginas_publicas():
 
 def test_triangulacion_nunca_es_publica():
     assert nav.PAGINA_TRIANGULACION not in nav.PUBLICAS
+
+
+def test_triangulacion_sigue_fuera_aunque_cuidadores_sea_publica(monkeypatch):
+    monkeypatch.setattr(nav, "CUIDADORES_PUBLICO", True)
+    assert nav.PAGINA_TRIANGULACION not in nav.menu(COMUNIDAD)
 
 
 def test_cuidadores_no_es_publica_hasta_la_aprobacion():
@@ -79,7 +87,10 @@ PROHIBIDOS_EN_COMUNIDAD = (
     "src.ui.trends", "src.ai.gemini_client",
     "src.ui.views.estudiantes_investigador",
     "src.ui.cuidadores", "src.ui.views.cuidadores_investigador",
-    "src.cuidadores.ingest", "src.cuidadores.pipeline")
+    "src.cuidadores.ingest", "src.cuidadores.pipeline",
+    "src.ui.triangulacion", "src.ui.views.triangulacion_investigador",
+    "src.triangulacion.fuentes", "src.triangulacion.enlace", "src.triangulacion.diadas",
+    "src.triangulacion.capa1", "src.triangulacion.pipeline")
 
 
 def _main_en_comunidad(monkeypatch):
@@ -149,3 +160,19 @@ def test_main_en_investigador_ofrece_cuidadores(monkeypatch, tmp_path):
     radio.set_value("Cuidadores 360").run()
     assert not at.exception
     assert any("aún no está publicado" in i.value for i in at.info)
+
+
+def test_main_en_investigador_ofrece_triangulacion(monkeypatch, tmp_path):
+    """Sin archivos (como en el despliegue del equipo), la página lo dice y no falla."""
+    from streamlit.testing.v1 import AppTest
+    from src.triangulacion import catalogo as cat_tri
+    monkeypatch.setenv("OBS360_MODO", "investigador")
+    monkeypatch.setenv("OBS360_DATOS_DIR", str(tmp_path))
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=120).run()
+    assert not at.exception
+    radio = at.radio(key="nav_pagina")
+    assert "Triangulación 360" in radio.options
+    radio.set_value("Triangulación 360").run()
+    assert not at.exception
+    assert any(cat_tri.AVISO_DESPLIEGUE in i.value for i in at.info)

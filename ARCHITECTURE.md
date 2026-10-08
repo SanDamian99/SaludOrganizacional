@@ -622,3 +622,41 @@ src/ui/views/cuidadores_investigador.py Pestañas y paquete exportable.
   de niños. Toda proporción pasa por `estudiantes/supresion.py`.
 - **Sin publicación todavía.** `navegacion.CUIDADORES_PUBLICO = False`: el
   despliegue público no muestra ni importa nada de cuidadores.
+
+---
+
+## Módulo Triangulación 360 (fase 5)
+
+Solo investigadores y solo local. Cruza estudiantes, cuidadores y docentes.
+
+```
+src/triangulacion/
+├── catalogo.py      Constructos por actor, pares del mismo objeto y de
+│                    co-ocurrencia, avisos fijos.
+├── fuentes.py       Carga local: estudiantes (con el seudónimo «N…» del niño),
+│                    cuidadores (fase 4a) y docentes (archivo codificado).
+├── estadistica.py   CCI(A,1), kappa ponderado, Bland–Altman, errores agrupados,
+│                    bootstrap por familias (numpy/scipy, sin statsmodels).
+├── capa1.py         Cada actor frente al resto del municipio, por colegio y
+│                    por grado. Átomos = las unidades que publica cada módulo
+│                    (estudiantes por nivel; cuidadores en el marco completo y
+│                    el filtro de grados quita átomos enteros).
+├── enlace.py        Díadas: seudónimo HMAC exacto + mismo colegio; claves
+│                    repetidas en un colegio se descartan (ambiguas).
+├── diadas.py        Acuerdo SDQ, malestar no visto, apoyo, asociaciones y
+│                    sensibilidad sin díadas discordantes (sexo, edad, grado).
+├── pipeline.py      Triangulacion: solo agregados.
+└── exportar.py      ZIP local: tablas, figuras y metodología fija.
+src/ui/triangulacion.py                    Página: archivos, clave, módulo viejo.
+src/ui/views/triangulacion_investigador.py Resumen, capas, metodología, ZIP.
+```
+
+- **Nada individual.** La tabla de díadas vive solo dentro de
+  `pipeline.analizar`; toda cifra exige 10 o más (familias distintas en las
+  díadas) y toda proporción, 3 o más casos y no casos, también por resta,
+  incluso junto a lo que publican los módulos de estudiantes y cuidadores
+  (`tests/triangulacion_span.py`: auditoría lineal de piezas de 1 a 9).
+- **Estudiantes no cambia.** `estudiantes.ingest` solo crea `N_hmac` cuando la
+  triangulación pasa `clave_nino`; el pipeline y la publicación no lo hacen.
+- **Nunca en público.** `PAGINA_TRIANGULACION` no está en `PUBLICAS` y
+  `main.py` la enruta después del corte.

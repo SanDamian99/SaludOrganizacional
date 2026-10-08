@@ -108,6 +108,10 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
     assert "src.ui.cuidadores" not in antes and "src.cuidadores" not in antes
     assert "from src.ui.cuidadores import render_cuidadores" in despues
 
+    # Triangulación 360 (fase 5) también: después del corte y solo para investigadores
+    assert "src.triangulacion" not in antes and "src.ui.triangulacion" not in antes
+    assert "from src.ui.triangulacion import render_triangulacion" in despues
+
 
 def test_el_panel_tecnico_queda_despues_del_corte():
     fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
