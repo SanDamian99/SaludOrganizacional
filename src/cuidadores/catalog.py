@@ -351,9 +351,10 @@ AVISO_APQ = ("APQ: mientras no llegue el libro de códigos solo se reportan el c
 AVISO_MSPSS = ("El MSPSS del cuidador reparte los ítems 5 / 4 / 3 (persona especial, familia, "
                "amigos) y su redacción no es la de estudiantes: solo se compara por fuente, "
                "sobre todo familia, y con este aviso.")
-AVISO_SDQ_EDAD = (f"SDQ de padres: se puntúa a los niños de {EDAD_SDQ[0]} a {EDAD_SDQ[1]} años "
-                  "y a los que no tienen una edad numérica (se declaran aparte). Con una edad "
-                  "numérica fuera de ese rango, el SDQ queda como faltante.")
+AVISO_SDQ_EDAD = (f"SDQ de padres: solo se puntúa a los niños con una edad numérica de "
+                  f"{EDAD_SDQ[0]} a {EDAD_SDQ[1]} años (spec §5.5). Con una edad no numérica, "
+                  "vacía o fuera de ese rango, el SDQ queda como faltante; las edades no "
+                  "numéricas y fuera de rango se declaran en la calidad de datos.")
 AVISO_OLA = ("El filtro de ola solo existe en esta vista local: nada se publica por ola.")
 AVISO_MINIMO = (f"Ningún grupo con menos de {MIN_GROUP_N} cuidadores distintos se muestra "
                 "desagregado; en el marco de niños el mínimo también cuenta cuidadores, no "

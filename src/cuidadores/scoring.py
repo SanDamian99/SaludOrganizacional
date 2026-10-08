@@ -13,7 +13,8 @@ de autolesión (ítem 10 ≠ «No, nunca»), MSPSS por fuente (media 1–5, 5 / 
 o más») y grito (APQ 25), descriptivos.
 
 Marco niño: SDQ de padres con las subescalas estándar y las bandas
-`BANDS_PARENT`; si la edad es numérica y cae fuera de 4–17, el SDQ es faltante.
+`BANDS_PARENT`, solo con una edad numérica entre 4 y 17 (spec §5.5); con una
+edad no numérica, vacía o fuera de ese rango, el SDQ es faltante.
 ARI de padres: ítems 1–6 (0–12) y deterioro (ítem 7).
 
 Las tablas (`descriptivos`, `sobre_cortes_*`, `terciles`, `fiabilidad`) tienen
@@ -85,8 +86,8 @@ def puntuar_ninos(d: pd.DataFrame) -> pd.DataFrame:
     out = d.copy()
     sdq_cols = cat_est.SDQ.columnas
     if "_edad_estado" in out.columns:
-        fuera = out["_edad_estado"] == "fuera_de_rango"
-        out.loc[fuera, sdq_cols] = np.nan
+        sin_edad_valida = out["_edad_estado"] != "ok"
+        out.loc[sin_edad_valida, sdq_cols] = np.nan
     nuevas: dict[str, pd.Series] = {}
     for sub in cat_est.SDQ.subescalas:
         X = sc_est.items_orientados(out, sub, cat_est.SDQ)

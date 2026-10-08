@@ -67,7 +67,7 @@
 | Colegio | `core.colegios.normalizar`. «OTRO» se guarda como «Otro colegio» (el texto libre no viaja). «OTRO» y «SIN_DATO» **nunca forman grupo**: solo cuentan en el total |
 | Colegio y grado del cuidador | Los de su **hijo 1** (el primero que reporta) |
 | Ola | Año calendario de la marca temporal: «2025» (sep-2025) y «2026» (mar–sep 2026). La marca se lee en ISO (xlsx) o día/mes/año (csv) |
-| Edad del niño | Un entero de 1 o 2 cifras, con «años» opcional («10 años» → 10). Lo demás («diez», «10 años 5 meses») es «no numérica» → faltante. Una edad numérica fuera de 4–17 → faltante y **su SDQ queda faltante**; con edad no numérica el SDQ se puntúa (casi todos están en grados del estudio) y se declara aparte |
+| Edad del niño | Un entero de 1 o 2 cifras, con «años» opcional («10 años» → 10). Lo demás («diez», «10 años 5 meses») es «no numérica» → faltante. Una edad numérica fuera de 4–17 → faltante y **su SDQ queda faltante**. Con edad no numérica (o vacía) el SDQ **también queda faltante** (spec §5.5: «si no es numérica, falta»; la spec manda sobre este plan, corregido tras la revisión del 8-oct-2026) y se declara aparte |
 | Curso → grado | En orden: (1) palabra de grado en cualquier parte («Sexto 602» → Sexto); (2) número de 1 o 2 cifras con o sin sufijo («5A», «4to», «8vo», «5°», «5-2» → su primer número); (3) código de 3–4 cifras grado + grupo 01–20 («501» → Quinto, «1002» → Décimo). Grados del estudio: cuarto a décimo, con los nombres de estudiantes. Transición/jardín, primero a tercero y once: «fuera del rango del estudio» (`Grado` vacío, `Grado_detalle` con el nombre). Lo demás: «Sin dato» |
 | Quién responde | Mamá, Papá u Otro cuidador (otro cuidador principal, tío o tía, abuelo o abuela) |
 | Deduplicación | **Cuidadores:** la respuesta más reciente por `ID_cuidador` (si empatan, el último envío). **Niños:** ola más reciente → mamá, papá, otro → primer envío → hijo 1 antes que hijo 2 (cubre el caso real del mismo niño como hijo 1 y 2 en un envío). El filtro de ola se aplica **antes** de deduplicar |
@@ -1864,9 +1864,11 @@ def test_sdq_inversos_estandar():
     assert p["SDQ_Total"].item() == 10
 
 
-def test_sdq_faltante_si_la_edad_numerica_esta_fuera_de_4_a_17():
-    assert np.isnan(scoring.puntuar_ninos(_nino("fuera_de_rango"))["SDQ_Total"].item())
-    assert scoring.puntuar_ninos(_nino("no_numerica"))["SDQ_Total"].notna().item()
+def test_sdq_solo_con_edad_numerica_de_4_a_17():
+    # Corregido tras la revisión (spec §5.5): sin edad numérica válida, el SDQ falta.
+    assert scoring.puntuar_ninos(_nino("ok"))["SDQ_Total"].notna().item()
+    for estado in ("fuera_de_rango", "no_numerica", "vacia"):
+        assert np.isnan(scoring.puntuar_ninos(_nino(estado))["SDQ_Total"].item())
 
 
 def test_ari_de_padres_items_1_a_6():
@@ -1995,8 +1997,8 @@ def puntuar_ninos(d: pd.DataFrame) -> pd.DataFrame:
     out = d.copy()
     sdq_cols = cat_est.SDQ.columnas
     if "_edad_estado" in out.columns:
-        fuera = out["_edad_estado"] == "fuera_de_rango"
-        out.loc[fuera, sdq_cols] = np.nan
+        sin_edad_valida = out["_edad_estado"] != "ok"     # spec §5.5 (corregido)
+        out.loc[sin_edad_valida, sdq_cols] = np.nan
     nuevas: dict[str, pd.Series] = {}
     for sub in cat_est.SDQ.subescalas:
         X = sc_est.items_orientados(out, sub, cat_est.SDQ)
@@ -4058,7 +4060,7 @@ OBS360_MODO=investigador OBS360_DATOS_DIR="$TMPDIR/obs360_vacio" .venv/bin/strea
 1. **Libro de códigos (`Códigos.xlsx`, spec §5.0 y §9).** Sin él no hay subescalas del APQ ni total del estrés parental. En particular: ¿cómo se puntúan las columnas 103–107 (una pregunta de elección forzada partida en cinco Likert) y la 117 (en positivo)? ¿Qué ítems del APQ forman cada subescala (implicación, crianza positiva, supervisión, disciplina inconsistente, castigo corporal)?
 2. **Hijo 2 igual al hijo 1.** En 72 envíos el hijo 2 tiene el mismo nombre que el hijo 1 (ver observaciones). Hoy se queda el hijo 1 y el 2 se descarta. ¿Es un error de diligenciamiento, o son hermanos con el mismo nombre (improbable)? ¿Conviene conservar el SDQ del hijo 2 como segunda medición?
 3. **Corte del ARI de padres.** No se aplica el > 2 del autoinforme; solo media y distribución. ¿Hay un corte de la versión para padres que quieran usar?
-4. **Edad y SDQ.** Con una edad numérica fuera de 4–17 (15 filas de niño) el SDQ queda faltante; con edad no numérica (9 filas) se puntúa. ¿De acuerdo?
+4. **Edad y SDQ.** *Resuelta por la spec §5.5 (revisión del 8-oct-2026):* el SDQ solo se puntúa con una edad numérica de 4 a 17. Quedan faltantes 15 filas con edad fuera de rango y 9 con edad no numérica. Si el equipo prefiere puntuar las no numéricas (casi todas están en grados del estudio), hay que cambiar la spec primero.
 5. **Colegio y grado del cuidador = los de su hijo 1.** Afecta a 217 cuidadores con dos hijos. ¿Prefieren el hijo de menor grado, o contar al cuidador en los dos grupos (esto último complica la regla de cuidadores distintos)?
 6. **Ola por año calendario.** 2025 = septiembre de 2025; 2026 = marzo a septiembre de 2026. ¿Es la definición de ola del estudio?
 7. **Señales del adulto** (provisionales, `TEXTOS_APROBADOS = False`): ánimo = EPDS ≥ 13; autolesión = ítem 10 distinto de «No, nunca». Uso y redacción de la EPDS fuera del periodo perinatal (spec §8.4).

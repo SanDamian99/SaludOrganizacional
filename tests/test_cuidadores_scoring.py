@@ -116,9 +116,13 @@ def test_sdq_inversos_estandar():
     assert p["SDQ_Total"].item() == 10
 
 
-def test_sdq_faltante_si_la_edad_numerica_esta_fuera_de_4_a_17():
-    assert np.isnan(scoring.puntuar_ninos(_nino("fuera_de_rango"))["SDQ_Total"].item())
-    assert scoring.puntuar_ninos(_nino("no_numerica"))["SDQ_Total"].notna().item()
+def test_sdq_solo_con_edad_numerica_de_4_a_17():
+    """Spec §5.5: edad numérica entre 4 y 17; si no es numérica (o falta), el SDQ falta."""
+    assert scoring.puntuar_ninos(_nino("ok"))["SDQ_Total"].notna().item()
+    for estado in ("fuera_de_rango", "no_numerica", "vacia"):
+        p = scoring.puntuar_ninos(_nino(estado))
+        assert np.isnan(p["SDQ_Total"].item()), estado
+        assert p[[c for c in p.columns if c.startswith("banda_")]].isna().all(axis=None)
 
 
 def test_ari_de_padres_items_1_a_6():
