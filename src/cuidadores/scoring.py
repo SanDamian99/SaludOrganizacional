@@ -110,6 +110,7 @@ def disponibles(d: pd.DataFrame, claves: list[str]) -> list[str]:
 
 
 def descriptivos(d: pd.DataFrame, claves: list[str]) -> pd.DataFrame:
+    """n, M, DE, Mdn, P25, P75 y faltantes. Sin mínimo ni máximo: son de una sola persona."""
     filas = []
     for k in disponibles(d, claves):
         v = d[k].dropna()
@@ -117,7 +118,7 @@ def descriptivos(d: pd.DataFrame, claves: list[str]) -> pd.DataFrame:
         filas.append(dict(
             clave=k, escala=p.label, n=len(v), M=round(float(v.mean()), 2),
             DE=round(float(v.std(ddof=1)), 2) if len(v) > 1 else np.nan,
-            Mdn=round(float(v.median()), 2), min=float(v.min()), max=float(v.max()),
+            Mdn=round(float(v.median()), 2),
             rango=f"{p.rango[0]:g}–{p.rango[1]:g}",
             pct_faltante=round(100 * (1 - len(v) / len(d)), 1) if len(d) else np.nan,
             P25=round(float(v.quantile(.25)), 2), P75=round(float(v.quantile(.75)), 2),

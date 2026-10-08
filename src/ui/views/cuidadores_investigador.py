@@ -108,7 +108,7 @@ def tabla1(ac) -> pd.DataFrame:
             alpha = fia.loc[f["clave"]] if f["clave"] in fia.index else None
             filas.append(dict(
                 marco=marco, clave=f["clave"], escala=f["escala"], n=f["n"], M=f["M"],
-                DE=f["DE"], Mdn=f["Mdn"], min=f["min"], max=f["max"], rango=f["rango"],
+                DE=f["DE"], Mdn=f["Mdn"], rango=f["rango"],
                 alpha=None if alpha is None else alpha["alpha"],
                 alpha_ic=(_SIN_DATO if alpha is None or alpha["ic_inf"] is None
                           or pd.isna(alpha["ic_inf"])

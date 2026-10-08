@@ -263,7 +263,7 @@ def _items_publicables(t: pd.DataFrame, umbral: int | None = None,
 
 # ══ Vista de una ola: solo el total, y solo lo que no se deduce restando ═══
 CLAVE_FILA = {cat.MARCO_CUIDADOR: "ID_cuidador", cat.MARCO_NINO: "ID_nino"}
-COLUMNAS_MEDIA = ("M", "DE", "Mdn", "min", "max", "P25", "P75")
+COLUMNAS_MEDIA = ("M", "DE", "Mdn", "P25", "P75")
 
 
 def _nivel_enmascarado(d: pd.DataFrame, clave_fila: str) -> tuple[pd.DataFrame, object]:

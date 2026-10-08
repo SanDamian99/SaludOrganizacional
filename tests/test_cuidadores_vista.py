@@ -91,3 +91,12 @@ def test_flujo_de_la_muestra_con_una_ola_cuadra():
         assert f["distintos"] - f["fuera_de_base"] - f["otras_olas"] == a.n
         assert f"quedan {a.n}" in md
     assert "## Ola" not in vi.flujo_exclusiones_md(todas.informe, todas)
+
+
+def test_tabla1_sin_minimo_ni_maximo(ac):
+    """Un mínimo o un máximo es la respuesta de una sola persona."""
+    assert not {"min", "max"} & set(vi.tabla1(ac).columns)
+    assert not {"min", "max"} & set(ac.cuidador.descriptivos.columns)
+    z = zipfile.ZipFile(io.BytesIO(vi.paquete_zip(ac)))
+    cabecera = z.read("tabla1_descriptivos.csv").decode("utf-8").splitlines()[0].split(",")
+    assert not {"min", "max"} & set(cabecera)
