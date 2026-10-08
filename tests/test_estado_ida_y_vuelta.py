@@ -18,13 +18,12 @@ def parada_prematura(monkeypatch):
     """Como en el navegador tras `st.stop()`: no se limpian los widgets no dibujados.
 
     `ScriptRunner._on_script_finished` solo llama a
-    `SessionState.on_script_finished` (que borra el estado de los widgets que
-    no se dibujaron) si la ejecución no se paró antes de tiempo, y `st.stop()`
-    cuenta como parada prematura. El arnés de pruebas no siempre lo reproduce,
+    `SessionState.on_script_finished` (que borra, con `_remove_stale_widgets`,
+    el estado de los widgets que no se dibujaron) si la ejecución no se paró
+    antes de tiempo, y `st.stop()` cuenta como parada prematura. El arnés de pruebas no siempre lo reproduce,
     así que aquí se fuerza.
     """
-    monkeypatch.setattr(SessionState, "on_script_finished",
-                        lambda self, ids: self._reset_triggers())
+    monkeypatch.setattr(SessionState, "_remove_stale_widgets", lambda self, *a, **k: None)
 
 
 def _app():
