@@ -227,12 +227,32 @@ def analizar_marco(d: pd.DataFrame, marco: str, n_boot: int = 300,
         "Grado": sorted(set(map(str, d["Grado"].dropna().unique())) - set(base.grados)),
         "Colegio": sorted(set(map(str, d["Colegio"].dropna().unique())) - set(base.colegios)),
     }
-    a.icc = {k: stats.icc_entre_grupos(dn, k) for k in claves}
+    a.icc = {k: icc_publicable(dm, base, k) for k in claves}
     a.subgrupos = _subgrupos(dm, marco, claves, base)
     extra = (regla_cuidadores_distintos(dm, base, claves) if marco == cat.MARCO_NINO
              else None)
     supresion.aplicar(a, extra_por_clave=extra)
     return a
+
+
+def icc_publicable(d: pd.DataFrame, base, clave: str) -> float:
+    """CCI entre colegios sobre la base publicable, contando cuidadores distintos.
+
+    Solo las filas que cada colegio publica (`base.colegios`, sin sus grados
+    pequeños) y solo los colegios con ≥ MIN_GROUP_N cuidadores distintos con
+    dato en `clave`: en el marco de niños las filas son niños, no cuidadores.
+    """
+    if clave not in d.columns:
+        return float("nan")
+    partes = []
+    for idx in (getattr(base, "colegios", None) or {}).values():
+        sub = d.loc[d.index.intersection(idx)]
+        sub = sub[sub[clave].notna()]
+        if sub[privacidad.UNIDAD].nunique() >= cat.MIN_GROUP_N:
+            partes.append(sub)
+    if len(partes) < 2:
+        return float("nan")
+    return stats.icc_entre_grupos(pd.concat(partes), clave)
 
 
 # ── medias por colegio y por grado que acotan un corte ────────────────────
