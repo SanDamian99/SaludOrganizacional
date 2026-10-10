@@ -48,7 +48,6 @@ SaludOrganizacional/
 │   ├── ui/                         # Componentes de interfaz
 │   │   ├── dashboard.py            # Panel principal con visualizaciones
 │   │   ├── chat.py                 # Chat con IA
-│   │   ├── trends.py               # Análisis de tendencias
 │   │   ├── upload.py               # Carga de datos
 │   │   └── reports.py              # Generación de reportes
 │   ├── ai/                         # Integración con Gemini
@@ -78,13 +77,11 @@ graph TB
     Nav --> Estudiantes[Estudiantes 360]
     Nav --> Chat[Chat con IA]
     Nav --> Upload[Cargar Datos]
-    Nav --> Trends[Análisis de Tendencias]
     Nav --> Reports[Reportes]
     
     Docentes --> State[Session State]
     Chat --> Gemini[Gemini Client]
     Upload --> Processor[Data Processor]
-    Trends --> Analytics[Analytics Module]
     Reports --> ReportBuilder[Report Builder]
     
     Processor --> State
@@ -159,31 +156,7 @@ sequenceDiagram
 - **Filtros globales**: Permiten segmentar por variables categóricas
 - **Interpretación IA**: Botón para análisis experto con Gemini
 
-### 3. Análisis de Tendencias
-
-```mermaid
-graph LR
-    A[trends.py] --> B{¿Tiene columna de fecha?}
-    B -->|Sí| C[Análisis Temporal]
-    B -->|No| D[Análisis Comparativo]
-    
-    C --> E[Gráfico de línea temporal]
-    D --> F[Gráfico de barras por grupos]
-    D --> G[Box plots por categorías]
-    
-    E --> H[Interpretación IA]
-    F --> H
-    G --> H
-```
-
-**Funcionalidades:**
-
-- Detección automática de columnas de fecha
-- Agrupación mensual para tendencias temporales
-- Comparación por grupos demográficos (sexo, edad, sector)
-- Análisis prospectivo con IA
-
-### 4. Generación de Reportes
+### 3. Generación de Reportes
 
 ```mermaid
 sequenceDiagram
@@ -321,7 +294,6 @@ class GeminiClient:
 **Casos de uso:**
 
 - Interpretación de dimensiones en dashboard
-- Análisis prospectivo en tendencias
 - Generación de secciones de reportes
 
 ### 5. `src/data/processor.py`
@@ -445,16 +417,14 @@ Cada dimensión tiene entre 3 y 22 ítems medidos en escalas Likert (1-7) o Dife
 
 1. **Carga de datos**: Sube archivo Excel con resultados de encuesta
 2. **Docentes**: Revisa visualizaciones por dimensión
-3. **Analiza tendencias**: Compara por sexo, edad, área
-4. **Genera reporte**: Descarga PDF ejecutivo con análisis IA
-5. **Chat con IA**: Hace preguntas específicas sobre los datos
+3. **Genera reporte**: Descarga PDF ejecutivo con análisis IA
+4. **Chat con IA**: Hace preguntas específicas sobre los datos
 
 ### Stakeholder: Gobierno
 
 1. **Carga datos agregados**: Múltiples empresas o colegios
-2. **Análisis de tendencias**: Identifica patrones temporales
-3. **Generación de reportes**: Crea informes para políticas públicas
-4. **Comparación sectorial**: Usa filtros globales
+2. **Generación de reportes**: Crea informes para políticas públicas
+3. **Comparación sectorial**: Usa filtros globales
 
 ### Stakeholder: Padres
 

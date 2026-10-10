@@ -96,7 +96,7 @@ Conviene hacer dos, del mismo repositorio, con distinta configuración.
 
 ### A · Para el equipo investigador (privado)
 
-En este modo el investigador ve **toda** la plataforma: Docentes, tendencias,
+En este modo el investigador ve **toda** la plataforma: Docentes, chat,
 carga de datos, informes y las dos vistas de estudiantes. La única diferencia
 con el modo local es con qué vista abre el módulo de estudiantes. Es deliberado:
 quien revisa también va a enseñar la herramienta, y conviene que la conozca

@@ -24,17 +24,16 @@ PAGINA_CUIDADORES = "Cuidadores 360"
 PAGINA_TRIANGULACION = "Triangulación 360"
 PAGINA_CHAT = "Chat con IA"
 PAGINA_CARGA = "Cargar Datos"
-PAGINA_TENDENCIAS = "Análisis de tendencias"
 PAGINA_REPORTES = "Reportes"
 
 MENU = (PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES, PAGINA_TRIANGULACION,
-        PAGINA_CHAT, PAGINA_CARGA, PAGINA_TENDENCIAS, PAGINA_REPORTES)
+        PAGINA_CHAT, PAGINA_CARGA, PAGINA_REPORTES)
 
 # Las que ya tienen vista. Cuidadores entró en la fase 4a y Triangulación en la
 # 5, las dos solo para investigadores: Triangulación nunca está en PUBLICAS.
 DISPONIBLES = frozenset({PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES,
                          PAGINA_TRIANGULACION, PAGINA_CHAT, PAGINA_CARGA,
-                         PAGINA_TENDENCIAS, PAGINA_REPORTES})
+                         PAGINA_REPORTES})
 
 # Lo único que puede ver el público. Triangulación es solo para investigadores.
 PUBLICAS = (PAGINA_ESTUDIANTES, PAGINA_CUIDADORES)

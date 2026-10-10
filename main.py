@@ -144,10 +144,6 @@ elif page == nav.PAGINA_CARGA:
     from src.ui.upload import render_upload
     render_upload()
 
-elif page == nav.PAGINA_TENDENCIAS:
-    from src.ui.trends import render_trends
-    render_trends()
-
 elif page == nav.PAGINA_REPORTES:
     render_reports_page()
 
