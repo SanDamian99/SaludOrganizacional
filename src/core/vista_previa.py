@@ -40,7 +40,7 @@ import time
 logger = logging.getLogger(__name__)
 
 ESQUEMA = "obs360"
-MODULOS = ("estudiantes", "cuidadores")
+MODULOS = ("estudiantes", "cuidadores", "triangulacion")   # triangulación: solo el equipo
 CLAVE_ACTIVA = "obs360_vista_previa"            # preferencia de la persona (sesión)
 _CLAVE_CLIENTE = "_obs360_vista_previa_cliente"
 _CLAVE_REVISION = "_obs360_vista_previa_revision"

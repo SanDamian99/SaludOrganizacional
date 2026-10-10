@@ -108,6 +108,8 @@ PROHIBIDOS_EN_COMUNIDAD = (
     "src.ui.triangulacion", "src.ui.views.triangulacion_investigador",
     "src.triangulacion.fuentes", "src.triangulacion.enlace", "src.triangulacion.diadas",
     "src.triangulacion.capa1", "src.triangulacion.pipeline",
+    "src.triangulacion.lectura", "src.triangulacion.publicar",
+    "src.triangulacion.exportar",
     "src.core.vista_previa")
 
 
@@ -236,3 +238,29 @@ def test_main_en_investigador_ofrece_triangulacion(monkeypatch, tmp_path):
     radio.set_value("Triangulación 360").run()
     assert not at.exception
     assert any(cat_tri.AVISO_DESPLIEGUE in i.value for i in at.info)
+
+
+def test_main_en_investigador_muestra_la_triangulacion_publicada(monkeypatch, tmp_path):
+    """Sin archivos, con el usuario de carga: la corrida publicada para el equipo."""
+    from streamlit.testing.v1 import AppTest
+    from src.core import vista_previa as vp
+    from src.triangulacion import lectura
+    from src.ui import triangulacion as pag
+    from src.ui.views import triangulacion_investigador as vi
+    from tests import triangulacion_publicada_datos as datos
+    from tests.supabase_falso import CREDENCIALES_CARGADOR
+    _, base = datos.publicado(publicar_ya=True)
+    monkeypatch.setenv("OBS360_MODO", "investigador")
+    monkeypatch.setenv("OBS360_DATOS_DIR", str(tmp_path))
+    monkeypatch.setenv("OBS360_SUPABASE_URL", "https://falso.invalid")
+    monkeypatch.setenv("OBS360_SUPABASE_KEY", "clave-anon-falsa")
+    monkeypatch.setattr(vp, "credenciales", lambda: (CREDENCIALES_CARGADOR["email"],
+                                                     CREDENCIALES_CARGADOR["password"]))
+    monkeypatch.setattr(vp, "_crear_cliente", lambda url, key: base.cliente_sin_sesion())
+    pag._leer.clear()
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    at = AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=180).run()
+    at.radio(key="nav_pagina").set_value("Triangulación 360").run()
+    assert not at.exception
+    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert any(lectura.AVISO_PUBLICADO in i.value for i in at.info)

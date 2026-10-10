@@ -134,6 +134,8 @@ def tasa_legible(k: int, n: int) -> str:
 
 
 def conteo_legible(valor) -> str:
+    if isinstance(valor, str) and valor.strip() == f"<{cat.MIN_GROUP_N}":
+        return valor.strip()               # ya enmascarado (corrida publicada)
     try:
         v = int(valor)
     except (TypeError, ValueError):

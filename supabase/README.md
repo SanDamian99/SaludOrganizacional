@@ -42,6 +42,7 @@ hacer ni con acceso total a la base.
 | RLS activo en las tres tablas nuevas | sí |
 | Políticas de lectura para el rol anónimo | solo la **última** corrida con `publicada = true` de cada módulo (función `obs360.es_ultima_publicada`, desde la migración 2026-10-07) |
 | Lectura de corridas ocultas | solo el usuario de carga (`obs360.es_cargador()`, migración 2026-10-10), para la vista previa del equipo |
+| Triangulación 360 (`modulo = nivel = 'triangulacion'`) | **nunca** para anon ni para otros autenticados (`obs360_interno.es_publica`, migración 2026-10-10b); solo el usuario de carga, aunque la corrida esté publicada |
 | Políticas de escritura para el rol anónimo | **ninguna** |
 | Concesiones `INSERT/UPDATE/DELETE` a `anon` en `public` y `obs360` | **ninguna** |
 | Tablas sin RLS en `public` y `obs360` | ninguna |
@@ -277,6 +278,32 @@ incluida en `estudiantes_schema.sql`).
   debe listar, por tabla, la política pública y la del cargador, ambas `SELECT`.
 - **Sin ella:** la aplicación funciona igual que antes; el interruptor de vista
   previa simplemente no aparece.
+
+## Migración: triangulación solo para el equipo (10 oct 2026)
+
+Archivo: `supabase/migraciones/2026-10-10b-triangulacion-privada.sql` (ya
+incluida en `estudiantes_schema.sql`). Requiere 2026-10-07b y 2026-10-10.
+
+- **Qué hace:** (1) el CHECK `resultados_nivel_valido` admite
+  `'triangulacion'`; (2) crea `obs360_interno.es_publica(id)` = última corrida
+  publicada de su módulo **y** módulo distinto de `triangulacion` (SECURITY
+  DEFINER, `search_path` fijo, dueño `postgres`, en el esquema que la API REST
+  no expone, como `es_ultima_publicada`); (3) recrea las dos políticas públicas
+  con `es_publica`, y la de `resultados` además exige `nivel <> 'triangulacion'`.
+- **Resultado:** la clave pública (anon) y cualquier autenticado que no sea el
+  cargador nunca leen filas de triangulación, ni siquiera de una corrida
+  publicada. El usuario de carga (despliegue privado) las lee con su política
+  de la migración 2026-10-10, que no cambia.
+- **Qué no cambia:** Estudiantes y Cuidadores se leen igual que antes (para
+  ellos `es_publica` = `es_ultima_publicada`). No se crea ninguna política de
+  escritura. Los CHECK de n ≥ 10, identificadores y conteos valen también para
+  las filas de triangulación.
+- **Verificar:** como anon, `SELECT count(*) FROM obs360.resultados WHERE
+  nivel = 'triangulacion';` debe dar 0 aunque haya una corrida publicada;
+  `pg_policies` debe mostrar `es_publica` en las dos políticas públicas.
+- **Sin ella:** `python -m src.triangulacion.publicar` falla en el CHECK de
+  `nivel` y deshace la corrida; nada queda a medias. **No publicar triangulación
+  sin esta migración.**
 
 ## Lo que falta
 

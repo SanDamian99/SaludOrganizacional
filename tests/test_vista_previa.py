@@ -46,9 +46,13 @@ def test_el_esquema_incluye_la_migracion_sin_tocar_la_politica_publica():
     sql = _sql("estudiantes_schema.sql")
     for politica in POLITICAS:
         assert politica in sql
+    # La política pública: la última publicada de cada módulo, nunca triangulación
+    # (es_publica = es_ultima_publicada y módulo distinto de triangulación, 2026-10-10b).
     assert ("FOR SELECT TO anon, authenticated USING "
-            "(obs360_interno.es_ultima_publicada(id));") in sql
-    assert "USING (obs360_interno.es_ultima_publicada(corrida_id));" in sql
+            "(obs360_interno.es_publica(id));") in sql
+    assert ("USING (obs360_interno.es_publica(corrida_id) AND nivel <> 'triangulacion');"
+            in sql)
+    assert "AND obs360_interno.es_ultima_publicada(p_id)" in sql
     # la función se define antes de las políticas que la usan
     assert sql.index("FUNCTION obs360.es_cargador()") < sql.index(POLITICAS[0])
 

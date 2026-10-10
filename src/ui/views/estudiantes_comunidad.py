@@ -997,7 +997,7 @@ def tarjetas(analisis, rol: str, filtros: dict | None = None,
                         + CONTRASTES[clave]["etiqueta"])
             detalle = (f"{uno_de_cada(c['pct_tercil_alto'])} entre quienes sienten mucho, "
                        f"{uno_de_cada(c['pct_tercil_bajo'])} entre quienes sienten poco "
-                       f"(n = {c['n_alto']} y {c['n_bajo']})")
+                       f"(n = {int(c['n_alto'])} y {int(c['n_bajo'])})")
         salida.append(Tarjeta(clave=clave, cifra=cifra, etiqueta=etiqueta,
                               significa=mensaje.significa, accion=accion, detalle=detalle))
         if len(salida) == MAX_TARJETAS:
@@ -1275,18 +1275,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     # ── 2. tarjetas (sin la de muerte solo si el panel salió de verdad)
     fichas = tarjetas(a, rol, filtros, panel_dibujado=panel_dibujado)
     if fichas:
-        columnas = st.columns(len(fichas))
-        for col, t in zip(columnas, fichas):
-            with col:
-                titulo = cat.MENSAJES[t.clave].titulo if t.clave in cat.MENSAJES else ""
-                with st.container(border=True):
-                    st.markdown(f"**{titulo}**")
-                    st.markdown(f"## {t.cifra}")
-                    st.caption(t.etiqueta)
-                    st.markdown(f"**Qué significa:** {t.significa}")
-                    st.markdown(f"**Qué hacer:** {t.accion}")
-                    if t.detalle:
-                        st.caption(t.detalle)
+        from src.ui.views import tarjetas as vt
+        vt.render([vt.ficha(t, cat.MENSAJES[t.clave].titulo if t.clave in cat.MENSAJES else "")
+                   for t in fichas])
     else:
         st.info("Aún no hay indicadores con base suficiente para este grupo.", icon="ℹ️")
 

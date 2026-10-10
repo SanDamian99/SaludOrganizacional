@@ -4,9 +4,12 @@ Vista investigador de la Triangulación 360 — Observatorio 360 (fase 5).
 Se lee en capas (spec §6): primero el resumen («dónde coinciden» y «dónde hay
 tensión»), luego las tablas de cada capa, luego la metodología y la descarga.
 
-No calcula: consume un `pipeline.Triangulacion`, que solo tiene agregados. Los
-conteos por debajo de 10 se muestran como «<10» y ninguna tabla lleva
-identificadores, seudónimos ni díadas.
+No calcula: consume un `pipeline.Triangulacion` (máquina que procesa) o un
+`lectura.TriangulacionPublicada` (despliegue del equipo), que solo tienen
+agregados; el publicado ya trae legibles las personas por colegio
+(`conteos_tabla`) y la calidad del enlace (`calidad`). Los conteos por debajo de
+10 se muestran como «<10» y ninguna tabla lleva identificadores, seudónimos ni
+díadas.
 """
 from __future__ import annotations
 
@@ -49,8 +52,12 @@ def conteos_actores(t) -> pd.DataFrame:
     Por actor, los colegios con menos de 10 (y OTRO/SIN_DATO) van juntos en
     «otros colegios»; si esa fila quedara con 1 a 9, se le suma el colegio
     publicado más pequeño (`enlace.reparto`). Así el total exacto del actor
-    (metodología) menos lo mostrado nunca deja de 1 a 9.
+    (metodología) menos lo mostrado nunca deja de 1 a 9. Una corrida publicada
+    trae esta tabla ya armada (los conteos exactos no se publican).
     """
+    pre = getattr(t, "conteos_tabla", None)
+    if isinstance(pre, pd.DataFrame):
+        return pre
     conteos = t.capa1.conteos or {}
     actores = ((cat.ESTUDIANTE, "Estudiantes"), (cat.CUIDADOR, "Cuidadores"),
                (cat.DOCENTE, "Docentes"))
@@ -111,9 +118,17 @@ def _tab_grado(t) -> None:
     _df(t.capa1.por_grado)
 
 
+def calidad(t) -> pd.DataFrame:
+    """La calidad del enlace: la publicada si viene en `t`, si no, del informe local."""
+    pre = getattr(t, "calidad", None)
+    if isinstance(pre, pd.DataFrame):
+        return pre
+    return en.tabla_calidad(getattr(t, "enlace", None) or {})
+
+
 def _tab_enlace(t) -> None:
     st.caption(cat.AVISO_ENLACE)
-    _df(en.tabla_calidad(t.enlace))
+    _df(calidad(t))
 
 
 def _tab_acuerdo(t) -> None:
@@ -154,7 +169,7 @@ def _tab_metodologia(t) -> None:
 
 
 def _tab_exportar(t) -> None:
-    st.caption("Todo es agregado: ni filas, ni seudónimos, ni díadas. Nada sube a Supabase.")
+    st.caption("Todo es agregado: ni filas, ni seudónimos, ni díadas. Solo para el equipo.")
     st.download_button("📦 Descargar el paquete de la triangulación (ZIP)",
                        data=ex.paquete_zip(t),
                        file_name=f"triangulacion360_{_dt.date.today().isoformat()}.zip",

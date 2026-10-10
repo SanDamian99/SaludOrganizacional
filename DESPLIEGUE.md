@@ -277,6 +277,55 @@ recargar la sesión). No se abre a mano con `UPDATE … publicada = true`: cuand
 el equipo apruebe, se ponen las banderas en `True` (commit aparte) y se publica
 de nuevo con `--publicar-ya`, como en «Publicar alertas».
 
+## Triangulación en la app del equipo
+
+La Triangulación 360 (estudiantes × cuidadores × docentes) es **solo para el
+equipo investigador**. Se calcula en la máquina que procesa los formularios
+(los tres archivos, la clave `OBS360_CLAVE_HMAC` y las díadas solo existen
+allí) y sube a Supabase **solo sus agregados**: cada cifra con n ≥ 10, sin
+identificadores, sin seudónimos y sin ninguna díada (el Bland–Altman va como
+medias de grupos de ≥ 10 díadas). El despliegue privado
+(`OBS360_MODO=investigador`) la lee con el usuario de carga y muestra las mismas
+pestañas, figuras y ZIP que la máquina local. **El público nunca la ve**: ni la
+clave anon ni otro usuario autenticado leen una corrida ni una fila de
+triangulación, aunque esté marcada como publicada.
+
+**Una sola vez: la migración.** Supabase → SQL Editor → pegar y correr
+`supabase/migraciones/2026-10-10b-triangulacion-privada.sql` (requiere las
+2026-10-07b y 2026-10-10, ya aplicadas). Admite `nivel = 'triangulacion'` y
+cambia las dos políticas públicas a `obs360_interno.es_publica`, que excluye el
+módulo `triangulacion`; Estudiantes y Cuidadores se leen igual que antes. Sin
+ella, publicar falla en el CHECK de `nivel` y no deja nada a medias. Comprobar
+(con la clave anon, p. ej. desde la app pública o la API REST):
+`SELECT count(*) FROM obs360.resultados WHERE nivel = 'triangulacion';` → 0.
+
+**Publicar** (en la máquina que procesa, con `OBS360_CLAVE_HMAC` y
+`SUPABASE_SERVICE_KEY` en `.streamlit/secrets.toml` o en el entorno):
+
+```bash
+# 1. Ensayo: no toca la red; deja el lote (solo agregados) en un JSON
+python -m src.triangulacion.publicar --ensayo --salida /tmp/lote_triangulacion.json
+# 2. Corrida oculta: el equipo la revisa con la vista previa
+python -m src.triangulacion.publicar --notas "triangulación oct 2026"
+# 3. Abrirla para el equipo (y cerrar las demás corridas de triangulación)
+python -m src.triangulacion.publicar --notas "triangulación oct 2026" --publicar-ya
+```
+
+El orden es el de los otros módulos: la corrida entra oculta, se suben sus
+resultados y solo entonces se abre; `--publicar-ya` despublica las demás
+corridas **de triangulación** (las de estudiantes y cuidadores no se tocan).
+«Abrir» aquí significa «visible para el equipo»: el público no la lee nunca.
+
+**En la app del equipo.** Sin archivos en disco, la página «Triangulación 360»
+lee la última corrida abierta (franja azul «leída de la corrida…»); si hay una
+oculta más nueva, el interruptor «Vista previa: corrida en revisión (N)» la
+muestra con su franja amarilla. Sin ninguna corrida legible (migración sin
+aplicar, nada subido, sin credenciales de carga) dice «aún no hay una corrida
+de triangulación publicada». No necesita secretos nuevos: usa
+`OBS360_CARGA_EMAIL` / `OBS360_CARGA_CLAVE` del despliegue privado. Tras fusionar,
+«Reboot app». El despliegue público (`comunidad`) nunca importa la página, la
+lectura ni el publicador de triangulación.
+
 ## Qué esperar del arranque
 
 La primera carga tarda unos segundos: lee la corrida completa y rearma las
