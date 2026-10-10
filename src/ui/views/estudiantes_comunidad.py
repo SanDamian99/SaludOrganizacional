@@ -1262,6 +1262,16 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     # ── 1b. señales para actuar a tiempo (alertas de grupo, spec §5.4)
     panel_dibujado = _panel_alertas(a, rol, filtros)
 
+    # ── 1c. mapa del municipio (src/geo): cobertura y factores protectores
+    try:
+        from src.ui.views import estudiantes_mapa
+        v_mapa, p_mapa = (grupos_visibles(a, "Colegio") if ve_colegios(rol)
+                          else ([], []))
+        estudiantes_mapa.render_mapa(a, rol, v_mapa, p_mapa)
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("El mapa falló; la vista sigue sin él")
+
     # ── 2. tarjetas (sin la de muerte solo si el panel salió de verdad)
     fichas = tarjetas(a, rol, filtros, panel_dibujado=panel_dibujado)
     if fichas:
