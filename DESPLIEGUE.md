@@ -206,21 +206,6 @@ los formularios; un despliegue nunca lee archivos crudos.
 **Después de fusionar a `main`, haz siempre *Manage app → Reboot app*.** Si no,
 la aplicación puede quedar con módulos viejos en memoria.
 
-Por qué: Streamlit Cloud actualiza los archivos sin reiniciar el proceso, y
-Streamlit solo recarga lo que cambió si en ese momento hay alguna sesión
-abierta. Si no la hay, las páginas ya importadas siguen con el código viejo
-aunque se abra una sesión nueva (así pasó en oct 2026: Cuidadores mostraba la
-vista previa y Estudiantes no). Desde `src/core/frescura.py`, main.py desaloja
-al empezar cada ejecución los módulos de `src` cuyo archivo cambió y lo anota en
-los registros («Frescura: N archivo(s) cambiaron…»). El reinicio sigue siendo
-necesario una vez, para el despliegue que trae `frescura`, y cuando cambia
-`frescura.py` mismo.
-
-Los fallos de la vista previa se registran como «Vista previa [paso]: Tipo»,
-con el paso y el tipo de la excepción, nunca con el mensaje (puede traer el
-correo del usuario de carga). Si faltan credenciales en el modo privado, se
-anota una vez qué nombres de secreto faltan.
-
 ## Publicar alertas
 
 Mientras no se publique una corrida nueva, el despliegue sigue con la tarjeta de
