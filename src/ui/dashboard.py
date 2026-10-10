@@ -14,7 +14,6 @@ import pandas as pd
 from src.core.config import DATA_DICTIONARY, get_scale_range
 from src.core.state import get_processed_data
 from src.analysis import scoring, indicators
-from src.ai.gemini_client import get_cached_client
 from src.ui.components.filtering import render_filtering_sidebar
 
 SEM_COLORS = {"green": "#1A7F4B", "yellow": "#B07D0D", "red": "#C0392B", "grey": "#5F6368"}
@@ -220,25 +219,6 @@ def _view_dimension(df, scores):
 
     st.plotly_chart(render_item_bars(df, selected, cols), width="stretch")
 
-    if st.button(f"✨ Interpretar «{selected}» con IA"):
-        client = get_cached_client()
-        client.current_df = df
-        if not client.is_configured():
-            st.error("⚠️ API Key no configurada.")
-        else:
-            with st.spinner("Generando análisis experto..."):
-                stats = df[cols].describe().to_string()
-                prompt = (
-                    f"Actúa como experto en Psicología Organizacional. Analiza la dimensión "
-                    f"'{selected}' (puntaje orientado a bienestar {info['score']:.2f}/"
-                    f"{info['scale_max']:.0f}, estado {info['estado']}, N={info['n']}).\n\n"
-                    f"Estadísticos por ítem:\n{stats}\n\n"
-                    "1. Describe el estado actual en lenguaje claro.\n"
-                    "2. Identifica ítems críticos.\n"
-                    "3. Sugiere 2 acciones basadas en evidencia."
-                )
-                st.markdown(client.generate_response(prompt))
-
 
 def _view_profile(df):
     tabs = st.tabs(["👥 Sociodemográficas", "🏢 Laborales"])
@@ -378,41 +358,31 @@ def _theme_bar(items):
     return fig
 
 
+# «📊 Otros indicadores» (PRPS, Conf_FaTr/TrFa, Desconexión…) no se muestra como
+# tema: no tiene dirección ni codebook y sus etiquetas no se entienden fuera del
+# equipo (auditoría de relevancia, 10-oct-2026). Siguen en la tabla completa.
+TEMA_OTROS = "📊 Otros indicadores"
+TEMAS_VISIBLES = [t for t in indicators.THEMES_ORDER if t != TEMA_OTROS]
+
+
 def _view_indicators(df, enr):
     themes = indicators.by_theme(enr)
-    n_atencion = sum(1 for _, i in enr.items()
-                     if i["theme"].startswith("🧠") and i["level"] == "Atención")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("👥 Docentes", f"{len(df):,}")
     c2.metric("📐 Indicadores", len(enr))
-    c3.metric("🧠 Salud mental en atención", n_atencion)
 
     st.info("Las barras muestran la **posición relativa dentro de esta muestra** (0-100), "
             "orientada a *mayor = mejor* cuando se conoce la dirección del instrumento. "
             "El nivel (Favorable/Intermedio/Atención) es relativo a la muestra, no un punto "
             "de corte clínico. Ajusta etiquetas y direcciones en `docs/GUIA_DATASETS.md`.")
 
-    for theme in indicators.THEMES_ORDER:
+    for theme in TEMAS_VISIBLES:
         items = themes.get(theme)
         if not items:
             continue
         st.markdown(f"##### {theme}")
         st.plotly_chart(_theme_bar(items), width="stretch")
-        if theme.startswith("🧠"):
-            aten = [i["label"] for _, i in items if i["level"] == "Atención"]
-            fav = [i["label"] for _, i in items if i["level"] == "Favorable"]
-            cols = st.columns(2)
-            with cols[0]:
-                if aten:
-                    st.error("**Requieren atención:** " + ", ".join(aten))
-                else:
-                    st.success("Sin indicadores de salud mental en zona de atención.")
-            with cols[1]:
-                if fav:
-                    st.success("**Favorables:** " + ", ".join(fav))
-            if st.button("✨ Interpretar salud mental con IA"):
-                _ai_interpret_mental_health(df, items)
 
     with st.expander("📋 Tabla completa de indicadores"):
         table = pd.DataFrame([
@@ -450,62 +420,6 @@ def _view_indicators(df, enr):
                                coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
             st.plotly_chart(fig2, width="stretch")
             st.caption("N por grupo: " + ", ".join(f"{r[gcol]}={int(r['count'])}" for _, r in agg.iterrows()))
-
-        if st.button(f"✨ Interpretar «{info['label']}» con IA"):
-            client = get_cached_client()
-            client.current_df = df
-            if not client.is_configured():
-                st.error("⚠️ API Key no configurada.")
-            else:
-                with st.spinner("Generando análisis..."):
-                    desc = df[sel].describe().to_string()
-                    d = ("mayor = mejor" if info["higher_is_better"] else "mayor = más riesgo"
-                         if info["higher_is_better"] is False else "dirección no definida")
-                    prompt = (
-                        f"Actúa como psicólogo experto en salud mental laboral docente. El indicador "
-                        f"'{info['label']}' ({d}) tiene estos estadísticos:\n{desc}\n\n"
-                        "1. Explica en lenguaje claro qué mide.\n"
-                        "2. Interpreta el nivel observado en el contexto de docentes.\n"
-                        "3. Sugiere 2 acciones basadas en evidencia."
-                    )
-                    st.markdown(client.generate_response(prompt))
-
-
-def _ai_interpret_mental_health(df, items):
-    client = get_cached_client()
-    client.current_df = df
-    if not client.is_configured():
-        st.error("⚠️ API Key no configurada.")
-        return
-    with st.spinner("Analizando salud mental con IA..."):
-        resumen = "\n".join(
-            f"- {i['label']}: media {i['mean']:.1f} (rango {i['min']:.0f}-{i['max']:.0f}), "
-            f"posición {i['oriented']:.0f}/100, {i['level']}" for _, i in items)
-        prompt = (
-            "Actúa como experto en salud mental ocupacional docente. Con base en estos "
-            f"indicadores de {len(df)} docentes (posición 0-100 orientada a mejor):\n{resumen}\n\n"
-            "1. Da un panorama de la salud mental del profesorado en lenguaje claro.\n"
-            "2. Señala los focos de riesgo prioritarios.\n"
-            "3. Propón 3 acciones concretas y basadas en evidencia (cita autores clásicos si aplica)."
-        )
-        st.markdown(client.generate_response(prompt))
-
-
-def _view_generic_academic(df, enr):
-    st.markdown("#### Correlación entre indicadores")
-    inds = list(enr.keys())
-    num = df[inds].apply(pd.to_numeric, errors="coerce")
-    num.columns = [enr[c]["label"] for c in inds]
-    if num.shape[1] >= 2:
-        corr = num.corr()
-        fig = px.imshow(corr, text_auto=False, aspect="auto",
-                        color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
-        fig.update_layout(height=680, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
-        st.caption("Correlaciones de Pearson entre los indicadores detectados. "
-                   "Nota: sobre puntajes crudos (sin orientar).")
-    else:
-        st.caption("Se necesitan al menos 2 indicadores numéricos.")
 
 
 # ── Sidebar (reporte + filtros + descarga) ──────────────────────
@@ -587,9 +501,7 @@ def render_dashboard():
     else:
         inds = indicators.detect_indicators(df_view)
         enr = _enriched(df_view, inds) if inds else {}
-        tab_ind, tab_perfil, tab_corr = st.tabs(
-            ["🧠 Salud mental e indicadores", "👥 Perfil", "🎓 Correlaciones"]
-        )
+        tab_ind, tab_perfil = st.tabs(["🧠 Salud mental e indicadores", "👥 Perfil"])
         with tab_ind:
             if enr:
                 _view_indicators(df_view, enr)
@@ -597,8 +509,3 @@ def render_dashboard():
                 st.warning("No se detectaron indicadores numéricos en este dataset.")
         with tab_perfil:
             _view_profile(df_view)
-        with tab_corr:
-            if enr:
-                _view_generic_academic(df_view, enr)
-            else:
-                st.caption("Sin indicadores para correlacionar.")

@@ -154,7 +154,6 @@ sequenceDiagram
 - **Tabs organizadas**: Sociodemográficas, Laborales, Dimensiones de Bienestar  
 - **Visualizaciones dinámicas**: Gauge charts, tanks (diferenciales semánticos), distribuciones Likert
 - **Filtros globales**: Permiten segmentar por variables categóricas
-- **Interpretación IA**: Botón para análisis experto con Gemini
 
 ### 3. Generación de Reportes
 
@@ -293,7 +292,7 @@ class GeminiClient:
 
 **Casos de uso:**
 
-- Interpretación de dimensiones en dashboard
+- Chat con IA sobre los datos cargados
 - Generación de secciones de reportes
 
 ### 5. `src/data/processor.py`
