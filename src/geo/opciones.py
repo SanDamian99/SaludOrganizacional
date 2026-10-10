@@ -19,6 +19,13 @@ MAPA_ROLES = ("municipio", "colegio")
 MAPA_EN_INFORMES = True                # mapa en el informe de la Secretaría
 MAPA_CAPAS_INFORME = ("respuestas", "sentirse_parte")
 
+# Video del municipio (src/geo/video_municipio.py). Para la Secretaría y los rectores.
+VIDEO_NOMBRES_COLEGIOS = False         # nombrar los colegios en los mapas del video
+VIDEO_ACCIONES = True                  # escena «qué podemos hacer» (de catalog.MENSAJES)
+VIDEO_RUTAS = False                    # rutas en el cierre; además exige RUTAS_VALIDADAS
+VIDEO_VARIANTE_CELULAR = True          # además del 16:9, una versión cuadrada
+VIDEO_APROBADO = False                 # llave de publicación del guion (a mano, en un commit)
+
 # No es un parámetro: las únicas capas que el mapa sabe dibujar. Ninguna es de
 # malestar, alertas, SDQ ni RCADS.
 PERMITIDAS = ("respuestas", "sentirse_parte", "apoyo_social")

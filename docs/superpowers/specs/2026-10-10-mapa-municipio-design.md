@@ -241,8 +241,7 @@ Cambiar uno es un commit de una línea, a mano, igual que `TEXTOS_APROBADOS`.
 | `VIDEO_ACCIONES` | `True` | La escena «qué puede hacer cada quién» (de `catalog.MENSAJES`) |
 | `VIDEO_RUTAS` | `False` | Rutas de atención en el cierre; solo se activa con `RUTAS_VALIDADAS` |
 | `VIDEO_VARIANTE_CELULAR` | `True` | También genera la versión 1:1 |
-| `VIDEO_SELLO_BORRADOR` | `True` | Marca «BORRADOR» hasta que `VIDEO_APROBADO` sea `True` |
-| `VIDEO_APROBADO` | `False` | Llave de publicación del guion |
+| `VIDEO_APROBADO` | `False` | Llave de publicación del guion. **Sin ella el video lleva siempre el sello BORRADOR** (no hay parámetro aparte para el sello) |
 
 **Lo que NO es un parámetro** (cambiarlo exige tocar el código y sus pruebas,
 a propósito): la lista de indicadores permitidos en el mapa, la supresión de
@@ -304,3 +303,21 @@ Reglas para no pisarnos:
 A → B → C → D → E. Cada fase deja la plataforma funcionando y es revisable por
 separado, en rama propia. C, D y E son independientes entre sí y pueden cambiar
 de orden o caer sin afectar el mapa.
+
+## Fase D · cómo quedó (10 oct 2026)
+
+- `src/geo/video_municipio.py` arma las escenas y el MP4; `scripts/generar_video_municipio.py`
+  lo genera desde la **última corrida publicada** (o con `--local`), tras la misma
+  auditoría de los informes. Sale fuera del repo (`datos_fuente_360/videos`).
+- Dura 62 s: título, cómo leer los mapas, dónde hemos escuchado, qué protege (sentirse
+  parte del colegio), qué podemos hacer y cierre. Dos formatos: horizontal 1920×1080 y
+  cuadrado 1080×1080 para el celular.
+- Los mapas son los del producto: pasan por `tabla_mapa` y `auditar`. Si la auditoría
+  falla, no hay video. Por defecto **no nombra los colegios** (`VIDEO_NOMBRES_COLEGIOS`).
+- Las lecturas y acciones salen de `catalog.MENSAJES`, no se escriben en el video. Se
+  eligieron solo las que se entienden solas: la de «adulto de referencia» para colegios
+  (primera oración) y las de clima escolar y crianza para la Secretaría. Las demás
+  referían a un dato que el video no muestra.
+- Los títulos de las escenas y la frase «el tono se compara dentro de cada mapa» son
+  texto nuevo: por eso el video lleva el sello **BORRADOR** hasta `VIDEO_APROBADO = True`.
+- Las rutas solo salen con `VIDEO_RUTAS` y `RUTAS_VALIDADAS` (hoy ninguna).
