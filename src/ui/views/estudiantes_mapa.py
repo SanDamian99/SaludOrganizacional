@@ -16,18 +16,6 @@ from src.geo import auditoria_mapa, colegios_geo, mapa_datos, mapa_figura, opcio
 
 log = logging.getLogger(__name__)
 
-NOTA_LECTURA = ("Los colegios se muestran para conocer dónde hay respuestas y qué "
-                "protege a los estudiantes. No es un ranking ni un diagnóstico.")
-LEYENDA = {
-    "respuestas": "Tamaño del círculo: respuestas recibidas (10 a 29, 30 a 99, "
-                  "100 o más). Gris: todavía sin cifras que mostrar.",
-    "sentirse_parte": "Más oscuro: mayor puntaje medio de sentirse parte del "
-                      "colegio. Gris: todavía sin cifras que mostrar.",
-    "apoyo_social": "Más oscuro: mayor puntaje medio de apoyo social. Gris: "
-                    "todavía sin cifras que mostrar.",
-}
-
-
 def preparar(analisis, capa: str, visibles, pequenos):
     """(puntos, filas) listos para dibujar; levanta si la auditoría no pasa."""
     puntos, avisos = colegios_geo.cargar_puntos()
@@ -62,8 +50,8 @@ def render_mapa(analisis, rol: str, visibles, pequenos) -> bool:
         return False
     st.plotly_chart(mapa_figura.figura_interactiva(filas, capa, puntos),
                     width="stretch", key="est_map_fig")
-    st.caption(LEYENDA[capa])
+    st.caption(mapa_datos.LEYENDAS[capa])
     if pequenos and opciones.MAPA_MOSTRAR_CAUSA_SIN_CIFRA:
         st.caption(cat.CIFRAS_PEQUENAS)
-    st.caption(NOTA_LECTURA)
+    st.caption(mapa_datos.NOTA_LECTURA)
     return True

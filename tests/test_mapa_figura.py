@@ -123,3 +123,78 @@ def test_las_etiquetas_tienen_color_propio():
     fig = mf.figura_interactiva(_filas_respuestas(), "respuestas", PUNTOS)
     rotuladas = [tr for tr in fig.data if tr.mode and "text" in tr.mode]
     assert rotuladas and all(tr.textfont.color for tr in rotuladas)
+
+
+# ── Etiquetas sin superposición, con los puntos reales de Chía ────────────────
+def _filas_reales(puntos):
+    """Los primeros cuatro con cifra, el resto sin ella: el caso del informe."""
+    filas = []
+    for i, p in enumerate(puntos):
+        if i < 4:
+            filas.append(md.FilaMapa(p.codigo, p.nombre, md.CON_CIFRA,
+                                     tramo=("100 o más", "30 a 99", "10 a 29", "100 o más")[i]))
+        elif i % 2:
+            filas.append(md.FilaMapa(p.codigo, p.nombre, md.PEQUENA))
+        else:
+            filas.append(md.FilaMapa(p.codigo, p.nombre, md.SIN_FORMULARIO))
+    return filas
+
+
+def _puntos_reales():
+    from src.geo import colegios_geo
+    puntos, _ = colegios_geo.cargar_puntos()
+    assert len(puntos) >= 10
+    return puntos
+
+
+def test_estatica_ninguna_etiqueta_se_superpone_con_otra_ni_sale_de_la_figura():
+    import itertools
+    puntos = _puntos_reales()
+    fig = mf.figura_estatica(_filas_reales(puntos), "respuestas", puntos)
+    ax = fig.axes[0]
+    renderer = fig.canvas.get_renderer()
+    from matplotlib.text import Text
+    for t in ax.texts:
+        t.update_positions(renderer)
+    cajas = [Text.get_window_extent(t, renderer) for t in ax.texts]
+    assert len(cajas) == len(puntos), "todas las etiquetas deben colocarse"
+    for a, b in itertools.combinations(cajas, 2):
+        assert not a.overlaps(b)
+    for c in cajas:
+        assert c.x0 >= fig.bbox.x0 and c.x1 <= fig.bbox.x1
+        assert c.y0 >= fig.bbox.y0 and c.y1 <= fig.bbox.y1
+
+
+def test_estatica_sin_nombres_no_pone_etiquetas(monkeypatch):
+    monkeypatch.setattr(opciones, "MAPA_MOSTRAR_NOMBRES", False)
+    puntos = _puntos_reales()
+    fig = mf.figura_estatica(_filas_reales(puntos), "respuestas", puntos)
+    assert len(fig.axes[0].texts) == 0
+
+
+def test_interactiva_cada_nombre_sigue_en_el_hover_aunque_se_oculte_su_etiqueta():
+    puntos = _puntos_reales()
+    fig = mf.figura_interactiva(_filas_reales(puntos), "respuestas", puntos)
+    hover = _hover_total(fig)
+    assert all(p.nombre in hover for p in puntos)
+
+
+def test_interactiva_las_etiquetas_usan_una_posicion_valida_y_ninguna_choca():
+    from src.geo import etiquetas as et
+    puntos = _puntos_reales()
+    fig = mf.figura_interactiva(_filas_reales(puntos), "respuestas", puntos)
+    rotulados = [tr for tr in fig.data if tr.mode and "text" in tr.mode]
+    assert rotulados
+    for tr in rotulados:
+        assert tr.textposition in {n for n, _, _ in et.POSICIONES}
+    n_con_texto = sum(len(tr.text) for tr in rotulados)
+    n_total = sum(len(tr.lon) for tr in fig.data if tr.mode and "markers" in tr.mode)
+    assert 0 < n_con_texto <= n_total == len(puntos)
+
+
+def test_interactiva_con_puntaje_deja_una_sola_barra_de_color():
+    puntos = _puntos_reales()
+    filas = [md.FilaMapa(p.codigo, p.nombre, md.CON_CIFRA, valor=3.0 + i / 10,
+                         referencia=3.3) for i, p in enumerate(puntos[:6])]
+    fig = mf.figura_interactiva(filas, "sentirse_parte", puntos[:6])
+    assert sum(1 for tr in fig.data if tr.marker is not None and tr.marker.showscale) == 1

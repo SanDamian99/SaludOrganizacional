@@ -734,6 +734,14 @@ def _tab_muestra(a, informe, nivel: str) -> None:
         st.caption("Este es el diagrama de la muestra del artículo: se lee de arriba abajo y "
                    "cada resta corresponde a una regla documentada en metodologia.md.")
 
+    # Avance de datos: qué celdas colegio × grado ya se ven (src/estudiantes/avance.py)
+    try:
+        from src.ui.views import estudiantes_avance
+        estudiantes_avance.render_avance(a, nivel)
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("El avance de datos falló; la pestaña sigue")
+
 
 def _tab_tabla1(a, nivel: str) -> None:
     st.subheader("Tabla 1 · descriptivos y fiabilidad")
