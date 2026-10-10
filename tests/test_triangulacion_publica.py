@@ -37,6 +37,14 @@ POLITICA_CORRIDAS = ("FOR SELECT TO anon, authenticated USING "
                      "(obs360_interno.es_publica(id));")
 POLITICA_RESULTADOS = ("FOR SELECT TO anon, authenticated\n"
                        "    USING (obs360_interno.es_publica(corrida_id));")
+# En el esquema consolidado, desde la 2026-10-10f, hay una política por rol:
+# anon solo es_publica; authenticated es_publica o cargador. Mismo alcance.
+POLITICAS_ESQUEMA = (
+    "FOR SELECT TO anon USING (obs360_interno.es_publica(id));",
+    "USING (obs360_interno.es_publica(id) OR obs360.es_cargador());",
+    "FOR SELECT TO anon USING (obs360_interno.es_publica(corrida_id));",
+    "USING (obs360_interno.es_publica(corrida_id) OR obs360.es_cargador());",
+)
 
 
 def _sql(*partes) -> str:
@@ -64,9 +72,14 @@ def test_es_publica_es_la_ultima_publicada_sin_excluir_triangulacion(partes):
     assert "REVOKE ALL ON FUNCTION obs360_interno.es_publica(bigint) FROM PUBLIC;" in codigo
     assert ("GRANT EXECUTE ON FUNCTION obs360_interno.es_publica(bigint)\n"
             "    TO anon, authenticated, service_role;") in codigo
-    assert POLITICA_CORRIDAS in codigo and POLITICA_RESULTADOS in codigo
+    if partes == MIGRACION:
+        politicas = (POLITICA_CORRIDAS, POLITICA_RESULTADOS)
+    else:
+        politicas = POLITICAS_ESQUEMA
+    for politica in politicas:
+        assert politica in codigo, politica
     assert "nivel <> 'triangulacion'" not in codigo
-    assert codigo.rindex(FUNCION) < codigo.rindex(POLITICA_RESULTADOS)
+    assert codigo.rindex(FUNCION) < codigo.rindex(politicas[-1])
     for prohibido in ("FOR INSERT", "FOR UPDATE", "FOR DELETE", "FOR ALL"):
         assert prohibido not in codigo
 

@@ -10,10 +10,12 @@ import os
 import re
 import tempfile
 
-import matplotlib.pyplot as plt
 import pandas as pd
 
+from src.core import perezoso
 from src.analysis import indicators
+
+plt = perezoso.modulo("matplotlib.pyplot")   # solo al generar el PDF
 from src.analysis import grupo_minimo as gm
 from src.reports.analytics import apply_report_theme, save_figure_to_bytes, COLORS
 from src.reports.pdf_generator import PDFReport

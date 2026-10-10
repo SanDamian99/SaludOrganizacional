@@ -85,11 +85,16 @@ def disponible() -> bool:
 
 
 def _cliente():
-    from supabase import create_client
+    """Cliente anónimo de lectura: uno por proceso, compartido entre sesiones.
+
+    Lo reutilizan `cuidadores.lectura` y `triangulacion.lectura`; las pruebas
+    lo sustituyen entero por el cliente falso.
+    """
+    from src.core.supabase_cliente import cliente_lectura
     url, key = credenciales()
     if not (url and key):
         raise RuntimeError("Faltan SUPABASE_URL y SUPABASE_KEY.")
-    return create_client(url, key)
+    return cliente_lectura(url, key)
 
 
 def id_corrida_vigente() -> int | None:

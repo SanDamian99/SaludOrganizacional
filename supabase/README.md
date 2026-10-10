@@ -330,6 +330,26 @@ incluida en `estudiantes_schema.sql`). Requiere 2026-10-07b y 2026-10-10b.
 - **Sin ella:** la página pública «Triangulación 360» aparece pero dice «aún no
   hay una corrida de triangulación publicada» (anon no lee nada).
 
+## Migración: una sola política SELECT por rol (10 oct 2026, rendimiento)
+
+Archivo: `supabase/migraciones/2026-10-10f-politicas-select-unicas.sql` (ya
+incluida en `estudiantes_schema.sql`). Requiere 2026-10-10 y 2026-10-10e.
+
+- **Por qué:** el linter de rendimiento de Supabase avisaba de «multiple
+  permissive policies»: `authenticated` tenía dos políticas SELECT en
+  `corridas` y en `resultados` (la pública y la del cargador) y Postgres evalúa
+  todas en cada consulta.
+- **Qué hace:** deja una política por rol y tabla. `anon`: `es_publica(...)`,
+  como antes. `authenticated`: `es_publica(...) OR es_cargador()`. Quita la
+  política duplicada «Permitir lectura anónima» de `public.processed_data`
+  (esquema antiguo).
+- **Qué no cambia:** nadie ve más que antes; ninguna política de escritura; las
+  funciones `es_publica` y `es_cargador` quedan como están.
+- **Verificar:** `SELECT tablename, policyname, roles FROM pg_policies WHERE
+  schemaname = 'obs360' AND tablename IN ('corridas','resultados');` da dos
+  filas por tabla, una `{anon}` y otra `{authenticated}`. Con la clave anon no se
+  ve ninguna corrida con `publicada = false`; con el usuario de carga, todas.
+
 ## Lo que falta
 
 1. **Correr la migración y publicar una corrida nueva** de la fase 1

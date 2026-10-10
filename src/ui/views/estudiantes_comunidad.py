@@ -1326,7 +1326,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         _seccion_informes(analisis, rol, colegio)
 
 
-@st.cache_data(show_spinner="Preparando el PDF…", max_entries=64)
+# Pocas entradas y con caducidad: cada PDF son cientos de KB que antes se
+# quedaban en memoria para siempre (64 por vista, sin TTL).
+@st.cache_data(show_spinner="Preparando el PDF…", max_entries=16, ttl=3600)
 def _pdf_de(html: str) -> bytes | None:
     from src.ui.views.estudiantes_informe import a_pdf
     return a_pdf(html)

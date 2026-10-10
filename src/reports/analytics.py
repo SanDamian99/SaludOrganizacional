@@ -4,12 +4,19 @@ Tema visual institucional azul + semáforo de bienestar.
 """
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from matplotlib.patches import Patch
-import seaborn as sns
 import io
+from src.core import perezoso
 from src.core.config import DATA_DICTIONARY, get_scale_range as _config_scale_range
+
+# matplotlib solo hace falta al generar un PDF; en pantalla se dibuja con Plotly.
+# Importarlo aquí arriba costaba ~0,25 s y ~60 MB en cada arranque.
+plt = perezoso.modulo("matplotlib.pyplot")
+mpl = perezoso.modulo("matplotlib")
+
+
+def Patch(*args, **kwargs):
+    from matplotlib.patches import Patch as _Patch
+    return _Patch(*args, **kwargs)
 from src.core.ai import generate_analysis, build_report_prompt
 from src.analysis import scoring
 from src.analysis import grupo_minimo as gm
@@ -338,15 +345,27 @@ class ReportAnalytics:
         fig_size = max(6, n * 0.55)
         fig, ax = plt.subplots(figsize=(fig_size, fig_size))
 
-        sns.heatmap(corr_df, annot=True, fmt=".2f", annot_kws={"size": 7},
-                    cmap='coolwarm', center=0, vmin=-1, vmax=1,
-                    xticklabels=corr_df.columns, yticklabels=corr_df.columns,
-                    square=True, linewidths=.5, cbar_kws={"shrink": .6}, ax=ax)
+        # Mapa de calor con matplotlib (antes seaborn, que solo se usaba aquí).
+        valores = corr_df.to_numpy(dtype=float)
+        imagen = ax.imshow(valores, cmap="coolwarm", vmin=-1, vmax=1, aspect="equal")
+        ax.set_xticks(range(n), labels=list(corr_df.columns), fontsize=8)
+        ax.set_yticks(range(n), labels=list(corr_df.columns), fontsize=8)
+        ax.set_xticks(np.arange(-0.5, n, 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, n, 1), minor=True)
+        ax.grid(which="minor", color="white", linewidth=0.5)
+        ax.grid(which="major", visible=False)
+        ax.tick_params(which="minor", length=0)
+        for i in range(n):
+            for j in range(n):
+                v = valores[i, j]
+                if np.isnan(v):
+                    continue
+                ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=7,
+                        color="white" if abs(v) > 0.6 else COLORS["text_primary"])
+        fig.colorbar(imagen, ax=ax, shrink=0.6)
 
         ax.set_title("Matriz de Correlación entre Dimensiones (orientadas a bienestar)",
                      fontsize=12, color=COLORS["brand_blue"], pad=12)
-        plt.xticks(rotation=0, fontsize=8)
-        plt.yticks(rotation=0, fontsize=8)
         return save_figure_to_bytes(fig, dpi=120)
 
     def generate_ai_analysis(self, promedios, fortalezas, riesgos) -> str:
