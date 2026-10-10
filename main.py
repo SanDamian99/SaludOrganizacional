@@ -2,6 +2,12 @@
 Observatorio de Salud Organizacional — Main Entry Point
 """
 import streamlit as st
+# Antes de cualquier otro import de `src`: tras un despliegue en caliente sin
+# sesiones abiertas, Streamlit conserva los módulos viejos (y el main.py viejo).
+# `frescura` los desaloja si su archivo cambió; los imports de abajo ya leen
+# del disco.
+from src.core import frescura
+frescura.refrescar(__file__)
 from src.core import modo as modo_app
 from src.core import navegacion as nav
 from src.core.state import init_session_state
