@@ -162,3 +162,24 @@ def test_capa1_junto_a_los_modulos_no_deduce_piezas_pequenas(fuentes_reales, tri
     total = int(sum(deducibles.values()))
     assert hay_constructos
     assert total == 0
+
+
+def test_cifras_municipales_no_deducen_piezas_pequenas(fuentes_reales, tri):
+    """Señales (estudiantes) y terciles (cuidadores) junto a los módulos y la capa 1."""
+    from tests import triangulacion_span as span
+    tablas = c1.marcos(fuentes_reales)
+    por_marco = {m: c1.atomos(d, m) for m, d in tablas.items()}
+    for marco in (cat.ESTUDIANTE, cat.CUIDADOR):
+        assert span.auditar_municipal(tablas, por_marco, marco) == 0
+    con = tri.capa1.municipal[tri.capa1.municipal["valor"].notna()]
+    assert (con["n"] >= MIN).all()
+
+
+def test_los_hallazgos_se_evaluan_sin_error_y_sin_conteos_pequenos(tri):
+    from src.triangulacion import hallazgos as hz
+    vis = hz.evaluar(tri)
+    numeros = {v.hallazgo.numero for v in vis}
+    assert numeros <= set(range(1, 9))
+    for n in re.findall(r"\b(\d+) (?:díadas|familias|estudiantes|cuidadores|docentes)\b",
+                        " ".join(v.cifra for v in vis)):
+        assert int(n) >= MIN

@@ -299,7 +299,8 @@ def perfil_colegios(t) -> pd.DataFrame:
                 if signo == 0:
                     continue
                 corta = c.corta or c.etiqueta
-                partes.append(f"{MEJOR if signo > 0 else PEOR} {corta}")
+                sentido = "más" if f["d"] > 0 else "menos"
+                partes.append(f"{MEJOR if signo > 0 else PEOR} {corta} ({sentido})")
             fila[actor] = "; ".join(partes) if partes else "sin diferencias claras"
         filas.append(fila)
     return pd.DataFrame(filas, columns=COLUMNAS_PERFIL)

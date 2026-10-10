@@ -213,5 +213,6 @@ AVISO_HIPOTESIS = ("Hipótesis de trabajo que acompañan a los hallazgos visible
                    "explicaciones alternativas y cómo ponerla a prueba.")
 AVISO_SIN_HALLAZGOS = "Esta corrida no sustenta ninguno de los hallazgos de este bloque."
 AVISO_PERFIL = ("Por actor, los constructos en que el colegio difiere del resto del "
-                "municipio (IC 95 % que excluye 0): ▲ mejor, ▼ peor. En estudiantes, "
-                "ajustado por grado.")
+                "municipio (IC 95 % que excluye 0): ▲ mejor, ▼ peor; entre paréntesis, si "
+                "el colegio tiene más o menos que el resto. En estudiantes, ajustado por "
+                "grado.")
