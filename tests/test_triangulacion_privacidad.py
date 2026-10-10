@@ -91,17 +91,22 @@ def test_cada_cifra_de_diadas_tiene_10_familias(tri):
     assert pub.empty or (pub["familias"] >= cat.MIN_GROUP_N).all()
 
 
-def test_nada_de_triangulacion_sube_a_supabase():
-    """Ningún módulo de la triangulación importa el cliente de Supabase ni el publicador."""
+def test_solo_publicar_y_lectura_hablan_con_supabase():
+    """El cálculo, la vista y el ZIP no tocan Supabase; solo `publicar` (escribe con
+    service_role, en la máquina que procesa) y `lectura` (lee con el usuario de
+    carga). La página solo importa `lectura`."""
     import pathlib
     raiz = pathlib.Path(__file__).resolve().parents[1]
-    archivos = [*(raiz / "src" / "triangulacion").glob("*.py"),
-                raiz / "src" / "ui" / "triangulacion.py",
-                raiz / "src" / "ui" / "views" / "triangulacion_investigador.py"]
+    calculo = [f for f in (raiz / "src" / "triangulacion").glob("*.py")
+               if f.name not in ("publicar.py", "lectura.py")]
+    archivos = [*calculo, raiz / "src" / "ui" / "views" / "triangulacion_investigador.py"]
     prohibidos = re.compile(r"^\s*(from|import)\s+.*(supabase|publicar|lectura|almacen)",
                             re.MULTILINE)
     for f in archivos:
         assert not prohibidos.search(f.read_text(encoding="utf-8")), f.name
+    pagina = (raiz / "src" / "ui" / "triangulacion.py").read_text(encoding="utf-8")
+    assert not re.search(r"^\s*(from|import)\s+.*(supabase|publicar|almacen)", pagina,
+                         re.MULTILINE)
 
 
 def test_la_metodologia_declara_los_limites_estadisticos(tri):
