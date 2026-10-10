@@ -78,7 +78,7 @@ def init_session_state():
 def get_processed_data() -> pd.DataFrame | None:
     """
     Returns the currently loaded DataFrame, or None if not available.
-    Safe accessor used by trends.py, dashboard.py, etc.
+    Safe accessor used by dashboard.py, chat, etc.
     """
     df = st.session_state.get("df")
     if df is not None and isinstance(df, pd.DataFrame) and not df.empty:

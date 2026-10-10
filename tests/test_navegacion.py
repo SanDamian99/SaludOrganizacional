@@ -17,11 +17,19 @@ def test_nombres_de_las_paginas():
 def test_orden_del_menu_es_el_de_la_spec():
     assert nav.MENU == (
         "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
-        "Chat con IA", "Cargar Datos", "Análisis de tendencias", "Reportes")
+        "Chat con IA", "Cargar Datos", "Reportes")
 
 
 def test_ya_no_existe_la_pagina_dashboard():
     assert "Dashboard" not in nav.MENU
+
+
+def test_ya_no_existe_el_analisis_de_tendencias():
+    """Auditoría de relevancia (10-oct-2026): no servía con los datos reales."""
+    import importlib.util
+    assert "Análisis de tendencias" not in nav.MENU
+    assert not hasattr(nav, "PAGINA_TENDENCIAS")
+    assert importlib.util.find_spec("src.ui.trends") is None
 
 
 def test_triangulacion_solo_para_investigadores():
@@ -35,7 +43,7 @@ def test_triangulacion_solo_para_investigadores():
 
 def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
     esperado = ["Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
-                "Chat con IA", "Cargar Datos", "Análisis de tendencias", "Reportes"]
+                "Chat con IA", "Cargar Datos", "Reportes"]
     assert nav.menu(COMPLETO) == esperado
     assert nav.menu(INVESTIGADOR) == esperado
 
@@ -99,7 +107,7 @@ def test_un_modo_desconocido_se_trata_como_comunidad():
 
 PROHIBIDOS_EN_COMUNIDAD = (
     "src.ui.dashboard", "src.ui.chat", "src.ui.upload", "src.ui.reports",
-    "src.ui.trends", "src.ai.gemini_client",
+    "src.ai.gemini_client",
     "src.ui.views.estudiantes_investigador",
     "src.ui.cuidadores", "src.ui.views.cuidadores_investigador",
     "src.cuidadores.ingest", "src.cuidadores.pipeline", "src.cuidadores.scoring",

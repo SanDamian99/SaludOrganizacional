@@ -73,7 +73,6 @@ def test_las_medias_no_existen_por_celda(ac):
                                      {"colegio": "SJMEB"}])
 def test_local_y_publicado_muestran_lo_mismo(ac, leido, rol, filtros):
     assert vc.tarjetas(ac, rol, filtros) == vc.tarjetas(leido, rol, filtros)
-    assert vc.bandas_hijo(ac, filtros) == vc.bandas_hijo(leido, filtros)
     assert vc.panel_html(ac, rol, filtros) == vc.panel_html(leido, rol, filtros)
 
 
@@ -159,6 +158,14 @@ def test_comparables_por_rol():
         assert not [k for k in vc.comparables(rol) if "auto" in k]
 
 
+def test_hijo_alto_no_se_compara_entre_grupos():
+    """Auditoría de relevancia (10-oct-2026): por grado no tenía cifra en ningún grupo."""
+    assert "hijo_alto" not in vc.COMPARABLES
+    for rol in ROLES:
+        assert "hijo_alto" not in vc.comparables(rol)
+    assert "castigo" in vc.comparables("familia")
+
+
 def test_la_comparacion_sin_casos_y_solo_con_porcentaje(ac):
     t = vc.prevalencia_por(ac, "castigo", "Colegio")
     assert list(t.columns) == ["grupo", "n", "pct", "ic_inf", "ic_sup"]
@@ -202,6 +209,20 @@ def test_la_vista_se_dibuja_para_cada_rol(tmp_path, objeto, rol):
         for palabra in PALABRAS_DANO:
             assert palabra not in pantalla.lower()
         assert "cuid_com_colegio" not in [s.key for s in at.sidebar.selectbox]
+
+
+@pytest.mark.parametrize("objeto", ["ac", "leido"])
+def test_no_hay_grafico_de_bandas_del_hijo(tmp_path, objeto):
+    """Duplicaba la tarjeta «Cómo ve el cuidador al hijo», que se queda."""
+    at = _app(tmp_path, objeto)
+    at.session_state["cuid_com_rol"] = "municipio"
+    at.run()
+    assert not at.exception
+    assert not [m for m in at.markdown if m.value.startswith("#### ")
+                and cc.MENSAJES["hijo"].titulo in m.value]
+    assert not hasattr(vc, "figura_bandas") and not hasattr(vc, "bandas_hijo")
+    opciones = at.selectbox(key="cuid_com_indicador").options
+    assert not [o for o in opciones if "niños con dificultades" in o.lower()]
 
 
 def test_familia_no_tiene_selector_de_colegio_ni_informes(tmp_path):

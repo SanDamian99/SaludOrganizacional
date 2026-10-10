@@ -32,7 +32,7 @@ src/
   analysis/    scoring (puntuación psicométrica — única fuente de verdad)
   ai/          gemini_client, knowledge_base (RAG), response_router, prompt_builder
   reports/     analytics, report_builder, pdf_generator
-  ui/          dashboard, chat, trends, upload, reports, diagnostics, components/
+  ui/          dashboard, chat, upload, reports, diagnostics, components/
 docs/          METODOLOGIA_PUNTAJES.md, specs/
 tests/         suite pytest
 ```

@@ -16,6 +16,7 @@ import re
 import pandas as pd
 import streamlit as st
 
+from src.analysis.grupo_minimo import texto_n
 from src.core.config import DATA_DICTIONARY
 from src.data.processor import is_protected_column, normalize_text
 
@@ -245,7 +246,8 @@ def render_filtering_sidebar(df: pd.DataFrame) -> pd.DataFrame:
     df_filtrado = aplicar_filtros(df, activos)
 
     if len(df_filtrado) != len(df):
-        st.sidebar.info(f"Registros filtrados: {len(df_filtrado)} / {len(df)}")
+        # Grupo mínimo de 10: un conteo pequeño no se imprime ni aquí.
+        st.sidebar.info(f"Registros filtrados: {texto_n(len(df_filtrado))} / {len(df)}")
     else:
         st.sidebar.text(f"Total registros: {len(df)}")
 

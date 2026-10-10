@@ -12,6 +12,7 @@ import io
 from src.core.config import DATA_DICTIONARY, get_scale_range as _config_scale_range
 from src.core.ai import generate_analysis, build_report_prompt
 from src.analysis import scoring
+from src.analysis import grupo_minimo as gm
 
 # Variables candidatas para comparaciones por grupo (se usan las presentes)
 GROUP_CANDIDATES = [
@@ -97,6 +98,30 @@ def save_figure_to_bytes(fig, dpi=130) -> bytes:
 # ═══════════════════════════════════════════════════════════════
 # CLASE PRINCIPAL
 # ═══════════════════════════════════════════════════════════════
+
+def conteos_para_grafica(df, col_name: str) -> pd.DataFrame:
+    """Conteos de una variable del perfil sin cifras menores de 10 (`grupo_minimo`).
+
+    Las numéricas (edad…) van por rangos: un histograma enseñaría barras de una o
+    dos personas.
+    """
+    serie = df[col_name]
+    if pd.api.types.is_numeric_dtype(serie):
+        ancho = 10 if "edad" in str(col_name).lower() else None
+        t = gm.conteos_protegidos(gm.agrupar_numerica(serie, ancho))
+        return t.sort_values("categoria", key=lambda c: c.str.extract(r"(\d+)")[0].astype(float)
+                             ).reset_index(drop=True)
+    return gm.conteos_protegidos(serie)
+
+
+def medias_por_grupo(oriented: pd.DataFrame, grupo: pd.Series) -> pd.Series:
+    """Media de los ítems orientados por grupo, solo para grupos de 10 o más."""
+    n = grupo.value_counts()
+    validos = n[n >= gm.N_MINIMO].index
+    mascara = grupo.isin(validos)
+    grouped = oriented[mascara].groupby(grupo[mascara], observed=True).mean(numeric_only=True)
+    return grouped.mean(axis=1, skipna=True).dropna()
+
 
 class ReportAnalytics:
     def __init__(self, df):
@@ -200,27 +225,23 @@ class ReportAnalytics:
         if col_name not in self.df.columns:
             return None
 
-        if pd.api.types.is_numeric_dtype(self.df[col_name]):
-            fig, ax = plt.subplots(figsize=(5, 3.5))
-            self.df[col_name].hist(ax=ax, bins=15, color=COLORS["brand_blue_mid"],
-                                   edgecolor="white", linewidth=0.5)
-            ax.set_xlabel(var_label, fontsize=9)
-            ax.set_ylabel("Frecuencia", fontsize=9)
-        else:
-            counts = self.df[col_name].value_counts()
-            fig, ax = plt.subplots(figsize=(5, 3.5))
-            colors = [CHART_PALETTE[i % len(CHART_PALETTE)] for i in range(len(counts))]
-            bars = ax.bar(range(len(counts)), counts.values, color=colors,
-                          edgecolor="white", linewidth=0.5)
-            ax.set_xticks(range(len(counts)))
-            ax.set_xticklabels(counts.index, rotation=45, ha='right', fontsize=8)
-            ax.set_ylabel("Frecuencia", fontsize=9)
+        # Grupo mínimo de 10: las categorías ocultas van sin barra y con «<10».
+        t = conteos_para_grafica(self.df, col_name)
+        if t.empty:
+            return None
+        alturas = [n if v else 0 for n, v in zip(t["n"], t["visible"])]
+        fig, ax = plt.subplots(figsize=(5, 3.5))
+        colors = [CHART_PALETTE[i % len(CHART_PALETTE)] for i in range(len(t))]
+        bars = ax.bar(range(len(t)), alturas, color=colors,
+                      edgecolor="white", linewidth=0.5)
+        ax.set_xticks(range(len(t)))
+        ax.set_xticklabels([str(c) for c in t["categoria"]], rotation=45, ha='right', fontsize=8)
+        ax.set_ylabel("Frecuencia", fontsize=9)
 
-            for bar, val in zip(bars, counts.values):
-                if val > 0:
-                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
-                            str(val), ha='center', va='bottom', fontsize=7,
-                            color=COLORS["text_secondary"])
+        for bar, texto in zip(bars, t["texto"]):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
+                    texto, ha='center', va='bottom', fontsize=7,
+                    color=COLORS["text_secondary"])
 
         ax.set_title(var_label, pad=10)
         return save_figure_to_bytes(fig)
@@ -263,8 +284,8 @@ class ReportAnalytics:
             for k, (grupo_label, grupo_col) in enumerate(grupos.items()):
                 ax = axs[k]
                 try:
-                    grouped = oriented.groupby(self.df[grupo_col], observed=False).mean(numeric_only=True)
-                    final_means = grouped.mean(axis=1, skipna=True).dropna()
+                    # Solo grupos de 10 o más (grupo mínimo).
+                    final_means = medias_por_grupo(oriented, self.df[grupo_col])
                     if not final_means.empty:
                         has_data = True
                         cats = final_means.index.astype(str)

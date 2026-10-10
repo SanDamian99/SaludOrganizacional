@@ -44,7 +44,7 @@ from src.estudiantes import alertas_catalogo as ac_est
 from src.estudiantes import privacidad
 from src.ui import estado
 from src.ui.views import estudiantes_alertas as va
-from src.ui.views.estudiantes_comunidad import COLORES_BANDAS, figura_comparativa, uno_de_cada
+from src.ui.views.estudiantes_comunidad import figura_comparativa, uno_de_cada
 
 TODOS = privacidad.TODOS
 CRUCE = privacidad.AGRUPACION_CRUCE
@@ -73,7 +73,9 @@ INDICADOR_TARJETA = {"animo": "animo", "apoyo": "apoyo_familia", "crianza": "cas
                      "hijo": "hijo_alto"}
 EXTRAS_TARJETA = {"apoyo": ("apoyo_amigos", "apoyo_otro"), "crianza": ("grito",)}
 MEDIAS = {"estres": ("PSS_Total", 40), "barrio": ("BARRIO_Indice", 10)}
-COMPARABLES = ("castigo", "apoyo_familia", "hijo_alto", "animo")
+# «Hijo alto» no se compara: casi ningún grupo llega al mínimo para tener cifra
+# (auditoría de relevancia, 10-oct-2026). Sigue en su tarjeta.
+COMPARABLES = ("castigo", "apoyo_familia", "animo")
 CIFRA_SUPRIMIDA = "—"
 
 
@@ -288,25 +290,6 @@ def tarjetas(ac, rol: str, filtros: dict | None = None,
         if len(salida) == cc.MAX_TARJETAS:
             break
     return salida
-
-
-def bandas_hijo(ac, filtros: dict | None = None) -> dict:
-    """Las cuatro bandas del SDQ total según el cuidador, o {} si no hay o se ocultaron."""
-    o = objeto(ac.nino, filtros)
-    t = getattr(o, "bandas", None) if o is not None else None
-    if not isinstance(t, pd.DataFrame) or t.empty or "clave" not in t.columns:
-        return {}
-    sel = t[t["clave"] == "SDQ_Total"]
-    if sel.empty:
-        return {}
-    f = sel.iloc[0]
-    if int(f["n"]) < cat.MIN_GROUP_N or any(pd.isna(f[f"pct_b{i}"]) for i in range(4)):
-        return {}
-    etiquetas = list(f["etiquetas"]) if isinstance(f.get("etiquetas"), (list, tuple)) and \
-        len(f["etiquetas"]) == 4 else ["Cercano al promedio", "Ligeramente elevado", "Alto",
-                                       "Muy alto"]
-    return dict(n=int(f["n"]), pct=[float(f[f"pct_b{i}"]) for i in range(4)],
-                etiquetas=etiquetas)
 
 
 def comparables(rol: str) -> list[str]:
@@ -567,21 +550,6 @@ def _panel(ac, rol: str, filtros: dict) -> bool:
         return False
 
 
-def figura_bandas(b: dict):
-    import plotly.graph_objects as go
-    fig = go.Figure()
-    for i, (etiqueta, pct) in enumerate(zip(b["etiquetas"], b["pct"])):
-        fig.add_trace(go.Bar(x=[pct], y=[""], orientation="h", name=etiqueta,
-                             marker_color=COLORES_BANDAS[i], text=[f"{pct:.0f} %"],
-                             textposition="inside", insidetextanchor="middle",
-                             hovertemplate=f"<b>{etiqueta}</b><br>%{{x:.0f}} %<extra></extra>"))
-    fig.update_layout(barmode="stack", height=150, showlegend=True,
-                      legend=dict(orientation="h", yanchor="bottom", y=-0.6, x=0),
-                      margin=dict(l=10, r=10, t=10, b=10),
-                      xaxis=dict(range=[0, 100], visible=False), yaxis=dict(visible=False))
-    return fig
-
-
 def _selector(ac, columna: str, colegio: str = TODOS) -> str:
     opciones = grupos(ac, columna, colegio if columna == "Grado" else TODOS)
     clave = f"cuid_com_{columna.lower()}"
@@ -686,11 +654,6 @@ def render_comunidad(ac) -> None:
     sin_cifra = grupos_sin_cifra(ac, indicador, dimension, filtros)
     if sin_cifra:
         st.caption(f"Sin cifra: {', '.join(sin_cifra)}. {cc.CIFRAS_PEQUENAS}")
-
-    b = bandas_hijo(ac, filtros)
-    if b:
-        st.markdown(f"#### {cc.MENSAJES['hijo'].titulo} · {b['n']} niños")
-        st.plotly_chart(figura_bandas(b), width="stretch", key="cuid_com_bandas")
 
     with st.container(border=True):
         st.markdown(f"#### 🆘 {cc.TITULO_RUTA}")

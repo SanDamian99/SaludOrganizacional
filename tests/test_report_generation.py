@@ -11,15 +11,16 @@ def test_report_generation():
     print("--- Testing Report Generation ---")
     
     # 1. Create Mock Data
+    # 10 filas: los PDF no se construyen para grupos de menos de 10 (grupo mínimo).
     data = {
-        "Edad": [25, 30, 35, 40, 45],
-        "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre"],
+        "Edad": [25, 30, 35, 40, 45] * 2,
+        "Sexo": ["Hombre", "Mujer", "Hombre", "Mujer", "Hombre"] * 2,
     }
     
     # Add dimension data
     burnout_dim = DATA_DICTIONARY["Dimensiones de Bienestar y Salud Mental"]["Síntomas de Burnout"]
     for q in burnout_dim["Preguntas"]:
-        data[q] = [3, 4, 3, 5, 2]
+        data[q] = [3, 4, 3, 5, 2] * 2
         
     df = pd.DataFrame(data)
     print(f"Mock DataFrame created: {df.shape}")

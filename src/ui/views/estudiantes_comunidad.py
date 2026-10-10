@@ -1127,22 +1127,6 @@ def figura_comparativa(tabla: pd.DataFrame, titulo: str) -> go.Figure:
     return fig
 
 
-def figura_items_pssm(items: list[dict]) -> go.Figure:
-    """Barras horizontales con la media de los ítems de pertenencia más bajos."""
-    items = list(reversed(items))
-    fig = go.Figure(go.Bar(
-        x=[it["media"] for it in items],
-        y=[it["enunciado"] for it in items], orientation="h",
-        marker_color=COLOR_BARRA,
-        text=[f"{it['media']:.2f}" for it in items], textposition="outside",
-        hovertemplate="<b>%{y}</b><br>Media %{x:.2f} de 5<extra></extra>"))
-    fig.update_layout(
-        height=max(240, 60 * len(items)), margin=dict(l=10, r=40, t=10, b=10),
-        showlegend=False, xaxis=dict(range=[1, 5], title="Media del grupo (1 a 5)"),
-        yaxis=dict(title=""))
-    return fig
-
-
 def _sin_datos() -> None:
     """Mensaje de ayuda cuando no hay nada que mostrar, sin lanzar excepción."""
     st.info(
@@ -1310,15 +1294,9 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     if ocultos:
         st.caption(ocultos)
 
-    # ── 4. ítems de pertenencia más bajos
-    items = items_pertenencia_bajos(a, 4, filtros)
-    if items:
-        st.markdown("#### Los cuatro enunciados de pertenencia con la media más baja")
-        st.plotly_chart(figura_items_pssm(items), width="stretch",
-                        key="est_com_items_pssm")
-        st.caption("Enunciados tomados del instrumento aplicado. Las medias están "
-                   "orientadas (mayor es mejor), así que los cinco enunciados "
-                   "negativos se leen en positivo.")
+    # (4. Los enunciados de pertenencia más bajos salieron de la pantalla: medias
+    # casi iguales y sin IC. Auditoría de relevancia, 10-oct-2026. Los informes
+    # descargables los conservan.)
 
     # ── 5. ruta de atención, siempre visible
     with st.container(border=True):
