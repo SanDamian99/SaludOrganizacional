@@ -16,6 +16,8 @@ MAPA_MOSTRAR_SIN_CIFRA = True          # círculos grises de colegios sin cifra
 MAPA_MOSTRAR_CAUSA_SIN_CIFRA = True    # decir por qué no hay cifra
 MAPA_MOSTRAR_COMPARACION = True        # valor del municipio junto al del colegio
 MAPA_ROLES = ("municipio", "colegio")
+MAPA_EN_INFORMES = True                # mapa en el informe de la Secretaría
+MAPA_CAPAS_INFORME = ("respuestas", "sentirse_parte")
 
 # No es un parámetro: las únicas capas que el mapa sabe dibujar. Ninguna es de
 # malestar, alertas, SDQ ni RCADS.
@@ -37,3 +39,9 @@ def capa_inicial() -> str:
 def rol_ve_mapa(rol: str) -> bool:
     """Familia nunca: no ve desagregación por colegio y el mapa lo es."""
     return rol != "familia" and rol in tuple(MAPA_ROLES)
+
+
+def capas_informe() -> list[str]:
+    """Capas del informe: las pedidas, permitidas y también activas en pantalla."""
+    pedidas = tuple(MAPA_CAPAS_INFORME)
+    return [c for c in capas_activas() if c in pedidas]

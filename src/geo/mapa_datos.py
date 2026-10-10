@@ -20,6 +20,16 @@ ETIQUETAS_CAPA = {"respuestas": "Respuestas recibidas",
                   "sentirse_parte": "Sentirse parte del colegio",
                   "apoyo_social": "Apoyo social"}
 TRAMOS = ((100, "100 o más"), (30, "30 a 99"), (10, "10 a 29"))
+LEYENDAS = {
+    "respuestas": "Tamaño del círculo: respuestas recibidas (10 a 29, 30 a 99, "
+                  "100 o más). Gris: todavía sin cifras que mostrar.",
+    "sentirse_parte": "Más oscuro: mayor puntaje medio de sentirse parte del "
+                      "colegio. Gris: todavía sin cifras que mostrar.",
+    "apoyo_social": "Más oscuro: mayor puntaje medio de apoyo social. Gris: "
+                    "todavía sin cifras que mostrar.",
+}
+NOTA_LECTURA = ("Los colegios se muestran para conocer dónde hay respuestas y qué "
+                "protege a los estudiantes. No es un ranking ni un diagnóstico.")
 
 CON_CIFRA = "con_cifra"
 PEQUENA = "pequena"                  # grupo bajo el mínimo: sin cifra
