@@ -95,7 +95,9 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
     # lo único que se importa antes del corte es el módulo de estudiantes
     assert "from src.ui.estudiantes import render_estudiantes" in antes
     # y estos quedan después, es decir, fuera del alcance del despliegue público
-    for modulo in ("src.ui.reports", "src.data.loader", "src.ui.diagnostics",
+    # (el cargador de docentes ya no se importa en main.py: lo pide
+    # `src.core.state` solo en las páginas que usan ese dataset)
+    for modulo in ("src.ui.reports", "src.ui.diagnostics",
                    "src.ui.chat", "src.ui.upload", "src.ui.dashboard"):
         assert modulo not in antes, f"{modulo} se importa antes del corte público"
         assert modulo in despues, f"{modulo} ya no aparece en main.py"

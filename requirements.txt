@@ -1,26 +1,28 @@
-streamlit>=1.44.0
-pandas>=2.0.0
-numpy>=1.24.0
-scipy>=1.11.0
-plotly>=5.24.0
-matplotlib>=3.8.0
-seaborn>=0.12.0
-google-generativeai>=0.8.0
-reportlab>=4.0.0
+# Dependencias del despliegue. Las de desarrollo (pytest) están en
+# requirements-dev.txt. Los topes de versión mayor evitan que Streamlit Cloud
+# cambie una librería de versión mayor sin aviso al reconstruir el entorno.
+streamlit>=1.44.0,<2
+pandas>=2.0.0,<3
+numpy>=1.24.0,<3
+scipy>=1.11.0,<2
+plotly>=5.24.0,<7
+# Solo para los PDF (gráficas) y la figura del mapa; se importa de forma
+# perezosa (src/core/perezoso.py), nunca al arrancar una página.
+matplotlib>=3.8.0,<4
+google-generativeai>=0.8.0,<1
+reportlab>=4.0.0,<5
 # HTML → PDF del resumen de una página de estudiantes; sus librerías de
 # sistema (Pango) están en packages.txt para Streamlit Cloud.
-weasyprint>=62.0
-chromadb>=0.5.0
-supabase>=2.0.0
-openpyxl>=3.1.0
-xlrd>=2.0.0
-chardet>=5.0.0
-Pillow>=10.0.0
-pytest>=7.4.0
-pytest-mock>=3.12.0
+weasyprint>=62.0,<70
+chromadb>=0.5.0,<2
+supabase>=2.0.0,<3
+openpyxl>=3.1.0,<4
+xlrd>=2.0.0,<3
+chardet>=5.0.0,<6
+Pillow>=10.0.0,<12
 
-# Recomendado por Streamlit para recargar archivos sin sondeo; además, cambiar
+# Recomendado por Streamlit para recargar archivos sin sondeo. Además, cambiar
 # este archivo obliga a Streamlit Cloud a reconstruir el entorno y reiniciar el
 # proceso, que es lo que hace falta cuando conserva módulos viejos en memoria.
-watchdog>=4.0.1
-# Reinicio forzado del despliegue: fase 1 (corrida 6, cruce colegio×grado), 7-oct-2026.
+watchdog>=4.0.1,<7
+# Reconstrucción del despliegue: limpieza y rendimiento, 10-oct-2026.

@@ -162,9 +162,10 @@ def _render_almacen():
                         st.session_state.get("_archivo_crudo_nombre", "archivo"),
                         notas=notas,
                     )
-                # El arranque y el selector cachean la versión activa: hay que
-                # invalidar para que la próxima sesión vea la nueva.
-                st.cache_data.clear()
+                # El selector cachea la versión activa y el dataset procesado:
+                # se invalidan solo esas cachés, no las de las demás páginas.
+                from src.data import loader as _loader
+                _loader.invalidar()
                 retiradas = fila.get("columnas_retiradas") or []
                 st.success(
                     f"✅ Versión guardada y activada: {fila.get('filas', '?'):,} filas, "
@@ -210,7 +211,8 @@ def _render_almacen():
         elif cols[4].button("Activar", key=f"activar_{v.get('id')}"):
             try:
                 almacen.Almacen().activar(v["id"], conjunto=v.get("conjunto"))
-                st.cache_data.clear()
+                from src.data import loader as _loader
+                _loader.invalidar()
                 st.success(f"Versión del {fecha_txt} activada. Se carga en el próximo arranque.")
                 st.rerun()
             except Exception as e:                          # noqa: BLE001
