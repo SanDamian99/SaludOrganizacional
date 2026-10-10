@@ -114,3 +114,128 @@ def test_la_firma_cambia_con_la_clave_sin_llevarla(monkeypatch, tmp_path):
     f2 = pag.firma(disp)
     assert f1 != f2
     assert ts.CLAVE_PRUEBA not in repr(f1) and ts.CLAVE_PRUEBA not in repr(f2)
+
+
+# ══ Despliegue del equipo: la corrida publicada (sin archivos, sin red) ═══
+from tests.supabase_falso import CREDENCIALES_CARGADOR  # noqa: E402
+
+PAGINA = "from src.ui.triangulacion import render_triangulacion\nrender_triangulacion()\n"
+
+
+def _equipo(monkeypatch, tmp_path, base, modo="investigador",
+            clave=CREDENCIALES_CARGADOR["password"]):
+    """Despliegue sin archivos, con las credenciales de carga y la base falsa detrás."""
+    from src.core import vista_previa as vp
+    from src.ui import triangulacion as pag
+    monkeypatch.setenv("OBS360_MODO", modo)
+    monkeypatch.setenv("OBS360_DATOS_DIR", str(tmp_path))
+    monkeypatch.setenv("OBS360_SUPABASE_URL", "https://falso.invalid")
+    monkeypatch.setenv("OBS360_SUPABASE_KEY", "clave-anon-falsa")
+    monkeypatch.delenv("OBS360_FUENTE", raising=False)
+    monkeypatch.setattr(vp, "credenciales", lambda: (CREDENCIALES_CARGADOR["email"], clave))
+    monkeypatch.setattr(vp, "_crear_cliente", lambda url, key: base.cliente_sin_sesion())
+    pag._leer.clear()
+    from streamlit.testing.v1 import AppTest
+    return AppTest.from_string(PAGINA, default_timeout=180)
+
+
+def _texto(at) -> str:
+    partes = []
+    for grupo in (at.markdown, at.caption, at.info, at.warning, at.error, at.title,
+                  at.subheader):
+        partes += [str(getattr(e, "value", "")) for e in grupo]
+    partes += [str(getattr(t, "label", "")) for t in at.toggle]
+    partes += [str(getattr(e, "value", "")) for e in at.sidebar.caption]
+    partes += [str(getattr(d, "value", "")) for d in at.dataframe]
+    return " ".join(partes)
+
+
+def test_el_mensaje_fijo_dice_que_no_hay_corrida_publicada():
+    assert "aún no hay una corrida de triangulación publicada" in cat.AVISO_DESPLIEGUE
+
+
+def test_sin_archivos_muestra_la_corrida_publicada(monkeypatch, tmp_path):
+    from src.triangulacion import lectura
+    from tests import triangulacion_publicada_datos as datos
+    resumen, base = datos.publicado(publicar_ya=True)
+    at = _equipo(monkeypatch, tmp_path, base).run()
+    assert not at.exception
+    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert any(lectura.AVISO_PUBLICADO in i.value for i in at.info)
+    assert not any(cat.AVISO_DESPLIEGUE in i.value for i in at.info)
+    assert not at.toggle                                   # nada en revisión
+    texto = _texto(at)
+    assert f"corrida {resumen['corrida_id']}" in texto
+    at.selectbox(key="tri_ba").set_value("SDQ_Emo").run()
+    assert not at.exception
+    texto = _texto(at)
+    for prohibido in ts.textos_prohibidos():
+        assert prohibido not in texto
+    assert CREDENCIALES_CARGADOR["password"] not in texto
+    assert at.get("download_button")                       # el ZIP de agregados
+
+
+def test_la_corrida_en_revision_con_su_franja(monkeypatch, tmp_path):
+    from src.triangulacion import publicar as pub
+    from tests import triangulacion_publicada_datos as datos
+    resumen, base = datos.publicado(publicar_ya=True)
+    oculta = pub.publicar(datos.analisis(), publicar_ya=False, cliente=base.cliente())
+    at = _equipo(monkeypatch, tmp_path, base).run()
+    assert not at.exception
+    toggle = at.toggle(key="vista_previa_triangulacion")
+    assert toggle.value and str(oculta["corrida_id"]) in toggle.label
+    texto = _texto(at)
+    assert "Vista previa para el equipo" in texto
+    assert f"Fuente: corrida en revisión ({oculta['corrida_id']})" in texto
+    assert "nunca es pública" in " ".join(str(m.value) for m in at.markdown)
+    assert [t.label for t in at.tabs] == vi.PESTANAS
+    at.toggle(key="vista_previa_triangulacion").set_value(False).run()
+    assert not at.exception
+    assert "Vista previa para el equipo" not in _texto(at)
+    assert f"corrida {resumen['corrida_id']}" in _texto(at)
+
+
+def test_solo_oculta_y_vista_previa_apagada_da_el_mensaje(monkeypatch, tmp_path):
+    from tests import triangulacion_publicada_datos as datos
+    _, base = datos.publicado(publicar_ya=False)
+    at = _equipo(monkeypatch, tmp_path, base, modo="completo").run()
+    assert not at.exception
+    assert at.toggle(key="vista_previa_triangulacion").value is False
+    assert any(cat.AVISO_DESPLIEGUE in i.value for i in at.info)
+    assert not at.tabs
+
+
+def test_sin_sesion_del_cargador_da_el_mensaje(monkeypatch, tmp_path):
+    from tests import triangulacion_publicada_datos as datos
+    _, base = datos.publicado(publicar_ya=True)
+    at = _equipo(monkeypatch, tmp_path, base, clave="equivocada").run()
+    assert not at.exception
+    assert any(cat.AVISO_DESPLIEGUE in i.value for i in at.info)
+    assert not at.tabs
+
+
+def test_un_vista_previa_rancio_igual_lee_la_publicada(monkeypatch, tmp_path):
+    from src.core import vista_previa as vp
+    from tests import triangulacion_publicada_datos as datos
+    _, base = datos.publicado(publicar_ya=True)
+    at = _equipo(monkeypatch, tmp_path, base)
+    monkeypatch.setattr(vp, "MODULOS", ("estudiantes", "cuidadores"))
+    monkeypatch.delattr(vp, "marcar_en_uso")
+    at.run()
+    assert not at.exception
+    assert [t.label for t in at.tabs] == vi.PESTANAS
+
+
+def test_si_la_lectura_falla_no_muestra_el_detalle(monkeypatch, tmp_path):
+    from src.triangulacion import lectura
+    from tests import triangulacion_publicada_datos as datos
+    _, base = datos.publicado(publicar_ya=True)
+    at = _equipo(monkeypatch, tmp_path, base)
+
+    def falla(*a, **k):
+        raise RuntimeError("detalle-interno-de-la-lectura")
+    monkeypatch.setattr(lectura, "cargar", falla)
+    at.run()
+    assert not at.exception
+    assert "detalle-interno" not in _texto(at)
+    assert any(cat.AVISO_DESPLIEGUE in i.value for i in at.info)
