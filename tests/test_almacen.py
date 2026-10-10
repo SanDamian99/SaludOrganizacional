@@ -210,7 +210,12 @@ def test_subir_version_sube_a_la_ruta_esperada_con_hash_correcto(alm, cliente, d
     assert len(guardadas) == 1 and guardadas[0]["activa"] is True
 
 
-def test_una_nueva_version_desactiva_la_anterior_del_mismo_conjunto(alm, cliente, df_docentes):
+def test_una_nueva_version_desactiva_la_anterior_del_mismo_conjunto(alm, cliente, df_docentes,
+                                                                     monkeypatch):
+    # «cuidadores» es un conjunto crudo y el almacén exige que venga desidentificado;
+    # aquí solo interesa que otro conjunto no se toque, así que se omite esa guarda.
+    from src.data import desidentificar
+    monkeypatch.setattr(desidentificar, "verificar", lambda conjunto, df: None)
     primera = alm.subir_version("docentes", df_docentes, "v1.xlsx")
     cuidadores = alm.subir_version("cuidadores", df_docentes, "c1.xlsx")
     # segunda versión de docentes con otro contenido

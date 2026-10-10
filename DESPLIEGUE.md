@@ -337,6 +337,46 @@ espera.
 Si la instalación en el despliegue tarda demasiado o falla, se puede quitar: en
 los modos `comunidad` e `investigador` la aplicación nunca importa el chat.
 
+## Todo lo que usa la plataforma está en Supabase
+
+| Conjunto | Qué es | Dónde |
+|---|---|---|
+| `docentes` | archivo codificado, sin nombres | Storage, bucket `datasets` |
+| `estudiantes_secundaria` | formulario de secundaria, desidentificado | Storage, bucket `datasets` |
+| `estudiantes_primaria` | formulario de primaria, desidentificado | Storage, bucket `datasets` |
+| `cuidadores` | exportación «Cuidando al Cuidador», desidentificada | Storage, bucket `datasets` |
+| corridas de estudiantes, cuidadores y triangulación | agregados publicados | tablas `obs360.corridas` / `resultados` |
+
+Los tres formularios traen nombres. **Lo que hay en Storage no los tiene**: cada
+nombre va reemplazado por su seudónimo HMAC con la clave local
+(`OBS360_CLAVE_HMAC`) y las columnas de teléfono y contacto van vacías
+(`src/data/desidentificar.py`). Las columnas quedan en su sitio, porque la
+ingesta lee por posición. El almacén verifica la copia antes de subir y se
+niega si queda un nombre. Como la ingesta reconoce un seudónimo y lo deja
+pasar, procesar la copia da exactamente los mismos resultados y los mismos
+identificadores que el original (está comprobado con los archivos reales).
+
+Subir todo, o un conjunto, desde la máquina que tiene los archivos:
+
+```bash
+python -m scripts.subir_datos_fuente            # todo
+python -m scripts.subir_datos_fuente cuidadores # uno
+python -m scripts.subir_datos_fuente --ensayo   # verifica sin subir
+```
+
+Procesar desde Storage en vez de desde disco (los tres publicadores):
+
+```bash
+python -m src.estudiantes.publicar --desde-storage --notas "..."
+python -m src.cuidadores.publicar --desde-storage --notas "..."
+python -m src.triangulacion.publicar --desde-storage --notas "..."
+```
+
+Baja las versiones activas a `~/.cache/obs360/datos/` (o `OBS360_CACHE_DIR`) y
+sigue igual. Requiere la credencial de carga y, para cuidadores y
+triangulación, la clave HMAC. La aplicación desplegada no usa esta vía: sigue
+leyendo solo agregados publicados.
+
 ## Dónde viven los datos fuente
 
 Los archivos con respuestas individuales no están en el repositorio: viven en

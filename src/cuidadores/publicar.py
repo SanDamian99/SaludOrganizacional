@@ -401,12 +401,15 @@ def main(argv=None) -> int:
     p.add_argument("--archivo", default=None,
                    help="exportación de «Cuidando al Cuidador» (por defecto, la de la "
                         "carpeta de datos fuente)")
+    p.add_argument("--desde-storage", action="store_true", help="procesa las versiones activas desidentificadas del almacén de Supabase en vez de los archivos locales (requiere la credencial de carga)")
     args = p.parse_args(argv)
 
     from src.core.seudonimo import ClaveAusente
     from src.cuidadores import comunidad, pipeline
     try:
-        ac = comunidad.preparar(pipeline.cargar_y_analizar(args.archivo))
+        archivo = (pipeline.localizar_formulario(desde_storage=True)
+                   if args.desde_storage else args.archivo)
+        ac = comunidad.preparar(pipeline.cargar_y_analizar(archivo))
     except (ClaveAusente, FileNotFoundError) as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 1
