@@ -7,6 +7,7 @@ import pandas as pd
 from src.reports.report_builder import ReportBuilder
 from src.reports.indicator_report import IndicatorReportBuilder
 from src.analysis import indicators
+from src.analysis import grupo_minimo as gm
 
 
 def render_reports_page():
@@ -71,7 +72,7 @@ def render_reports_page():
                 (df_filtered['Hora de inicio'].dt.date <= end_date)
             )
             df_filtered = df_filtered[mask].copy()
-            st.sidebar.info(f"Tras fecha: {len(df_filtered):,}")
+            st.sidebar.info(f"Tras fecha: {gm.texto_n(len(df_filtered))}")
 
     # --- Report Config ---
     st.sidebar.markdown("---")
@@ -89,6 +90,9 @@ def render_reports_page():
     if st.button("🚀 Generar Informe General PDF"):
         if df_filtered.empty:
             st.error("El conjunto de datos filtrado está vacío.")
+            return
+        if not gm.grupo_suficiente(len(df_filtered)):
+            st.error(gm.MENSAJE_GRUPO_PEQUENO)
             return
 
         with st.spinner("⏳ Analizando datos y generando PDF profesional..."):

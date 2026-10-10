@@ -7,6 +7,7 @@ import io
 import os
 import tempfile
 from datetime import datetime
+from src.analysis import grupo_minimo as gm
 from src.reports.analytics import ReportAnalytics
 from src.reports.pdf_generator import PDFReport, clean_text
 
@@ -35,6 +36,7 @@ class ReportBuilder:
             self.title = title
         if org_name:
             self.org_name = org_name
+        gm.exigir_grupo(len(self.df))      # grupo mínimo de 10
 
         # Crear archivo temporal
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")

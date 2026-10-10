@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from src.analysis import indicators
+from src.analysis import grupo_minimo as gm
 from src.reports.analytics import apply_report_theme, save_figure_to_bytes, COLORS
 from src.reports.pdf_generator import PDFReport
 from src.core.ai import generate_analysis
@@ -74,6 +75,7 @@ class IndicatorReportBuilder:
             self.title = title
         if org_name:
             self.org_name = org_name
+        gm.exigir_grupo(len(self.df))      # grupo mínimo de 10
 
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         tmp_path = tmp.name
@@ -156,8 +158,8 @@ class IndicatorReportBuilder:
         sexo = next((c for c in self.df.columns if c.lower().endswith("sexo")
                      or c.lower().endswith(")sexo")), None)
         if sexo:
-            vc = self.df[sexo].value_counts()
-            det = ", ".join(f"{k}: {v}" for k, v in vc.items())
+            # Sin conteos menores de 10 ni deducibles por resta (`grupo_minimo`).
+            det = gm.texto_conteos(self.df[sexo])
             parts.append(f"Distribución por sexo (según codificación del estudio): {det}.")
         pdf.add_paragraph(" ".join(parts))
         pdf.add_divider()

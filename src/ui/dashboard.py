@@ -14,6 +14,7 @@ import pandas as pd
 from src.core.config import DATA_DICTIONARY, get_scale_range
 from src.core.state import get_processed_data
 from src.analysis import scoring, indicators
+from src.analysis import grupo_minimo as gm
 from src.ui.components.filtering import render_filtering_sidebar
 
 SEM_COLORS = {"green": "#1A7F4B", "yellow": "#B07D0D", "red": "#C0392B", "grey": "#5F6368"}
@@ -201,7 +202,7 @@ def _view_dimension(df, scores):
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Puntaje", f"{info['score']:.2f}/{info['scale_max']:.0f}")
     m2.metric("Estado", info["estado"])
-    m3.metric("N", info["n"])
+    m3.metric("N", gm.texto_n(info["n"]))
     m4.metric("α Cronbach", f"{info['alpha']:.2f}" if isinstance(info["alpha"], float) else "—")
 
     if info["is_risk"]:
@@ -218,6 +219,31 @@ def _view_dimension(df, scores):
         st.plotly_chart(render_distribution(df, selected, cols), width="stretch")
 
     st.plotly_chart(render_item_bars(df, selected, cols), width="stretch")
+
+
+def tabla_perfil(serie, numerica: bool = False, ancho: int | None = None):
+    """Conteos de una variable del perfil sin cifras menores de 10 (ver `grupo_minimo`).
+
+    Las numéricas (edad…) se pasan antes a rangos: un histograma enseña cuántas
+    personas hay en cada barra, también cuando son una o dos.
+    """
+    if numerica:
+        serie = gm.agrupar_numerica(serie, ancho)
+        t = gm.conteos_protegidos(serie)
+        # Los rangos se leen en orden, no por tamaño.
+        return t.sort_values("categoria", key=lambda c: c.str.extract(r"(\d+)")[0].astype(float)
+                             ).reset_index(drop=True)
+    return gm.conteos_protegidos(serie)
+
+
+def _figura_perfil(t):
+    vis = t[t["visible"]]
+    fig = px.bar(vis, x="categoria", y="n", text="texto",
+                 labels={"categoria": "Valor", "n": "Docentes"},
+                 color_discrete_sequence=["#2E5FAC"])
+    fig.update_layout(height=300, margin=dict(l=40, r=20, t=20, b=60),
+                      xaxis=dict(automargin=True, type="category"), yaxis=dict(automargin=True))
+    return fig
 
 
 def _view_profile(df):
@@ -238,17 +264,16 @@ def _view_profile(df):
                 with cols[i % 2]:
                     label = var_name.split(")")[-1].strip()
                     st.markdown(f"**{label}**")
-                    if pd.api.types.is_numeric_dtype(df[found]):
-                        fig = px.histogram(df, x=found, nbins=20, color_discrete_sequence=["#2E5FAC"])
-                    else:
-                        vc = df[found].value_counts().reset_index()
-                        vc.columns = ["Valor", "Frecuencia"]
-                        fig = px.bar(vc, x="Valor", y="Frecuencia",
-                                     color="Frecuencia", color_continuous_scale="Blues")
-                    fig.update_layout(height=300, margin=dict(l=40, r=20, t=20, b=60),
-                                      coloraxis_showscale=False,
-                                      xaxis=dict(automargin=True), yaxis=dict(automargin=True))
-                    st.plotly_chart(fig, width="stretch")
+                    numerica = pd.api.types.is_numeric_dtype(df[found])
+                    ancho = 10 if numerica and "edad" in found.lower() else None
+                    t = tabla_perfil(df[found], numerica=numerica, ancho=ancho)
+                    if t["visible"].any():
+                        st.plotly_chart(_figura_perfil(t), width="stretch")
+                    ocultas = t[~t["visible"]]
+                    if not ocultas.empty:
+                        st.caption("Sin cifra: " + ", ".join(
+                            f"{c} ({x})" for c, x in zip(ocultas["categoria"], ocultas["texto"]))
+                            + ". " + gm.NOTA_OCULTOS)
                 i += 1
             if i == 0:
                 st.caption("No se encontraron columnas de esta categoría en los datos.")
@@ -263,7 +288,7 @@ def _view_academic(df, scores):
     table = pd.DataFrame([
         {
             "Dimensión": dim,
-            "N": info["n"],
+            "N": gm.texto_n(info["n"]),
             "Puntaje": round(info["score"], 2),
             "Escala": f"{info['scale_min']:.0f}-{info['scale_max']:.0f}",
             "DE": round(info["std"], 2),
@@ -299,14 +324,17 @@ def _view_academic(df, scores):
         comp = mat[[dim_acr]].copy()
         comp["_grupo"] = df[group_col].values
         agg = comp.groupby("_grupo")[dim_acr].agg(["mean", "count"]).reset_index()
-        agg = agg.sort_values("mean", ascending=False)
+        agg, ocultos = gm.grupos_comparables(agg.sort_values("mean", ascending=False), "_grupo")
+        if agg.empty:
+            st.caption(_pie_grupos(agg, "_grupo", ocultos))
+            return
         fig = px.bar(agg, x="_grupo", y="mean", text=agg["mean"].round(2),
                      color="mean", color_continuous_scale="Blues",
                      labels={"_grupo": group_col.split(")")[-1].strip(), "mean": "Puntaje medio"})
         fig.update_layout(height=380, margin=dict(l=40, r=20, t=20, b=80),
                           coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
         st.plotly_chart(fig, width="stretch")
-        st.caption("N por grupo: " + ", ".join(f"{r['_grupo']}={int(r['count'])}" for _, r in agg.iterrows()))
+        st.caption(_pie_grupos(agg, "_grupo", ocultos))
     else:
         st.caption("No hay variables de agrupación adecuadas en los datos.")
 
@@ -330,6 +358,17 @@ def _group_columns(df, exclude):
         if 1 < nun <= 12:
             cols.append(c)
     return cols
+
+
+def _pie_grupos(agg, columna, ocultos) -> str:
+    """«N por grupo: A=30, B=12. Con menos de 10 docentes, sin cifra: C.»"""
+    partes = []
+    if not agg.empty:
+        partes.append("N por grupo: " + ", ".join(
+            f"{r[columna]}={int(r['count'])}" for _, r in agg.iterrows()) + ".")
+    if ocultos:
+        partes.append("Con menos de 10 docentes, sin cifra: " + ", ".join(ocultos) + ".")
+    return " ".join(partes)
 
 
 def _label(c):
@@ -388,7 +427,7 @@ def _view_indicators(df, enr):
         table = pd.DataFrame([
             {"Indicador": i["label"], "Tema": i["theme"], "Media": round(i["mean"], 2),
              "DE": round(i["std"], 2), "Rango": f"{i['min']:.0f}–{i['max']:.0f}",
-             "N": i["n"], "Nivel (muestra)": i["level"]}
+             "N": gm.texto_n(i["n"]), "Nivel (muestra)": i["level"]}
             for _, i in enr.items()
         ])
         st.dataframe(table, width="stretch", hide_index=True)
@@ -402,7 +441,7 @@ def _view_indicators(df, enr):
         with g:
             st.metric(info["label"], f"{info['mean']:.2f}")
             st.metric("Rango observado", f"{info['min']:.0f} – {info['max']:.0f}")
-            st.metric("N", info["n"])
+            st.metric("N", gm.texto_n(info["n"]))
         with h:
             fig = px.histogram(df, x=sel, nbins=20, color_discrete_sequence=["#2E5FAC"])
             fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40),
@@ -411,56 +450,68 @@ def _view_indicators(df, enr):
 
         groups = _group_columns(df, exclude=set(enr.keys()))
         if groups:
-            gcol = st.selectbox("Comparar por grupo:", groups, format_func=_label)
+            gcol = st.selectbox("Comparar por grupo:", groups, format_func=_label,
+                                key="doc_comparar_por")
             agg = df.groupby(gcol)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
-            fig2 = px.bar(agg, x=gcol, y="mean", text=agg["mean"].round(2),
-                          color="mean", color_continuous_scale="Blues",
-                          labels={gcol: _label(gcol), "mean": f"{info['label']} (media)"})
-            fig2.update_layout(height=340, margin=dict(l=40, r=20, t=20, b=70),
-                               coloraxis_showscale=False, xaxis=dict(tickangle=-30, automargin=True))
-            st.plotly_chart(fig2, width="stretch")
-            st.caption("N por grupo: " + ", ".join(f"{r[gcol]}={int(r['count'])}" for _, r in agg.iterrows()))
+            agg, ocultos = gm.grupos_comparables(agg, gcol)
+            if not agg.empty:
+                fig2 = px.bar(agg, x=gcol, y="mean", text=agg["mean"].round(2),
+                              color="mean", color_continuous_scale="Blues",
+                              labels={gcol: _label(gcol), "mean": f"{info['label']} (media)"})
+                fig2.update_layout(height=340, margin=dict(l=40, r=20, t=20, b=70),
+                                   coloraxis_showscale=False,
+                                   xaxis=dict(tickangle=-30, automargin=True))
+                st.plotly_chart(fig2, width="stretch")
+            st.caption(_pie_grupos(agg, gcol, ocultos))
 
 
-# ── Sidebar (reporte + filtros + descarga) ──────────────────────
+# ── Sidebar (reporte + filtros) ──────────────────────
+def _generar_pdf(data, org, wellbeing):
+    """Genera el PDF en la barra lateral (se llama dentro de `st.sidebar`)."""
+    with st.spinner("Generando informe profesional..."):
+        try:
+            if wellbeing:
+                from src.reports.report_builder import ReportBuilder
+                pdf_bytes = ReportBuilder(
+                    data, title="Informe de Diagnóstico de Bienestar",
+                    org_name=org).build_report()
+                fname = "informe_bienestar.pdf"
+            else:
+                from src.reports.indicator_report import IndicatorReportBuilder
+                pdf_bytes = IndicatorReportBuilder(
+                    data, title="Informe de Salud Mental y Bienestar Docente",
+                    org_name=org).build_report()
+                fname = "informe_salud_mental_docente.pdf"
+            st.download_button(
+                "⬇️ Descargar Informe PDF", data=pdf_bytes,
+                file_name=fname, mime="application/pdf",
+                width="stretch")
+            st.success("✅ Informe generado.")
+        except Exception as e:
+            st.error(f"Error al generar informe: {e}")
+
+
 def _sidebar(df_full, wellbeing=True):
     with st.sidebar:
         st.subheader("📄 Informe")
         org = st.text_input("Organización", "Organización", key="dash_org")
+        # El PDF usa los filtros de la pasada anterior: se dibujan debajo.
+        data = st.session_state.get("_df_view", df_full)
         if st.button("Generar Informe PDF", width="stretch"):
-            with st.spinner("Generando informe profesional..."):
-                try:
-                    data = st.session_state.get("_df_view", df_full)
-                    if wellbeing:
-                        from src.reports.report_builder import ReportBuilder
-                        pdf_bytes = ReportBuilder(
-                            data, title="Informe de Diagnóstico de Bienestar",
-                            org_name=org).build_report()
-                        fname = "informe_bienestar.pdf"
-                    else:
-                        from src.reports.indicator_report import IndicatorReportBuilder
-                        pdf_bytes = IndicatorReportBuilder(
-                            data, title="Informe de Salud Mental y Bienestar Docente",
-                            org_name=org).build_report()
-                        fname = "informe_salud_mental_docente.pdf"
-                    st.download_button(
-                        "⬇️ Descargar Informe PDF", data=pdf_bytes,
-                        file_name=fname, mime="application/pdf",
-                        width="stretch")
-                    st.success("✅ Informe generado.")
-                except Exception as e:
-                    st.error(f"Error al generar informe: {e}")
+            if not gm.grupo_suficiente(len(data)):
+                st.error(gm.MENSAJE_GRUPO_PEQUENO)
+            else:
+                _generar_pdf(data, org, wellbeing)
         st.divider()
 
+    return _filtros(df_full)
+
+
+def _filtros(df_full):
     # Filtros multiselección (añaden controles a la sidebar)
     df_view = render_filtering_sidebar(df_full)
     st.session_state["_df_view"] = df_view
-
-    with st.sidebar:
-        csv = df_view.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Descargar datos filtrados (CSV)", data=csv,
-                           file_name="datos_filtrados.csv", mime="text/csv",
-                           width="stretch")
+    # Sin descarga de datos: ninguna fila individual sale de la aplicación.
     return df_view
 
 
@@ -484,6 +535,10 @@ def render_dashboard():
 
     wellbeing = indicators.is_wellbeing_dataset(df)
     df_view = _sidebar(df, wellbeing)
+    if not gm.grupo_suficiente(len(df_view)):
+        # Grupo mínimo de 10: ni figuras ni cifras, solo el mensaje fijo.
+        st.warning(gm.MENSAJE_GRUPO_PEQUENO)
+        return
 
     if wellbeing:
         scores = _scores(df_view)
