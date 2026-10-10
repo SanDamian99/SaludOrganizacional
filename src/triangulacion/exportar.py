@@ -1,8 +1,10 @@
 """
-Paquete local de la Triangulación 360: tablas, figuras y metodología.
+Paquete de la Triangulación 360: tablas, figuras y metodología.
 
-Todo sale de un `pipeline.Triangulacion`, que solo tiene agregados. Nada de
-esto sube a Supabase ni se publica: el ZIP se descarga en la máquina local.
+Todo sale de un `pipeline.Triangulacion` (en la máquina que procesa) o de un
+`lectura.TriangulacionPublicada` (en el despliegue del equipo), que solo tienen
+agregados. El ZIP es igual en los dos: el publicado trae la calidad del enlace,
+la metodología y la versión ya escritas en la corrida (`calidad`, `textos`).
 
 Figuras (matplotlib, sin estado global: `matplotlib.figure.Figure`):
   · `capa1_<colegio>.png`: d con su IC por constructo, coloreado por actor.
@@ -44,12 +46,26 @@ def _csv(df: pd.DataFrame | None) -> str:
     return "" if df.empty else df.to_csv(index=False)
 
 
+def calidad(t) -> pd.DataFrame:
+    """La calidad del enlace: la publicada si viene en `t`, si no, del informe local."""
+    pre = getattr(t, "calidad", None)
+    if isinstance(pre, pd.DataFrame):
+        return pre
+    return en.tabla_calidad(getattr(t, "enlace", None) or {})
+
+
+def _texto_publicado(t, nombre: str) -> str | None:
+    textos = getattr(t, "textos", None)
+    texto = textos.get(nombre) if isinstance(textos, dict) else None
+    return texto if isinstance(texto, str) and texto else None
+
+
 def tablas(t) -> dict[str, pd.DataFrame]:
     c, d = t.capa1, t.diadas
     return {
         "capa1_diferencias.csv": c.diferencias, "capa1_clasificacion.csv": c.clasificacion,
         "capa1_por_grado.csv": c.por_grado, "capa1_clasificacion_grado.csv": c.clasificacion_grado,
-        "enlace_calidad.csv": en.tabla_calidad(t.enlace),
+        "enlace_calidad.csv": calidad(t),
         "diadas_acuerdo_sdq.csv": d.acuerdo, "diadas_bland_altman_agrupado.csv": d.bland_altman,
         "diadas_malestar_no_visto.csv": d.no_visto, "diadas_apoyo_familiar.csv": d.apoyo,
         "diadas_asociaciones.csv": d.asociaciones,
@@ -119,15 +135,19 @@ def _png(fig) -> bytes:
 
 # ── textos ─────────────────────────────────────────────────────────────────
 def metodologia_md(t) -> str:
-    inf = t.enlace or {}
+    publicada = _texto_publicado(t, "metodologia")
+    if publicada:
+        return publicada
     actores = "; ".join(f"{k}: {en.conteo_legible(v)}" for k, v in (t.actores or {}).items())
-    calidad = en.tabla_calidad(inf)
-    lineas_calidad = [f"- {r.indicador}: {r.valor}" for r in calidad.itertuples()]
+    lineas_calidad = [f"- {r.indicador}: {r.valor}" for r in calidad(t).itertuples()]
     lineas = [
-        "# Metodología · Triangulación 360 (fase 5, solo local)", "",
+        "# Metodología · Triangulación 360 (fase 5, solo investigadores)", "",
         "## Alcance", "",
-        "Solo para el equipo investigador y solo en la máquina que procesa los formularios. "
-        "Nada de este paquete sube a Supabase ni se publica. " + cat.AVISO_TEXTOS, "",
+        "Solo para el equipo investigador. Se calcula en la máquina que procesa los "
+        "formularios; los archivos, la clave, los seudónimos y las díadas no salen de "
+        "ella. A Supabase solo suben estos agregados (cada cifra con 10 o más), en una "
+        "corrida que únicamente lee el usuario de carga del despliegue privado del "
+        "equipo: el público nunca la ve. " + cat.AVISO_TEXTOS, "",
         f"Personas analizadas: {actores or '—'}.", "",
         "## Capa 1 · por colegio y por grado", "",
         cat.AVISO_ECOLOGICO.format(n=t.n_colegios), "",
@@ -194,6 +214,9 @@ def metodologia_md(t) -> str:
 
 
 def version_txt(t) -> str:
+    publicada = _texto_publicado(t, "version")
+    if publicada:
+        return publicada
     return "\n".join([
         "Triangulación 360 · versión del análisis",
         f"Fecha: {_dt.date.today().isoformat()}",

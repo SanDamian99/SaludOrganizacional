@@ -14,19 +14,26 @@ K = ts.CLAVE_PRUEBA.encode()
 
 
 @functools.lru_cache(maxsize=1)
-def analisis():
-    """`pipeline.Triangulacion` de los tres actores sintéticos (n_boot corto)."""
-    from src.triangulacion import pipeline
+def fuentes():
+    """`fuentes.Fuentes` de los tres actores sintéticos (solo en memoria)."""
+    from src.triangulacion import fuentes as fu
     base = ts.escribir(tempfile.mkdtemp(prefix="tri_pub_"))
     previo = os.environ.get("OBS360_DATOS_DIR")
     os.environ["OBS360_DATOS_DIR"] = base
     try:
-        return pipeline.cargar_y_analizar(k=K, n_boot=30)
+        return fu.cargar(k=K)
     finally:
         if previo is None:
             os.environ.pop("OBS360_DATOS_DIR", None)
         else:
             os.environ["OBS360_DATOS_DIR"] = previo
+
+
+@functools.lru_cache(maxsize=1)
+def analisis():
+    """`pipeline.Triangulacion` de los tres actores sintéticos (n_boot corto)."""
+    from src.triangulacion import pipeline
+    return pipeline.analizar(fuentes(), n_boot=30)
 
 
 def publicado(publicar_ya: bool = True):
