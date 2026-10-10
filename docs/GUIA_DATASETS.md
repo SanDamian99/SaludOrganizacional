@@ -48,10 +48,20 @@ subescala ya calculados**. La app entra en **modo Indicadores**:
 - Las variables sociodemográficas comunes (Edad, Sexo, Estado Civil, Nivel educativo,
   Tipo de Contrato, Zona de vivienda…) se reconocen y alimentan la pestaña **Perfil**.
 
-> **Importante sobre la interpretación:** en modo Indicadores, el “nivel”
+> **Importante sobre la interpretación:** en modo Indicadores genérico, el “nivel”
 > (Favorable / Intermedio / Atención) es **relativo a la muestra cargada**, no un punto
 > de corte clínico. La dirección (mayor = mejor o mayor = riesgo) se toma del catálogo de
 > instrumentos conocidos; los no catalogados se muestran de forma **neutral**.
+
+> **Archivo de docentes del Observatorio (desde el 10-oct-2026).** Si el archivo trae los
+> ítems del PSS-10 y del BAT-12, la app **no** usa los totales `*_T` ni la posición
+> relativa: puntúa cada dimensión desde los ítems con `src/docentes/catalogo.py` y
+> `src/docentes/scoring.py` (subescalas con polaridad homogénea, sin imputación, N real
+> por constructo) y el semáforo se ancla a los cortes publicados (PSS-10, BAT-12,
+> ISTAS21; los marcados «comprobar en el manual» son provisionales) o al tercio de la
+> escala teórica. «Número de hijos» = 10 se trata como faltante al cargar. Detalle:
+> `docs/analisis/2026-10-10-docentes-fase1-cambios.md`. El PDF y el Chat siguen
+> leyendo los `*_T` hasta la fase 3.
 
 ## Personalizar el catálogo de indicadores
 
