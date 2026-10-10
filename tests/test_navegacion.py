@@ -107,7 +107,22 @@ PROHIBIDOS_EN_COMUNIDAD = (
     "src.cuidadores.comunidad", "src.core.seudonimo",
     "src.ui.triangulacion", "src.ui.views.triangulacion_investigador",
     "src.triangulacion.fuentes", "src.triangulacion.enlace", "src.triangulacion.diadas",
-    "src.triangulacion.capa1", "src.triangulacion.pipeline")
+    "src.triangulacion.capa1", "src.triangulacion.pipeline",
+    "src.core.vista_previa")
+
+
+def _descargar(monkeypatch, modulo: str) -> None:
+    """Quita el módulo de `sys.modules` y del paquete padre.
+
+    Solo con `sys.modules` no basta: `from src.core import vista_previa` toma el
+    atributo del paquete si ya existe, sin volver a registrarlo, y la prueba
+    no vería la importación.
+    """
+    import sys
+    monkeypatch.delitem(sys.modules, modulo, raising=False)
+    padre, _, nombre = modulo.rpartition(".")
+    if padre in sys.modules and hasattr(sys.modules[padre], nombre):
+        monkeypatch.delattr(sys.modules[padre], nombre)
 
 
 def _main_en_comunidad(monkeypatch):
@@ -117,7 +132,7 @@ def _main_en_comunidad(monkeypatch):
     monkeypatch.setenv("OBS360_MODO", "comunidad")
     monkeypatch.setenv("OBS360_DATOS_DIR", "/ruta/que/no/existe")
     for m in PROHIBIDOS_EN_COMUNIDAD:
-        monkeypatch.delitem(sys.modules, m, raising=False)
+        _descargar(monkeypatch, m)
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=60)
 
