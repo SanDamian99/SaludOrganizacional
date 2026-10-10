@@ -259,8 +259,12 @@ def _etiquetar_lo_mejor_posible(fig, ax, marcas) -> None:
     _etiquetar_estatica(fig, ax, mejor[1], mejor[0])
 
 
-def figura_estatica(filas, capa: str, puntos) -> Figure:
-    """Misma imagen sin tiles: contorno gris claro y puntos, para PDF y video."""
+def figura_estatica(filas, capa: str, puntos, nombres: bool | None = None) -> Figure:
+    """Misma imagen sin tiles: contorno gris claro y puntos, para PDF y video.
+
+    `nombres` manda sobre `opciones.MAPA_MOSTRAR_NOMBRES` cuando no es None (el video
+    decide por separado si nombra los colegios).
+    """
     pares = _orden(_con_punto(filas, puntos), capa)
     fig = Figure(figsize=FIGSIZE, dpi=150)
     FigureCanvasAgg(fig)
@@ -298,7 +302,7 @@ def figura_estatica(filas, capa: str, puntos) -> Figure:
         ax.set_ylim(min(ys) - 0.006, max(ys) + 0.006)
     ax.set_aspect(1 / math.cos(math.radians(lat)))
     ax.axis("off")
-    if opciones.MAPA_MOSTRAR_NOMBRES:
+    if opciones.MAPA_MOSTRAR_NOMBRES if nombres is None else nombres:
         marcas = [(f, p, areas[p.codigo]) for f, p in pares if p.codigo in areas]
         _etiquetar_lo_mejor_posible(fig, ax, marcas)
     return fig

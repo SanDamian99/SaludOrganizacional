@@ -198,3 +198,11 @@ def test_interactiva_con_puntaje_deja_una_sola_barra_de_color():
                          referencia=3.3) for i, p in enumerate(puntos[:6])]
     fig = mf.figura_interactiva(filas, "sentirse_parte", puntos[:6])
     assert sum(1 for tr in fig.data if tr.marker is not None and tr.marker.showscale) == 1
+
+
+def test_estatica_el_parametro_nombres_manda_sobre_la_opcion_global(monkeypatch):
+    puntos = _puntos_reales()
+    filas = _filas_reales(puntos)
+    assert len(mf.figura_estatica(filas, "respuestas", puntos, nombres=False).axes[0].texts) == 0
+    monkeypatch.setattr(opciones, "MAPA_MOSTRAR_NOMBRES", False)
+    assert len(mf.figura_estatica(filas, "respuestas", puntos, nombres=True).axes[0].texts) > 0
