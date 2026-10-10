@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 
 from src.core.texto import norm_txt
 
@@ -60,10 +61,25 @@ def clave() -> bytes:
     return valor.encode("utf-8")
 
 
+PATRON = re.compile(r"^[CNE][0-9a-f]{8}$")
+
+
+def es_seudonimo(texto) -> bool:
+    """True si el texto ya tiene la forma de un seudónimo («N3fa91b07»)."""
+    return isinstance(texto, str) and bool(PATRON.match(texto.strip()))
+
+
 def seudonimo(texto, letra: str, k: bytes | None = None) -> str | None:
-    """Letra + 8 hexadecimales del HMAC-SHA256 del texto normalizado. None si vacío."""
+    """Letra + 8 hexadecimales del HMAC-SHA256 del texto normalizado. None si vacío.
+
+    Un texto que ya es un seudónimo se devuelve tal cual: así un archivo
+    desidentificado (el que vive en Supabase Storage, con seudónimos en lugar de
+    nombres) produce exactamente los mismos identificadores que el original.
+    """
     if letra not in LETRAS:
         raise ValueError(f"Letra de seudónimo desconocida: {letra!r}")
+    if es_seudonimo(texto):
+        return texto.strip()
     normalizado = norm_txt(texto)
     if not normalizado:
         return None

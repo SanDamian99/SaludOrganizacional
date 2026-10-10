@@ -368,12 +368,23 @@ def main(argv=None) -> int:
     p.add_argument("--notas", default="", help="nota para la corrida")
     p.add_argument("--publicar-ya", action="store_true",
                    help="abre la corrida (para el equipo) y cierra las demás de triangulación")
+    p.add_argument("--desde-storage", action="store_true", help="procesa las versiones activas desidentificadas del almacén de Supabase en vez de los archivos locales (requiere la credencial de carga)")
     args = p.parse_args(argv)
 
     from src.core.seudonimo import ClaveAusente
     from src.triangulacion import pipeline
     try:
-        t = pipeline.cargar_y_analizar()
+        disp = None
+        if args.desde_storage:
+            # Solo aquí se habla con el almacén: `fuentes` sigue siendo local puro.
+            from src.data.almacen import rutas_desde_storage
+            from src.triangulacion import fuentes
+            r = rutas_desde_storage(["estudiantes_secundaria", "estudiantes_primaria",
+                                     "cuidadores", "docentes"])
+            disp = fuentes.Disponibles(
+                estudiantes=[x for x in (r["estudiantes_secundaria"], r["estudiantes_primaria"]) if x],
+                cuidadores=r["cuidadores"], docentes=r["docentes"])
+        t = pipeline.cargar_y_analizar(disp=disp)
     except (ClaveAusente, FileNotFoundError) as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 1

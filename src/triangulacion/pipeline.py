@@ -43,5 +43,7 @@ def analizar(fuentes: fu.Fuentes, n_boot: int = cat.N_BOOT) -> Triangulacion:
     return Triangulacion(capa1=capa, enlace=enlace.informe, diadas=resultado, actores=actores)
 
 
-def cargar_y_analizar(k: bytes | None = None, n_boot: int = cat.N_BOOT) -> Triangulacion:
-    return analizar(fu.cargar(k=k), n_boot=n_boot)
+def cargar_y_analizar(k: bytes | None = None, n_boot: int = cat.N_BOOT,
+                      disp: fu.Disponibles | None = None) -> Triangulacion:
+    """`disp` permite pasar los archivos ya localizados (p. ej. bajados del almacén)."""
+    return analizar(fu.cargar(disp, k=k), n_boot=n_boot)
