@@ -32,13 +32,13 @@ def test_ya_no_existe_el_analisis_de_tendencias():
     assert importlib.util.find_spec("src.ui.trends") is None
 
 
-def test_triangulacion_solo_para_investigadores():
-    """Fase 5: completo e investigador la ven; comunidad nunca (spec §5.3 y §5.6)."""
+def test_triangulacion_es_publica_por_decision_del_usuario():
+    """Decisión del usuario (10 oct 2026): el público la ve «todo como lo ve el
+    equipo», leída de la última corrida publicada (migración 2026-10-10e)."""
     assert nav.PAGINA_TRIANGULACION in nav.DISPONIBLES
-    assert nav.PAGINA_TRIANGULACION in nav.menu(COMPLETO)
-    assert nav.PAGINA_TRIANGULACION in nav.menu(INVESTIGADOR)
-    assert nav.PAGINA_TRIANGULACION not in nav.menu(COMUNIDAD)
-    assert nav.PAGINA_TRIANGULACION not in nav.menu("cualquier-cosa")
+    assert nav.PAGINA_TRIANGULACION in nav.PUBLICAS
+    for modo in (COMPLETO, INVESTIGADOR, COMUNIDAD, "cualquier-cosa"):
+        assert nav.PAGINA_TRIANGULACION in nav.menu(modo)
 
 
 def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
@@ -49,17 +49,14 @@ def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
 
 
 def test_comunidad_solo_ve_paginas_publicas():
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
-    assert set(nav.PUBLICAS) == {nav.PAGINA_ESTUDIANTES, nav.PAGINA_CUIDADORES}
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
+    assert set(nav.PUBLICAS) == {nav.PAGINA_ESTUDIANTES, nav.PAGINA_CUIDADORES,
+                                 nav.PAGINA_TRIANGULACION}
 
 
-def test_triangulacion_nunca_es_publica():
-    assert nav.PAGINA_TRIANGULACION not in nav.PUBLICAS
-
-
-def test_triangulacion_sigue_fuera_aunque_cuidadores_sea_publica(monkeypatch):
+def test_triangulacion_sigue_publica_con_cuidadores_aprobada(monkeypatch):
     _aprobar_cuidadores(monkeypatch)
-    assert nav.PAGINA_TRIANGULACION not in nav.menu(COMUNIDAD)
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
 
 
 def test_cuidadores_no_es_publica_hasta_la_aprobacion():
@@ -82,15 +79,16 @@ def test_cuando_cuidadores_se_apruebe_comunidad_lo_ve(monkeypatch):
     """Fase 4b: la bandera del equipo Y los textos y la ruta aprobados en el catálogo."""
     monkeypatch.setattr(nav, "DISPONIBLES",
                         nav.DISPONIBLES | {nav.PAGINA_CUIDADORES, nav.PAGINA_TRIANGULACION})
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
     _aprobar_cuidadores(monkeypatch, bandera=True, textos=False, rutas=False)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
     _aprobar_cuidadores(monkeypatch, bandera=True, textos=True, rutas=False)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
     _aprobar_cuidadores(monkeypatch, bandera=False, textos=True, rutas=True)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
     _aprobar_cuidadores(monkeypatch)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360",
+                                  "Triangulación 360"]
     assert nav.menu(INVESTIGADOR)[:4] == [
         "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
 
@@ -113,11 +111,12 @@ PROHIBIDOS_EN_COMUNIDAD = (
     "src.cuidadores.ingest", "src.cuidadores.pipeline", "src.cuidadores.scoring",
     "src.cuidadores.privacidad", "src.cuidadores.publicar", "src.cuidadores.auditoria",
     "src.cuidadores.comunidad", "src.core.seudonimo",
-    "src.ui.triangulacion", "src.ui.views.triangulacion_investigador",
-    "src.triangulacion.fuentes", "src.triangulacion.enlace", "src.triangulacion.diadas",
+    # Triangulación es pública (decisión del usuario, 10 oct 2026): la página,
+    # su vista, `lectura`, `catalogo`, `exportar` y `enlace` sí se importan en
+    # comunidad; lo que calcula desde los archivos o publica, nunca.
+    "src.triangulacion.fuentes", "src.triangulacion.diadas",
     "src.triangulacion.capa1", "src.triangulacion.pipeline",
-    "src.triangulacion.lectura", "src.triangulacion.publicar",
-    "src.triangulacion.exportar",
+    "src.triangulacion.publicar",
     "src.core.vista_previa")
 
 
@@ -161,7 +160,7 @@ def test_main_en_comunidad_no_importa_modulos_internos(monkeypatch):
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
 
 
-def test_comunidad_con_dos_paginas_publicas_muestra_el_selector(monkeypatch):
+def test_comunidad_con_cuidadores_aprobada_muestra_tres_paginas(monkeypatch):
     """Aprobada pero sin corrida publicada: la página lo dice y no se cae."""
     import sys
     from src.cuidadores import comunidad_catalogo as cc
@@ -171,10 +170,51 @@ def test_comunidad_con_dos_paginas_publicas_muestra_el_selector(monkeypatch):
     at = _main_en_comunidad(monkeypatch).run()
     assert not at.exception
     radio = at.radio(key="nav_pagina")
-    assert list(radio.options) == ["Estudiantes 360", "Cuidadores 360"]
+    assert list(radio.options) == ["Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
     radio.set_value("Cuidadores 360").run()
     assert not at.exception
     assert any(cc.NO_PUBLICADO in i.value for i in at.info)
+    for m in PROHIBIDOS_EN_COMUNIDAD:
+        assert m not in sys.modules, f"{m} se importó en modo comunidad"
+
+
+def _sin_triangulacion_publica(monkeypatch, base=None):
+    """El cliente anon de la triangulación: la base falsa o ninguno (sin red)."""
+    from src.triangulacion import lectura as lec_tri
+    from src.ui import triangulacion as pag
+    monkeypatch.setattr(lec_tri, "cliente_publico",
+                        (lambda: base.cliente(anonimo=True)) if base else (lambda: None))
+    pag._leer_publico.clear()
+
+
+def test_comunidad_muestra_el_selector_con_dos_paginas(monkeypatch):
+    """Sin corrida de triangulación publicada: el mensaje fijo, sin fallar."""
+    import sys
+    from src.triangulacion import catalogo as cat_tri
+    _sin_triangulacion_publica(monkeypatch)
+    at = _main_en_comunidad(monkeypatch).run()
+    assert not at.exception
+    radio = at.radio(key="nav_pagina")
+    assert list(radio.options) == ["Estudiantes 360", "Triangulación 360"]
+    radio.set_value("Triangulación 360").run()
+    assert not at.exception
+    assert any(cat_tri.AVISO_PUBLICO_SIN_CORRIDA in i.value for i in at.info)
+    for m in PROHIBIDOS_EN_COMUNIDAD:
+        assert m not in sys.modules, f"{m} se importó en modo comunidad"
+
+
+def test_comunidad_muestra_la_triangulacion_publicada(monkeypatch):
+    """Todas las pestañas, como las ve el equipo, desde la corrida publicada."""
+    import sys
+    from src.ui.views import triangulacion_investigador as vi
+    from tests import triangulacion_publicada_datos as datos
+    _, base = datos.publicado(publicar_ya=True)
+    _sin_triangulacion_publica(monkeypatch, base)
+    at = _main_en_comunidad(monkeypatch).run()
+    at.radio(key="nav_pagina").set_value("Triangulación 360").run()
+    assert not at.exception
+    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert not at.toggle
     for m in PROHIBIDOS_EN_COMUNIDAD:
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
 

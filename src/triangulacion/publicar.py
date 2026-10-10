@@ -1,5 +1,5 @@
 """
-Publicación PRIVADA de la Triangulación 360 en Supabase — solo para el equipo.
+Publicación de la Triangulación 360 en Supabase (equipo y, ya publicada, público).
 
 La triangulación se calcula en la máquina que procesa los formularios (los tres
 actores, la clave local y las díadas solo existen allí). Este módulo sube sus
@@ -7,11 +7,12 @@ AGREGADOS para que el despliegue privado del equipo (`OBS360_MODO =
 "investigador"`) la muestre sin archivos (`triangulacion.lectura`).
 
 QUIÉN LA LEE
-Solo el usuario de carga del despliegue privado. La migración
-`supabase/migraciones/2026-10-10b-triangulacion-privada.sql` hace que el rol
-anónimo (la clave pública) NUNCA lea una corrida ni una fila de triangulación,
-aunque esté marcada como publicada (`obs360_interno.es_publica`). Sin esa
-migración, la base rechaza el nivel 'triangulacion' y no se sube nada.
+El usuario de carga del despliegue privado lee todas las corridas (también las
+ocultas, para la vista previa). Por decisión del usuario (10 oct 2026, migración
+`supabase/migraciones/2026-10-10e-triangulacion-publica.sql`) el rol anónimo (la
+clave pública) lee además la última corrida de triangulación PUBLICADA, como
+las de los demás módulos; las ocultas siguen ocultas. Sin la migración
+2026-10-10b, la base rechaza el nivel 'triangulacion' y no se sube nada.
 
 QUÉ SUBE (modulo = nivel = "triangulacion")
   · Una fila por fila de cada tabla agregada que tiene cifra: capa 1 por colegio
@@ -408,7 +409,8 @@ def main(argv=None) -> int:
         print(f"✗ {exc}", file=sys.stderr)
         return 2
     print(f"✓ Corrida {resumen['corrida_id']} con {resumen['filas']} filas. "
-          f"Abierta para el equipo: {resumen['publicada']} (el público nunca la lee).")
+          f"Publicada: {resumen['publicada']} (la publicada la leen el equipo y el "
+          "público).")
     return 0
 
 

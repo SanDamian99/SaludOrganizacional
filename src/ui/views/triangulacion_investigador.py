@@ -169,7 +169,7 @@ def _tab_metodologia(t) -> None:
 
 
 def _tab_exportar(t) -> None:
-    st.caption("Todo es agregado: ni filas, ni seudónimos, ni díadas. Solo para el equipo.")
+    st.caption("Todo es agregado: ni filas, ni seudónimos, ni díadas.")
     st.download_button("📦 Descargar el paquete de la triangulación (ZIP)",
                        data=ex.paquete_zip(t),
                        file_name=f"triangulacion360_{_dt.date.today().isoformat()}.zip",
@@ -177,8 +177,10 @@ def _tab_exportar(t) -> None:
                        key="tri_dl_zip")
 
 
-def render_investigador(t) -> None:
-    st.title(f"🔺 {cat.TITULO}")
+def render_investigador(t, titulo: str | None = None) -> None:
+    """Las pestañas de la triangulación. La página pública pasa su propio título
+    (las mismas pestañas: decisión del usuario del 10 oct 2026)."""
+    st.title(f"🔺 {titulo or cat.TITULO}")
     tabs = st.tabs(PESTANAS)
     for tab, fn in zip(tabs, (_tab_resumen, _tab_colegio, _tab_grado, _tab_enlace,
                               _tab_acuerdo, _tab_no_visto, _tab_apoyo, _tab_asociaciones,

@@ -41,7 +41,7 @@ def test_por_defecto_es_completo(con_modo):
 def test_modo_comunidad_solo_deja_la_vista_comunidad(con_modo):
     m = con_modo("comunidad")
     assert m.es_publico()
-    assert m.paginas_permitidas() == ["Estudiantes 360"]
+    assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
     assert m.audiencias_permitidas() == ["comunidad"]
     assert m.audiencia_por_defecto() == "comunidad"
 
@@ -65,7 +65,7 @@ def test_solo_el_modo_comunidad_restringe(con_modo):
         assert m.paginas_permitidas() is None, valor
         assert m.audiencias_permitidas() is None, valor
     m = con_modo("comunidad")
-    assert m.paginas_permitidas() == ["Estudiantes 360"]
+    assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
 
 
 @pytest.mark.parametrize("valor", ["", "  ", "publico", "COMPLETO ", "cualquier-cosa"])
@@ -79,7 +79,7 @@ def test_un_valor_desconocido_cae_en_el_modo_mas_restrictivo(con_modo, valor):
     else:
         assert m.modo() == m.COMUNIDAD
         assert m.audiencias_permitidas() == ["comunidad"]
-        assert m.paginas_permitidas() == ["Estudiantes 360"]
+        assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
 
 
 def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
@@ -101,7 +101,7 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
         assert modulo in despues, f"{modulo} ya no aparece en main.py"
 
     # lo que llega en fases futuras tampoco puede importarse antes del corte
-    for modulo in ("triangulacion", "cuidadores_investigador"):
+    for modulo in ("triangulacion_investigador", "cuidadores_investigador"):
         assert modulo not in antes, f"{modulo} se importa antes del corte público"
 
     # Cuidadores 360: en público solo la vista de comunidad (fase 4b), leída de la
@@ -110,8 +110,13 @@ def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
     assert "src.ui.cuidadores" not in antes and "src.cuidadores" not in antes
     assert "from src.ui.cuidadores import render_cuidadores" in despues
 
-    # Triangulación 360 (fase 5) también: después del corte y solo para investigadores
-    assert "src.triangulacion" not in antes and "src.ui.triangulacion" not in antes
+    # Triangulación 360: pública por decisión del usuario (10 oct 2026), pero en
+    # público solo su lectura de la corrida publicada (`render_publico`); la
+    # página con archivos locales y vista previa queda después del corte.
+    assert "from src.ui import triangulacion as _tri_publica" in antes
+    assert '"render_publico"' in antes
+    assert "src.triangulacion" not in antes
+    assert "render_triangulacion" not in antes
     assert "from src.ui.triangulacion import render_triangulacion" in despues
 
 

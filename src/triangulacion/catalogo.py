@@ -143,7 +143,8 @@ VARIANTES_NO_VISTO = (("Dificultades totales o señal de malestar (vigente)", "S
 MAX_BINES_BA = 5
 
 # ── Avisos fijos ────────────────────────────────────────────────────────────
-TITULO = "Triangulación 360 · solo investigadores"
+TITULO = "Triangulación 360 · equipo investigador"
+TITULO_PUBLICO = "Triangulación 360"
 AVISO_ECOLOGICO = ("Con {n} colegios esto es descriptivo y ecológico: compara promedios de "
                    "grupo, no personas, y no permite concluir relaciones individuales ni "
                    "causales. Cada actor se compara con el resto del municipio del mismo "
@@ -167,8 +168,10 @@ AVISO_CLASIFICACION = ("«Tensión»: los intervalos de los dos actores excluyen
 AVISO_DESPLIEGUE = ("No hay en esta máquina los archivos de los tres actores (estudiantes, "
                     "cuidadores y docentes) y aún no hay una corrida de triangulación "
                     "publicada para el equipo. La máquina que procesa los formularios la sube "
-                    "con «python -m src.triangulacion.publicar»: solo agregados, y solo la "
-                    "lee el despliegue del equipo, nunca el público.")
+                    "con «python -m src.triangulacion.publicar»: solo agregados; el equipo "
+                    "la revisa oculta y, una vez publicada, la ve también el público.")
+AVISO_PUBLICO_SIN_CORRIDA = ("Triangulación 360: aún no hay una corrida de triangulación "
+                             "publicada. Vuelva más tarde.")
 AVISO_ENLACE = ("Enlace exacto: el seudónimo HMAC del nombre normalizado del niño, calculado "
                 "con la misma clave local en los dos formularios, y verificado con el "
                 "colegio. No hay coincidencias aproximadas: un nombre escrito distinto no "

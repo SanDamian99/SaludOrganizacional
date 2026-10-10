@@ -1,5 +1,6 @@
 """
-Triangulación 360 — solo investigadores (spec del 6-oct-2026, §5.6).
+Triangulación 360 (spec del 6-oct-2026, §5.6; pública desde el 10-oct-2026 por
+decisión del usuario, solo la corrida publicada).
 
 Dos capas:
   · Capa 1, por colegio (y por grado con estudiantes y cuidadores): cada actor

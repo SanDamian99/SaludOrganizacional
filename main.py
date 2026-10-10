@@ -42,6 +42,17 @@ if _PUBLICO:
         # carga del formulario, la vista de investigadores ni la página local.
         from src.ui.views.cuidadores_comunidad import render_publico
         render_publico()
+    elif _pagina_publica == nav.PAGINA_TRIANGULACION:
+        # Pública por decisión del usuario (10 oct 2026): solo la lectura de la
+        # corrida publicada con la clave anon; nunca los archivos locales, la
+        # vista previa ni el publicador. Con getattr: un módulo rancio en
+        # memoria tras un despliegue no tumba la aplicación.
+        from src.ui import triangulacion as _tri_publica
+        _render_tri = getattr(_tri_publica, "render_publico", None)
+        if callable(_render_tri):
+            _render_tri()
+        else:
+            st.info("Esta página se está actualizando. Vuelva en unos minutos.")
     st.stop()
 
 from src.ai.gemini_client import get_gemini_api_key
@@ -131,8 +142,8 @@ elif page == nav.PAGINA_CUIDADORES:
     render_cuidadores()
 
 elif page == nav.PAGINA_TRIANGULACION:
-    # Fase 5: solo investigadores y solo con los archivos en local. Nunca se
-    # importa en el despliegue público, que se corta arriba.
+    # Fase 5: archivos en local o corrida publicada, con vista previa. El
+    # despliegue público se corta arriba y usa solo `render_publico`.
     from src.ui.triangulacion import render_triangulacion
     render_triangulacion()
 

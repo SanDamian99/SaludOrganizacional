@@ -141,13 +141,13 @@ def metodologia_md(t) -> str:
     actores = "; ".join(f"{k}: {en.conteo_legible(v)}" for k, v in (t.actores or {}).items())
     lineas_calidad = [f"- {r.indicador}: {r.valor}" for r in calidad(t).itertuples()]
     lineas = [
-        "# Metodología · Triangulación 360 (fase 5, solo investigadores)", "",
+        "# Metodología · Triangulación 360 (fase 5)", "",
         "## Alcance", "",
-        "Solo para el equipo investigador. Se calcula en la máquina que procesa los "
-        "formularios; los archivos, la clave, los seudónimos y las díadas no salen de "
-        "ella. A Supabase solo suben estos agregados (cada cifra con 10 o más), en una "
-        "corrida que únicamente lee el usuario de carga del despliegue privado del "
-        "equipo: el público nunca la ve. " + cat.AVISO_TEXTOS, "",
+        "Se calcula en la máquina que procesa los formularios; los archivos, la clave, "
+        "los seudónimos y las díadas no salen de ella. A Supabase solo suben estos "
+        "agregados (cada cifra con 10 o más), en una corrida que el equipo revisa oculta "
+        "y, una vez publicada, también ve el público (decisión del 10 oct 2026). "
+        + cat.AVISO_TEXTOS, "",
         f"Personas analizadas: {actores or '—'}.", "",
         "## Capa 1 · por colegio y por grado", "",
         cat.AVISO_ECOLOGICO.format(n=t.n_colegios), "",

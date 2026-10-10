@@ -374,6 +374,15 @@ Código en `src/triangulacion/` (puro) y `src/ui/triangulacion.py`.
 
 **Exportación:** ZIP local con tablas, figuras y `metodologia.md` de plantilla fija. Nada de esto sube a Supabase.
 
+#### Decisión posterior (10 oct 2026) · Triangulación también en público
+
+El usuario decidió, de forma explícita y por encima del «solo investigadores» / «nunca público» de esta sección, que la Triangulación 360 se vea en el **despliegue público** (modo comunidad) **«todo como lo ve el equipo»**: todas las pestañas, incluidas las díadas, las asociaciones y la descarga ZIP.
+
+- **Qué se lee:** solo la **última corrida de triangulación publicada** en Supabase, con la clave anon (los mismos agregados que lee el equipo: cada cifra con n ≥ 10, sin identificadores, seudónimos ni díadas). Las corridas ocultas siguen siendo solo del equipo (vista previa con el usuario de carga).
+- **Base:** migración `supabase/migraciones/2026-10-10e-triangulacion-publica.sql` — `obs360_interno.es_publica` vuelve a ser `es_ultima_publicada` y la política pública de `resultados` deja de excluir `nivel = 'triangulacion'`.
+- **Aplicación:** «Triangulación 360» entra en `navegacion.PUBLICAS`; `main.py` en público llama a `src.ui.triangulacion.render_publico`, que nunca importa `fuentes`, `pipeline`, `publicar`, `diadas`, `capa1`, `vista_previa` ni la clave HMAC.
+- **Se mantiene** el aviso de textos provisionales (`catalogo.AVISO_TEXTOS`): los textos siguen sin aprobar por el equipo (§8).
+
 ## 6. Experiencia de usuario
 
 - **Lo existente no se mueve.** Estudiantes conserva su orden y su contenido. El panel de alertas entra arriba de las tarjetas, compacto, y reemplaza la tarjeta de muerte solo para colegio y municipio.

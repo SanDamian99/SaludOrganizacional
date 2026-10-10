@@ -1,5 +1,6 @@
 """
-Página «Triangulación 360» — fase 5: solo investigadores.
+Página «Triangulación 360» — fase 5: equipo investigador y, desde el 10 oct
+2026 (decisión del usuario), también el público con `render_publico`.
 
 Dos fuentes, en este orden:
   1. Los tres archivos (estudiantes, cuidadores y docentes) en la carpeta de
@@ -9,9 +10,14 @@ Dos fuentes, en este orden:
      `OBS360_FUENTE=supabase`: la corrida de triangulación que subió esa máquina
      (`triangulacion.lectura`), leída SOLO con el usuario de carga
      (`vista_previa.cliente_autenticado`). Son los mismos agregados, con las
-     mismas pestañas, figuras dibujadas desde las tablas y el mismo ZIP. El
-     público nunca la lee (migración 2026-10-10b).
+     mismas pestañas, figuras dibujadas desde las tablas y el mismo ZIP.
 Sin ninguna de las dos, un mensaje fijo: aún no hay una corrida publicada.
+
+Público (`render_publico`, modo comunidad): «todo como lo ve el equipo» — las
+mismas pestañas, díadas, asociaciones y ZIP — leído con la clave anon de la
+última corrida PUBLICADA (migración 2026-10-10e). Sin vista previa, sin
+archivos locales ni clave HMAC: no importa `fuentes`, `pipeline`, `publicar`,
+`vista_previa` ni `seudonimo`. Sin corrida legible, un mensaje fijo.
 
 Vista previa del equipo (`src.core.vista_previa`): si hay una corrida de
 triangulación OCULTA más nueva que la abierta, el interruptor de la barra
@@ -29,8 +35,8 @@ franja arriba que lo advierte.
     dentro de un `try` y con `getattr`: un módulo rancio en memoria tras un
     despliegue nunca tumba la página (cae en el mensaje fijo).
 
-Solo se enruta en los modos completo e investigador (`main.py`): el despliegue
-público nunca importa este módulo ni `src.triangulacion`.
+En los modos completo e investigador `main.py` enruta `render_triangulacion`;
+en el despliegue público, solo `render_publico`.
 """
 from __future__ import annotations
 
@@ -125,7 +131,8 @@ def texto_franja(info: dict) -> str:
     cola = (f"La corrida abierta para el equipo es la {abierta}." if abierta is not None
             else "Aún no hay ninguna corrida de triangulación abierta para el equipo.")
     return ("Vista previa para el equipo: esta corrida de triangulación se subió sin abrir "
-            "(sin --publicar-ya). " + cola + " La triangulación nunca es pública.")
+            "(sin --publicar-ya). " + cola + " El público no ve esta corrida: solo la "
+            "publicada.")
 
 
 def _franja(info: dict) -> None:
@@ -223,3 +230,46 @@ def render_triangulacion() -> None:
 
     from src.ui.views.triangulacion_investigador import render_investigador
     render_investigador(t)
+
+
+# ── Público (modo comunidad) ────────────────────────────────────────────────
+@st.cache_resource(show_spinner="Leyendo la triangulación publicada…")
+def _leer_publico(corrida_id: int):
+    """La corrida publicada `corrida_id`, leída con la clave anon. Lanza si no se
+    puede leer (así un fallo no queda guardado en la caché)."""
+    lectura = _lectura()
+    t = lectura.cargar(corrida_id=corrida_id, publico=True) if lectura is not None else None
+    if t is None:
+        raise LookupError("corrida no legible")
+    return t
+
+
+def _publicada_anon(lectura):
+    try:
+        cid = lectura.id_corrida_publicada(publico=True)
+        return _leer_publico(int(cid)) if cid is not None else None
+    except Exception as exc:                               # noqa: BLE001
+        LOG.warning("Triangulación pública: no se pudo leer la corrida (%s).",
+                    type(exc).__name__)
+        return None
+
+
+def render_publico() -> None:
+    """La triangulación publicada para el público: todas las pestañas del equipo.
+
+    Solo la última corrida publicada, con la clave anon. Sin vista previa ni
+    archivos locales. Cualquier fallo cae en el mensaje fijo, sin el texto de la
+    excepción.
+    """
+    titulo = getattr(cat, "TITULO_PUBLICO", "Triangulación 360")
+    lectura = _lectura()
+    t = _publicada_anon(lectura) if lectura is not None else None
+    if t is None:
+        st.title(f"🔺 {titulo}")
+        st.info(getattr(cat, "AVISO_PUBLICO_SIN_CORRIDA",
+                        "Aún no hay una corrida de triangulación publicada."), icon="⏳")
+        return
+    st.sidebar.caption(f"Fuente: corrida {t.corrida.get('id')} publicada")
+    st.info(getattr(lectura, "AVISO_PUBLICO", ""), icon="🗄️")
+    from src.ui.views.triangulacion_investigador import render_investigador
+    render_investigador(t, titulo=titulo)

@@ -29,14 +29,16 @@ PAGINA_REPORTES = "Reportes"
 MENU = (PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES, PAGINA_TRIANGULACION,
         PAGINA_CHAT, PAGINA_CARGA, PAGINA_REPORTES)
 
-# Las que ya tienen vista. Cuidadores entró en la fase 4a y Triangulación en la
-# 5, las dos solo para investigadores: Triangulación nunca está en PUBLICAS.
+# Las que ya tienen vista. Cuidadores entró en la fase 4a y Triangulación en la 5.
 DISPONIBLES = frozenset({PAGINA_DOCENTES, PAGINA_ESTUDIANTES, PAGINA_CUIDADORES,
                          PAGINA_TRIANGULACION, PAGINA_CHAT, PAGINA_CARGA,
                          PAGINA_REPORTES})
 
-# Lo único que puede ver el público. Triangulación es solo para investigadores.
-PUBLICAS = (PAGINA_ESTUDIANTES, PAGINA_CUIDADORES)
+# Lo único que puede ver el público. Triangulación 360 es pública por decisión
+# del usuario (10 oct 2026): «todo como lo ve el equipo», leída de la última
+# corrida publicada (migración 2026-10-10e). Si aún no hay corrida, la página
+# lo dice con un mensaje fijo.
+PUBLICAS = (PAGINA_ESTUDIANTES, PAGINA_CUIDADORES, PAGINA_TRIANGULACION)
 
 # Cuidadores es pública solo cuando el equipo aprueba sus textos y rutas y hay
 # una corrida de cuidadores publicada (spec §5.5). Dos llaves, las dos a mano:
