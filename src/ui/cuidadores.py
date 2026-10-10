@@ -97,12 +97,20 @@ def _vista_previa():
     """Módulo `vista_previa`, o None (modo comunidad, ausente o rancio)."""
     if modo_app.modo() == modo_app.COMUNIDAD:
         return None
+    import logging
     try:
         from src.core import vista_previa as vp
-    except Exception:                                      # noqa: BLE001
+    except Exception as exc:                               # noqa: BLE001
+        logging.getLogger(__name__).warning(
+            "Vista previa [cuidadores: import vista_previa]: %s.", type(exc).__name__)
         return None
     necesarias = ("interruptor", "banner", "cliente_autenticado", "marcar_en_uso")
-    return vp if all(callable(getattr(vp, n, None)) for n in necesarias) else None
+    faltan = [n for n in necesarias if not callable(getattr(vp, n, None))]
+    if faltan:
+        logging.getLogger(__name__).warning(
+            "Vista previa [cuidadores]: módulo vista_previa rancio, sin %s.", ", ".join(faltan))
+        return None
+    return vp
 
 
 def _marcar_en_uso(en_uso: bool) -> None:
@@ -130,20 +138,24 @@ def en_revision():
     vp = _vista_previa()
     if vp is None:
         return None, None
+    paso = "lectura.disponible"
     try:
         from src.cuidadores import lectura
         if not lectura.disponible():
             return None, None
+        paso = "vp.interruptor"
         info = vp.interruptor(cat.MODULO)
         if not info:
             return None, None
         corrida = info["en_revision"]
+        paso = f"_leer_revision({corrida})"
         datos = _leer_revision(f"{cat.MODULO}-corrida-{corrida}-vista-previa", corrida)
         return (info, datos) if datos is not None else (None, None)
-    except Exception:                                      # noqa: BLE001
+    except Exception as exc:                               # noqa: BLE001
         import logging
         logging.getLogger(__name__).warning(
-            "No se pudo leer la corrida de cuidadores en revisión; se muestra la publicada")
+            "Vista previa [cuidadores: en_revision: %s]: %s. Se muestra la publicada.",
+            paso, type(exc).__name__)
         return None, None
 
 

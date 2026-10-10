@@ -17,6 +17,7 @@ modo comunidad ese módulo ni se importa.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 import streamlit as st
@@ -24,6 +25,8 @@ import streamlit as st
 from src.core import modo as modo_app
 from src.estudiantes import catalog as cat
 from src.estudiantes import lectura, pipeline
+
+logger = logging.getLogger(__name__)
 
 AUDIENCIAS = {
     "comunidad": "Colegios, familias y municipio",
@@ -75,10 +78,17 @@ def _vista_previa():
         return None
     try:
         from src.core import vista_previa as vp
-    except Exception:                                      # noqa: BLE001
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("Vista previa [estudiantes: import vista_previa]: %s.",
+                       type(exc).__name__)
         return None
     necesarias = ("interruptor", "banner", "cliente_autenticado", "marcar_en_uso")
-    return vp if all(callable(getattr(vp, n, None)) for n in necesarias) else None
+    faltan = [n for n in necesarias if not callable(getattr(vp, n, None))]
+    if faltan:
+        logger.warning("Vista previa [estudiantes]: módulo vista_previa rancio, sin %s.",
+                       ", ".join(faltan))
+        return None
+    return vp
 
 
 def _fuente_supabase(base: str) -> bool:
@@ -93,13 +103,18 @@ def _revision_activa(base: str) -> dict | None:
     vp = _vista_previa()
     if vp is None:
         return None
+    paso = "lectura.disponible"
     try:
-        if not lectura.disponible() or not _fuente_supabase(base):
+        if not lectura.disponible():
             return None
+        paso = "_fuente_supabase"
+        if not _fuente_supabase(base):
+            return None
+        paso = "vp.interruptor"
         return vp.interruptor(lectura.MODULO)
-    except Exception:                                      # noqa: BLE001
-        import logging
-        logging.getLogger(__name__).warning("Vista previa no disponible en esta ejecución")
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("Vista previa [estudiantes: _revision_activa: %s]: %s. "
+                       "Se sigue con lo publicado.", paso, type(exc).__name__)
         return None
 
 
@@ -146,10 +161,9 @@ def cargar_analisis(base: str | None = None, revision: int | None = None):
         try:
             analisis, informes, _ = _leer_revision(
                 f"{lectura.MODULO}-corrida-{revision}-vista-previa", revision)
-        except Exception:                                  # noqa: BLE001
-            import logging
-            logging.getLogger(__name__).warning(
-                "No se pudo leer la corrida en revisión; se muestra la publicada")
+        except Exception as exc:                           # noqa: BLE001
+            logger.warning("Vista previa [estudiantes: _leer_revision(%s)]: %s. "
+                           "Se muestra la publicada.", revision, type(exc).__name__)
             analisis = None
         if analisis:
             return analisis, informes, "revision"

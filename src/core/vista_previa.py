@@ -24,8 +24,9 @@ aprobación:
 En el modo «comunidad» este módulo no se importa nunca (`tests/test_navegacion`
 lo comprueba) y, aun si se importara, `disponible()` devuelve False.
 
-Nunca registra ni muestra secretos: los errores de inicio de sesión se anotan
-solo con el tipo de la excepción, porque el mensaje puede traer el correo.
+Nunca registra ni muestra secretos: los fallos se anotan (`registrar_fallo`)
+con el paso y el tipo de la excepción, nunca con el mensaje, que puede traer el
+correo.
 
 Es un módulo nuevo a propósito: tras un despliegue, Streamlit puede conservar
 módulos viejos en memoria; quien lo usa lo importa dentro de un `try` y consulta
@@ -50,6 +51,18 @@ TTL_REVISION = 2 * 60          # cada cuánto se vuelve a mirar si hay corrida n
 
 # Sesión fuera de Streamlit (pruebas, scripts): un diccionario del módulo.
 _RESPALDO: dict = {}
+_AVISADO_SIN_CREDENCIALES = False
+
+
+def registrar_fallo(donde: str, exc: BaseException) -> None:
+    """Anota un fallo tragado: dónde y el tipo de la excepción, nunca el mensaje.
+
+    El mensaje de supabase/gotrue puede traer el correo del usuario de carga o
+    partes de la petición; el tipo y el paso bastan para diagnosticar en los
+    registros de Streamlit Cloud.
+    """
+    logger.warning("Vista previa [%s]: %s. Se sigue con lo publicado.",
+                   donde, type(exc).__name__)
 
 
 # ── Utilidades ──────────────────────────────────────────────────────────────
@@ -112,7 +125,23 @@ def disponible() -> bool:
         return False
     email, clave = credenciales()
     url, key = _conexion()
-    return bool(email and clave and url and key)
+    listo = bool(email and clave and url and key)
+    if not listo:
+        _avisar_sin_credenciales(email=email, clave=clave, url=url, key=key)
+    return listo
+
+
+def _avisar_sin_credenciales(**valores) -> None:
+    """Una vez por proceso: qué falta (solo los nombres, nunca los valores)."""
+    global _AVISADO_SIN_CREDENCIALES
+    if _AVISADO_SIN_CREDENCIALES:
+        return
+    _AVISADO_SIN_CREDENCIALES = True
+    nombres = {"email": "OBS360_CARGA_EMAIL", "clave": "OBS360_CARGA_CLAVE",
+               "url": "SUPABASE_URL", "key": "SUPABASE_KEY"}
+    faltan = [nombres[k] for k, v in valores.items() if not v]
+    logger.warning("Vista previa desactivada en el modo %s: faltan %s.",
+                   _modo(), ", ".join(faltan))
 
 
 def _crear_cliente(url: str, key: str):
@@ -140,12 +169,14 @@ def cliente_autenticado():
     email, clave = credenciales()
     url, key = _conexion()
     cliente = None
+    paso = "crear cliente"
     try:
         cliente = _crear_cliente(url, key)
+        paso = "iniciar sesión del usuario de carga"
         cliente.auth.sign_in_with_password({"email": email, "password": clave})
     except Exception as exc:                               # noqa: BLE001
-        logger.warning("Vista previa: no se pudo iniciar sesión con el usuario de carga "
-                       "(%s). Se sigue con lo publicado.", type(exc).__name__)
+        registrar_fallo(f"cliente_autenticado: {paso}; sin reintento en "
+                        f"{TTL_FALLO // 60} min", exc)
         cliente = None
     sesion[_CLAVE_CLIENTE] = (cliente, ahora)
     return cliente
@@ -194,16 +225,18 @@ def revision(modulo: str) -> dict | None:
     if modulo in memo and ahora - memo[modulo][1] < TTL_REVISION:
         return memo[modulo][0]
     info = None
+    paso = "cliente"
     try:
         cli = cliente_autenticado()
         if cli is not None:
+            paso = "corrida_en_revision"
             en_revision = corrida_en_revision(modulo, cli)
             if en_revision is not None:
+                paso = "corrida_publicada"
                 info = dict(modulo=modulo, en_revision=en_revision,
                             publicada=corrida_publicada(modulo, cli))
     except Exception as exc:                               # noqa: BLE001
-        logger.warning("Vista previa: no se pudo consultar la corrida en revisión de %s (%s).",
-                       modulo, type(exc).__name__)
+        registrar_fallo(f"revision({modulo}): {paso}", exc)
         info = None
     memo[modulo] = (info, ahora)
     return info
@@ -272,8 +305,7 @@ def interruptor(modulo: str) -> dict | None:
                                    "Solo existe en el despliegue del equipo.")
         sesion[CLAVE_ACTIVA] = bool(valor)
     except Exception as exc:                               # noqa: BLE001
-        logger.warning("Vista previa: no se pudo dibujar el interruptor (%s).",
-                       type(exc).__name__)
+        registrar_fallo(f"interruptor({modulo}): st.toggle", exc)
         return None
     return info if valor else None
 

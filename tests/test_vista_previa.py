@@ -228,6 +228,47 @@ def test_un_inicio_de_sesion_fallido_no_vuelca_secretos(monkeypatch, caplog):
         assert secreto not in texto                     # …sin el secreto
 
 
+def test_los_fallos_tragados_dicen_donde_y_que_tipo(monkeypatch, caplog):
+    """En producción solo hay registros: el paso y el tipo bastan, sin el mensaje."""
+    base, _, _ = _base_cuidadores()
+    _credenciales(monkeypatch, EMAIL, "clave-equivocada-XYZ")
+    monkeypatch.setenv("OBS360_MODO", "investigador")
+    _fabrica(monkeypatch, base)
+    with caplog.at_level(logging.WARNING):
+        assert vp.cliente_autenticado() is None
+    assert "iniciar sesión del usuario de carga" in caplog.text
+    tipos = {r.getMessage().rsplit(": ", 1)[-1].split(".")[0] for r in caplog.records}
+    assert tipos and all(t.isidentifier() for t in tipos)
+
+    caplog.clear()
+    vp._RESPALDO.clear()
+    _credenciales(monkeypatch)
+    _fabrica(monkeypatch, base)
+
+    def _roto(*_a, **_k):
+        raise ConnectionError(f"fallo con {EMAIL}")
+
+    monkeypatch.setattr(vp, "corrida_en_revision", _roto)
+    with caplog.at_level(logging.WARNING):
+        assert vp.revision("cuidadores") is None
+    assert "revision(cuidadores): corrida_en_revision" in caplog.text
+    assert "ConnectionError" in caplog.text and EMAIL not in caplog.text
+
+
+def test_sin_credenciales_avisa_que_falta_sin_valores(monkeypatch, caplog):
+    monkeypatch.setenv("OBS360_MODO", "investigador")
+    monkeypatch.setattr(vp, "credenciales", lambda: (EMAIL, None))
+    monkeypatch.setattr(vp, "_conexion", lambda: ("https://falso.invalid", "clave-anon-falsa"))
+    monkeypatch.setattr(vp, "_AVISADO_SIN_CREDENCIALES", False)
+    with caplog.at_level(logging.WARNING):
+        assert vp.disponible() is False
+        assert vp.disponible() is False
+    avisos = [r for r in caplog.records if "faltan" in r.getMessage()]
+    assert len(avisos) == 1 and "OBS360_CARGA_CLAVE" in avisos[0].getMessage()
+    for secreto in (EMAIL, "clave-anon-falsa", "falso.invalid"):
+        assert secreto not in caplog.text
+
+
 def test_en_comunidad_nunca_hay_cliente(monkeypatch):
     base, _, _ = _base_cuidadores()
     _credenciales(monkeypatch)
