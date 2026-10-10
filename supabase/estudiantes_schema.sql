@@ -31,8 +31,9 @@
 -- Ya incluye la migración 2026-10-07 (corridas por módulo: el público solo lee
 -- la última corrida publicada de cada módulo; nivel 'cuidadores'; ningún
 -- identificador E/C/N; mensajes por módulo) y la 2026-10-07c (ningún conteo de
--- casos; alertas con estado solo donde hay cifra). Volver a ejecutarlo NO reabre
--- las corridas viejas.
+-- casos; alertas con estado solo donde hay cifra) y la 2026-10-10 (el usuario
+-- cargador lee también las corridas ocultas, para la vista previa del equipo).
+-- Volver a ejecutarlo NO reabre las corridas viejas al público.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- ── 0. Esquema propio, para no mezclarse con lo que ya existe ──────────────
@@ -205,6 +206,24 @@ DROP POLICY IF EXISTS "lectura publica de resultados publicados" ON obs360.resul
 CREATE POLICY "lectura publica de resultados publicados" ON obs360.resultados
     FOR SELECT TO anon, authenticated
     USING (obs360_interno.es_ultima_publicada(corrida_id));
+
+-- Usuario de carga (app_metadata.obs360_rol = 'cargador', solo en los secretos
+-- del despliegue privado): lee CUALQUIER corrida y sus resultados, publicada o
+-- no, para la vista previa del equipo (migración 2026-10-10). Solo SELECT; se
+-- suma con OR a la política pública, que no cambia. La función es la misma de
+-- supabase/almacen_schema.sql; se define aquí para no depender del orden.
+CREATE OR REPLACE FUNCTION obs360.es_cargador() RETURNS boolean
+LANGUAGE sql STABLE SET search_path = obs360, pg_temp AS $$
+    SELECT coalesce((auth.jwt() -> 'app_metadata' ->> 'obs360_rol') = 'cargador', false)
+$$;
+
+DROP POLICY IF EXISTS "cargador lee todas las corridas" ON obs360.corridas;
+CREATE POLICY "cargador lee todas las corridas" ON obs360.corridas
+    FOR SELECT TO authenticated USING (obs360.es_cargador());
+
+DROP POLICY IF EXISTS "cargador lee todos los resultados" ON obs360.resultados;
+CREATE POLICY "cargador lee todos los resultados" ON obs360.resultados
+    FOR SELECT TO authenticated USING (obs360.es_cargador());
 
 DROP POLICY IF EXISTS "lectura publica de mensajes vigentes" ON obs360.mensajes;
 CREATE POLICY "lectura publica de mensajes vigentes" ON obs360.mensajes
