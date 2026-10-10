@@ -111,6 +111,10 @@ CONSTRUCTOS: tuple[Constructo, ...] = (
                corta="apoyo de compañeros"),
     Constructo("doc_desgaste", DOCENTE, "DOC_DESGASTE",
                "Desgaste del docente (4 ítems, 1–7)", "desgaste", -1, corta="desgaste"),
+    # Solo si el archivo de docentes trae los ítems MT4–7 (si no, la fila sale sin cifra).
+    Constructo("doc_demandas", DOCENTE, "DOC_DEMANDAS",
+               "Demandas y presión de tiempo del docente (HSE MT4–7)", "demandas", -1,
+               corta="demandas / presión de tiempo"),
 )
 POR_CLAVE = {c.clave: c for c in CONSTRUCTOS}
 

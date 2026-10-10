@@ -18,9 +18,11 @@ QUÉ SUBE (modulo = nivel = "triangulacion")
   · Una fila por fila de cada tabla agregada que tiene cifra: capa 1 por colegio
     (`tri_capa1_diferencias`) y por grado (`tri_capa1_por_grado`), acuerdo SDQ,
     su sensibilidad de concordancia, Bland–Altman AGRUPADO (cada fila es un grupo
-    de ≥ 10 díadas de ≥ 10 familias), malestar no visto, apoyo familiar y
-    asociaciones. `n` es el n de esa cifra (≥ 10, también lo exige la base) y la
-    fila completa va en `detalle.fila`.
+    de ≥ 10 díadas de ≥ 10 familias), malestar no visto, apoyo familiar,
+    asociaciones y, desde el 10 oct 2026, las cifras municipales de la capa 1
+    (`tri_capa1_municipal`) y el informante de las díadas (`tri_diadas_informante`).
+    `n` es el n de esa cifra (≥ 10, también lo exige la base) y la fila completa
+    va en `detalle.fila`.
   · Una fila `tri_meta` (n = estudiantes analizados): colegios y grados de la
     capa 1, las filas SIN cifra (solo su motivo, sin conteos), la clasificación
     de los pares (derivada de las cifras publicadas), la calidad del enlace y
@@ -84,12 +86,16 @@ def _tablas(t) -> dict:
         "diadas_acuerdo": d.acuerdo, "diadas_acuerdo_concordantes": d.acuerdo_concordantes,
         "diadas_bland_altman": d.bland_altman, "diadas_no_visto": d.no_visto,
         "diadas_apoyo": d.apoyo, "diadas_asociaciones": d.asociaciones,
+        # Desde el 10 oct 2026 (Resumen con hallazgos fijos); una corrida vieja
+        # sin estas tablas se sigue leyendo (vuelven vacías).
+        "capa1_municipal": getattr(c, "municipal", None),
+        "diadas_informante": getattr(d, "informante", None),
     }
 
 
 TABLAS = ("capa1_diferencias", "capa1_por_grado", "diadas_acuerdo",
           "diadas_acuerdo_concordantes", "diadas_bland_altman", "diadas_no_visto",
-          "diadas_apoyo", "diadas_asociaciones")
+          "diadas_apoyo", "diadas_asociaciones", "capa1_municipal", "diadas_informante")
 COLUMNA_N = {"capa1_diferencias": "n_grupo", "capa1_por_grado": "n_grupo"}
 VALOR = {"capa1_diferencias": ("d", "ic_inf", "ic_sup"),
          "capa1_por_grado": ("d", "ic_inf", "ic_sup"),
@@ -98,7 +104,9 @@ VALOR = {"capa1_diferencias": ("d", "ic_inf", "ic_sup"),
          "diadas_bland_altman": ("dif_media", "ic_inf", "ic_sup"),
          "diadas_no_visto": ("pct_no_visto", "ic_inf", "ic_sup"),
          "diadas_apoyo": ("rho", "rho_ic_inf", "rho_ic_sup"),
-         "diadas_asociaciones": ("beta", "ic_inf", "ic_sup")}
+         "diadas_asociaciones": ("beta", "ic_inf", "ic_sup"),
+         "capa1_municipal": ("valor", "ic_inf", "ic_sup"),
+         "diadas_informante": ("rho_cuidador", "rho_cuidador_ic_inf", "rho_cuidador_ic_sup")}
 
 
 # ── valores JSON ────────────────────────────────────────────────────────────
@@ -154,6 +162,9 @@ def _limpia(df: pd.DataFrame | None) -> pd.DataFrame | None:
 
 def _clave(tabla: str, fila: dict) -> tuple[str, str, str, str | None]:
     """(clave, escala, agrupación, grupo) legibles para las columnas de la base."""
+    if tabla == "capa1_municipal":
+        return (f"{fila.get('bloque')} · {fila.get('clave')}", str(fila.get("bloque")),
+                "municipio", plano(fila.get("grupo")))
     if tabla.startswith("capa1_"):
         return (str(fila.get("clave")), str(fila.get("constructo") or fila.get("clave")),
                 str(fila.get("agrupacion") or "total"), plano(fila.get("grupo")))
@@ -166,6 +177,8 @@ def _clave(tabla: str, fila: dict) -> tuple[str, str, str, str | None]:
         return str(fila.get("variante")), str(fila.get("variante")), "total", None
     if tabla == "diadas_apoyo":
         return str(fila.get("fuente")), str(fila.get("fuente")), "total", None
+    if tabla == "diadas_informante":
+        return str(fila.get("predictor")), str(fila.get("etiqueta")), "total", None
     return (f"{fila.get('resultado')} · {fila.get('predictor') or '—'}",
             str(fila.get("resultado")), "muestra", plano(fila.get("muestra")))
 

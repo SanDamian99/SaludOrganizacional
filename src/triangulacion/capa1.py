@@ -327,7 +327,7 @@ def _grupos(lista: list[Atomo], agrupacion: str) -> set:
 def _fila_m(bloque: str, clave: str, grupo=None, n=None, valor=None, ic_inf=None,
             ic_sup=None, motivo: str = "") -> dict:
     nan = float("nan")
-    return dict(bloque=bloque, clave=clave, grupo=grupo,
+    return dict(bloque=bloque, clave=clave, grupo=(nan if grupo is None else grupo),
                 n=(int(n) if n is not None else nan),
                 valor=(nan if valor is None else valor), ic_inf=(nan if ic_inf is None else ic_inf),
                 ic_sup=(nan if ic_sup is None else ic_sup), motivo=motivo)

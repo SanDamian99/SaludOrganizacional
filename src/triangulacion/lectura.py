@@ -42,7 +42,7 @@ TIPO_META = "tri_meta"
 FORMATO = 1
 TABLAS = ("capa1_diferencias", "capa1_por_grado", "diadas_acuerdo",
           "diadas_acuerdo_concordantes", "diadas_bland_altman", "diadas_no_visto",
-          "diadas_apoyo", "diadas_asociaciones")
+          "diadas_apoyo", "diadas_asociaciones", "capa1_municipal", "diadas_informante")
 AVISO_PUBLICADO = ("Triangulación leída de la corrida subida por la máquina que procesa: "
                    "solo agregados (n ≥ 10, sin identificadores ni díadas). Desde el 10 "
                    "oct 2026 la corrida publicada también la ve el público. Las figuras "
@@ -61,6 +61,7 @@ class Capa1Publicada:
     clasificacion: pd.DataFrame = field(default_factory=pd.DataFrame)
     por_grado: pd.DataFrame = field(default_factory=pd.DataFrame)
     clasificacion_grado: pd.DataFrame = field(default_factory=pd.DataFrame)
+    municipal: pd.DataFrame = field(default_factory=pd.DataFrame)   # vacía en corridas viejas
 
 
 @dataclass
@@ -73,6 +74,7 @@ class DiadasPublicadas:
     apoyo: pd.DataFrame = field(default_factory=pd.DataFrame)
     asociaciones: pd.DataFrame = field(default_factory=pd.DataFrame)
     acuerdo_concordantes: pd.DataFrame = field(default_factory=pd.DataFrame)
+    informante: pd.DataFrame = field(default_factory=pd.DataFrame)  # vacía en corridas viejas
 
 
 @dataclass
@@ -220,13 +222,15 @@ def reconstruir(filas: list[dict], corrida: dict | None = None
         colegios=list(meta.get("colegios") or []), grados=list(meta.get("grados") or []),
         diferencias=t["capa1_diferencias"], por_grado=t["capa1_por_grado"],
         clasificacion=_df(meta.get("clasificacion") or [], cols_cl),
-        clasificacion_grado=_df(meta.get("clasificacion_grado") or [], cols_cl))
+        clasificacion_grado=_df(meta.get("clasificacion_grado") or [], cols_cl),
+        municipal=t["capa1_municipal"])
     diadas = DiadasPublicadas(
         n=_entero(meta.get("diadas_n", 0)), familias=_entero(meta.get("diadas_familias", 0)),
         acuerdo=t["diadas_acuerdo"], bland_altman=t["diadas_bland_altman"],
         no_visto=t["diadas_no_visto"], apoyo=t["diadas_apoyo"],
         asociaciones=t["diadas_asociaciones"],
-        acuerdo_concordantes=t["diadas_acuerdo_concordantes"])
+        acuerdo_concordantes=t["diadas_acuerdo_concordantes"],
+        informante=t["diadas_informante"])
     return TriangulacionPublicada(
         capa1=capa1, diadas=diadas,
         actores={k: _entero(v) for k, v in (meta.get("actores") or {}).items()},
