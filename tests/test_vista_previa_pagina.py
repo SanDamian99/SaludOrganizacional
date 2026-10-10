@@ -250,3 +250,25 @@ def test_un_lector_rancio_cae_en_lo_publicado(monkeypatch, tmp_path, base):
     assert not at.exception
     texto = _texto(at)
     assert "Vista previa para el equipo" not in texto and "Fuente: corrida publicada" in texto
+
+
+def test_revision_activa_registra_paso_y_tipo_si_algo_falla(monkeypatch, tmp_path, caplog):
+    """`_revision_activa` traga el fallo, pero deja en el registro dónde y de qué tipo."""
+    import importlib
+    # Por sys.modules, no por el atributo del paquete: otras pruebas reimportan
+    # estos módulos (módulos rancios simulados) y el atributo puede ser otro.
+    ui_est = importlib.import_module("src.ui.estudiantes")
+    monkeypatch.setenv("OBS360_MODO", "investigador")
+    monkeypatch.setenv("OBS360_FUENTE", "supabase")
+    monkeypatch.setenv("OBS360_SUPABASE_URL", "https://falso.invalid")
+    monkeypatch.setenv("OBS360_SUPABASE_KEY", ANON)
+
+    def _roto(_modulo):
+        raise KeyError(EMAIL)
+
+    monkeypatch.setattr(importlib.import_module("src.core.vista_previa"), "interruptor", _roto)
+    with caplog.at_level(logging.WARNING):
+        assert ui_est._revision_activa(str(tmp_path)) is None
+    assert "_revision_activa: vp.interruptor" in caplog.text and "KeyError" in caplog.text
+    for secreto in SECRETOS:
+        assert secreto not in caplog.text
