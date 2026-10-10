@@ -168,6 +168,16 @@ VARIANTES_NO_VISTO = (("Dificultades totales o señal de malestar (vigente)", "S
                       ("Síntomas emocionales o señal de malestar (sensibilidad)", "SDQ_Emo",
                        True))
 MAX_BINES_BA = 5
+# El informante (hallazgo 2): el malestar del cuidador frente al SDQ total que
+# da él mismo del niño y frente al que da el niño. (columna del cuidador, etiqueta)
+PREDICTORES_INFORMANTE = (("EPDS_Total", "Ánimo del cuidador (EPDS)"),
+                          ("PSS_Total", "Estrés del cuidador (PSS)"))
+RESULTADO_INFORMANTE = "SDQ_Total"
+
+# ── Cifras municipales de la capa 1 (sustento de los hallazgos 3, 4, 5 y 8) ──
+ITEM_18 = "RCADS18"                   # «Pienso acerca de la muerte»
+CORTE_ITEM_18 = 2                     # ≥ «Con frecuencia» (= alertas_catalogo.CON_FRECUENCIA)
+EPDS_PROBABLE = "EPDS_Probable"       # EPDS ≥ 13, 0/1 (cuidadores.scoring)
 
 # ── Avisos fijos ────────────────────────────────────────────────────────────
 TITULO = "Triangulación 360 · equipo investigador"
@@ -229,3 +239,15 @@ AVISO_BLAND_ALTMAN = ("Bland–Altman agrupado: cada punto es el promedio de un 
                       "dibuja ninguna díada.")
 AVISO_TEXTOS = ("Textos provisionales: el equipo los revisa antes de usarlos fuera de esta "
                 "vista.")
+AVISO_MUNICIPAL = ("Cifras municipales de la capa 1, sobre el mismo universo de personas que "
+                   "las comparaciones por colegio: el cruce de la señal de malestar con el "
+                   "ítem 18 (secundaria; solo si las cuatro celdas tienen 10 o más), el ánimo "
+                   "del cuidador por tercil de apoyo familiar (cada tercil con 10 o más "
+                   "cuidadores y 3 ≤ casos ≤ n − 3), la PSS-10 en cuidadores y docentes (media "
+                   "con IC y d con IC de Welch) y el desgaste docente sobre demandas, "
+                   "conflicto de rol y apoyo del líder (MCO estandarizado, errores agrupados "
+                   "por colegio).")
+AVISO_INFORMANTE = ("El informante: correlación de Spearman (IC por bootstrap de familias) del "
+                    "ánimo y el estrés del cuidador con el SDQ total que él mismo da del niño "
+                    "y con el que da el niño. Si la primera es mayor que la segunda, lo que el "
+                    "cuidador reporta del niño refleja en parte su propio malestar.")

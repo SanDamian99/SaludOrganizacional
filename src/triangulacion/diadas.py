@@ -20,6 +20,9 @@ Entra la tabla de díadas de `enlace.enlazar` (solo en memoria) y sale un
     díadas y en familias; si no, no se muestra ninguna cifra.
   · `apoyo`: MSPSS del niño frente al del cuidador, por fuente (aviso fijo:
     redacción y reparto de ítems distintos; no es acuerdo sobre lo mismo).
+  · `informante`: ρ (bootstrap por familias) del EPDS y la PSS del cuidador
+    con el SDQ total que da el cuidador y con el que da el niño (hallazgo 2
+    del Resumen: el malestar del cuidador tiñe su reporte del hijo).
   · `asociaciones`: EPDS, PSS, castigo físico y barrio del cuidador con el
     SDQ del niño (total, internalizante, externalizante): MCO estandarizado,
     controles de sexo y edad del niño, efecto fijo de colegio y errores
@@ -70,6 +73,12 @@ class Diadas:
     apoyo: pd.DataFrame = field(default_factory=pd.DataFrame)
     asociaciones: pd.DataFrame = field(default_factory=pd.DataFrame)
     acuerdo_concordantes: pd.DataFrame = field(default_factory=pd.DataFrame)
+    informante: pd.DataFrame = field(default_factory=pd.DataFrame)
+
+
+COLUMNAS_INFORMANTE = ["predictor", "etiqueta", "n", "familias", "rho_cuidador",
+                       "rho_cuidador_ic_inf", "rho_cuidador_ic_sup", "rho_nino",
+                       "rho_nino_ic_inf", "rho_nino_ic_sup", "motivo"]
 
 
 def _r(v, dec: int = 3):
@@ -243,6 +252,29 @@ def apoyo_familiar(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
+def informante(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
+    """El malestar del cuidador frente a lo que reporta él y lo que reporta el niño."""
+    filas = []
+    y = cat.RESULTADO_INFORMANTE
+    for clave, etiqueta in cat.PREDICTORES_INFORMANTE:
+        a, c, e = f"a_{clave}", f"c_{y}", f"e_{y}"
+        fila = dict(predictor=clave, etiqueta=etiqueta)
+        if any(col not in D.columns for col in (a, c, e)):
+            filas.append({**fila, "motivo": MOTIVO_POCAS})
+            continue
+        sub = D[[a, c, e, FAMILIA]].dropna()
+        if not est.suficiente(sub, FAMILIA):
+            filas.append({**fila, "motivo": MOTIVO_POCAS})
+            continue
+        rc = correlacion_boot(sub, a, c, "spearman", n_boot)
+        rn = correlacion_boot(sub, a, e, "spearman", n_boot)
+        filas.append({**fila, "n": len(sub), "familias": int(sub[FAMILIA].nunique()),
+                      "rho_cuidador": _r(rc[0]), "rho_cuidador_ic_inf": _r(rc[1]),
+                      "rho_cuidador_ic_sup": _r(rc[2]), "rho_nino": _r(rn[0]),
+                      "rho_nino_ic_inf": _r(rn[1]), "rho_nino_ic_sup": _r(rn[2]), "motivo": ""})
+    return pd.DataFrame(filas, columns=COLUMNAS_INFORMANTE)
+
+
 def _z(s: pd.Series) -> pd.Series:
     return (s - s.mean()) / s.std(ddof=1)
 
@@ -328,4 +360,5 @@ def analizar(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> Diadas:
                   acuerdo=acuerdo_sdq(D, n_boot), bland_altman=bland_altman_agrupado(D),
                   no_visto=malestar_no_visto(D), apoyo=apoyo_familiar(D, n_boot),
                   asociaciones=asociaciones(D),
-                  acuerdo_concordantes=acuerdo_concordantes(D, n_boot))
+                  acuerdo_concordantes=acuerdo_concordantes(D, n_boot),
+                  informante=informante(D, n_boot))

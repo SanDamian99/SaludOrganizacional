@@ -41,6 +41,13 @@ ITEMS_DOCENTES = {
     "DOC_GRUPO": [f"AP{i}" for i in range(1, 4)],
     "DOC_DESGASTE": [f"BLG_Desg{i}" for i in range(1, 5)],
 }
+# Dimensiones que solo entran si el archivo trae sus ítems (hallazgo 8 del
+# Resumen): demandas / presión de tiempo (HSE MT4–7) y conflicto de rol (HSE
+# CR5–7). No condicionan `es_docentes_codificado`.
+ITEMS_DOCENTES_OPCIONALES = {
+    "DOC_DEMANDAS": [f"MT{i}" for i in range(4, 8)],
+    "DOC_CONFLICTO_ROL": [f"CR{i}" for i in range(5, 8)],
+}
 PSS_MIN_ITEMS = 9
 
 MENSAJE_RANCIO = ("La aplicación tiene en memoria una versión anterior de la carga de "
@@ -134,7 +141,8 @@ def _suma_prorrateada(X: pd.DataFrame, minimo: int) -> pd.Series:
 
 
 def puntuar_docentes(d: pd.DataFrame) -> pd.DataFrame:
-    """Colegio (código) y los cuatro constructos docentes. Nada más sale de aquí.
+    """Colegio (código), los cuatro constructos docentes y, si el archivo trae
+    sus ítems, demandas y conflicto de rol. Nada más sale de aquí.
 
     PSS-10: los ítems 3, 4, 5, 7 y 9 ya vienen invertidos por `preparar`; suma
     0–40 prorrateada con 9 de 10 (igual que cuidadores). Apoyo del líder (CL,
@@ -148,6 +156,10 @@ def puntuar_docentes(d: pd.DataFrame) -> pd.DataFrame:
     for clave in ("DOC_LIDER", "DOC_GRUPO", "DOC_DESGASTE"):
         X = items[clave]
         out[clave] = X.mean(axis=1).mask(X.isna().any(axis=1))
+    for clave, cols in ITEMS_DOCENTES_OPCIONALES.items():
+        if set(cols) <= set(d.columns):
+            X = d[cols].apply(pd.to_numeric, errors="coerce")
+            out[clave] = X.mean(axis=1).mask(X.isna().any(axis=1))
     return out.reset_index(drop=True)
 
 
