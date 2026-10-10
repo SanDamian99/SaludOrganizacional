@@ -661,9 +661,14 @@ def main(argv=None) -> int:
     p.add_argument("--base", default=None,
                    help="carpeta donde están los formularios (por defecto, la de datos "
                         "fuente: OBS360_DATOS_DIR o ../datos_fuente_360/estudiantes)")
+    p.add_argument("--desde-storage", action="store_true", help="procesa las versiones activas desidentificadas del almacén de Supabase en vez de los archivos locales (requiere la credencial de carga)")
     args = p.parse_args(argv)
 
-    analisis, informes = pipeline.cargar_y_analizar(base=args.base)
+    if args.desde_storage:
+        rutas = pipeline.localizar_formularios(desde_storage=True)
+        analisis, informes = pipeline.cargar_y_analizar(rutas=rutas, base=args.base)
+    else:
+        analisis, informes = pipeline.cargar_y_analizar(base=args.base)
     filas = aplanar(analisis) + aplanar_ingesta(informes)
     try:
         verificar(filas)

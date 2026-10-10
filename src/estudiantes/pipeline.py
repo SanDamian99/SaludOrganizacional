@@ -23,10 +23,19 @@ PATRONES = ("cuentanos sobre tu bienestar emocional",
 EXTENSIONES = (".csv", ".xlsx", ".xls")
 
 
-def localizar_formularios(base: str | None = None) -> list[str]:
-    """Un archivo por formulario: si hay varios (CSV viejo y xlsx nuevo), el más reciente."""
+def localizar_formularios(base: str | None = None, desde_storage: bool = False) -> list[str]:
+    """Un archivo por formulario: si hay varios (CSV viejo y xlsx nuevo), el más reciente.
+
+    Con `desde_storage=True` (solo los publicadores de línea de comandos, nunca
+    la aplicación) se bajan las versiones activas desidentificadas del almacén
+    de Supabase en lugar de buscar en disco.
+    """
     from src.estudiantes.ingest import norm_txt
     from src.core.rutas import carpeta_datos
+    if desde_storage:
+        from src.data.almacen import rutas_desde_storage
+        bajadas = rutas_desde_storage(["estudiantes_secundaria", "estudiantes_primaria"])
+        return [r for r in bajadas.values() if r]
     base = base or carpeta_datos("estudiantes")
     if not os.path.isdir(base):
         return []

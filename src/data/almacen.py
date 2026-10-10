@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 BUCKET = "datasets"
 ESQUEMA = "obs360"
 TABLA = "conjuntos_versiones"
-CONJUNTOS = ("docentes", "cuidadores")
+# «docentes» es el archivo ya codificado (sin nombres). Los demás son copias
+# desidentificadas de los formularios crudos: seudónimos en vez de nombres,
+# verificadas por `src.data.desidentificar` antes de subir.
+CONJUNTOS = ("docentes", "cuidadores", "estudiantes_secundaria", "estudiantes_primaria")
+CONJUNTOS_CRUDOS = ("cuidadores", "estudiantes_secundaria", "estudiantes_primaria")
 
 # Nombres de columna (normalizados) que identifican a una persona y que
 # `is_protected_column` no cubre. Coincidencia exacta salvo los fragmentos.
@@ -41,6 +45,20 @@ _IDENTIFICADORES_EXACTOS = {
     "nombre", "nombre completo", "documento", "cedula", "telefono", "celular",
 }
 _IDENTIFICADORES_FRAGMENTOS = ("correo", "email", "e-mail")
+
+
+def carpeta_cache() -> str:
+    """Dónde se bajan las versiones activas cuando se procesa desde Storage."""
+    return os.environ.get("OBS360_CACHE_DIR") or os.path.join(
+        os.path.expanduser("~"), ".cache", "obs360", "datos")
+
+
+def rutas_desde_storage(conjuntos, carpeta: str | None = None) -> dict[str, str | None]:
+    """{conjunto: ruta local de su versión activa}. Requiere la credencial de carga."""
+    carpeta = carpeta or carpeta_cache()
+    a = Almacen()
+    a.conectar()
+    return {c: a.descargar_a_carpeta(c, os.path.join(carpeta, c)) for c in conjuntos}
 
 
 class AlmacenNoDisponible(RuntimeError):
@@ -203,6 +221,11 @@ class Almacen:
                       notas: str = "") -> dict:
         """Guarda `df` sin identificadores como nueva versión activa de `conjunto`.
 
+        Para «docentes» se retiran las columnas que identifican (el análisis no
+        las usa). Para los conjuntos crudos no se retira ninguna columna, porque
+        la ingesta lee por posición: se exige que ya vengan desidentificados y se
+        verifica aquí mismo; si quedan nombres, no se sube.
+
         Devuelve la fila insertada más `columnas_retiradas`, para que la interfaz
         pueda decir exactamente qué no se guardó.
         """
@@ -211,8 +234,13 @@ class Almacen:
         if df is None or len(df) == 0:
             raise ValueError("No hay filas que guardar.")
 
-        retiradas = columnas_identificadoras(df)
-        limpio = df.drop(columns=retiradas)
+        if conjunto in CONJUNTOS_CRUDOS:
+            from src.data import desidentificar
+            desidentificar.verificar(conjunto, df)
+            retiradas, limpio = [], df
+        else:
+            retiradas = columnas_identificadoras(df)
+            limpio = df.drop(columns=retiradas)
         contenido = limpio.to_csv(index=False).encode("utf-8")
         hash_ = hashlib.sha256(contenido).hexdigest()
         ruta = f"{conjunto}/{_ahora():%Y%m%d-%H%M%S}_{hash_[:8]}.csv"
@@ -290,6 +318,31 @@ class Almacen:
             self._tabla().update({"activa": True}).eq("id", id_version).execute()
         except Exception as e:                              # noqa: BLE001
             raise AlmacenError(f"No se pudo activar la versión: {_mensaje(e)}") from e
+
+    def descargar_a_carpeta(self, conjunto: str, carpeta: str) -> str | None:
+        """Baja la versión activa de `conjunto` a `carpeta` y devuelve su ruta, o None.
+
+        El archivo se guarda con el nombre original (en .csv) para que los
+        localizadores de cada módulo, que reconocen el formulario por el nombre,
+        lo encuentren igual que al original. Si ya está bajado y el hash
+        coincide, no se vuelve a descargar.
+        """
+        version = self.version_activa(conjunto)
+        if not version:
+            return None
+        base = os.path.splitext(os.path.basename(version.get("nombre_original") or conjunto))[0]
+        os.makedirs(carpeta, exist_ok=True)
+        ruta = os.path.join(carpeta, f"{base}.csv")
+        marca = ruta + ".sha256"
+        if os.path.exists(ruta) and os.path.exists(marca) \
+                and open(marca).read().strip() == version.get("hash"):
+            return ruta
+        contenido = self._bucket().download(version["ruta"])
+        with open(ruta, "wb") as fh:
+            fh.write(contenido)
+        with open(marca, "w") as fh:
+            fh.write(version.get("hash") or "")
+        return ruta
 
     def descargar(self, ruta: str) -> pd.DataFrame:
         """Baja el CSV de Storage y lo devuelve como DataFrame crudo."""
