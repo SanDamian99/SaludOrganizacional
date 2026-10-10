@@ -56,8 +56,8 @@ def test_fuzzy_matching_excel():
     assert len(df) == 2
     assert len(report['warnings']) >= 0
 
-def test_missing_data_imputation():
-    """Archivo con 30% de datos faltantes → debe imputar y reportar"""
+def test_missing_data_is_kept_missing():
+    """Archivo con datos faltantes → se conservan como faltantes (sin imputar)."""
     data = {
         'ID': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
         '(BM)Agotamiento': [2, np.nan, 3, np.nan, 5, np.nan, 4, np.nan, 2, np.nan] # 50% faltante
@@ -66,8 +66,8 @@ def test_missing_data_imputation():
     cleaner = DataCleaner()
     df, report = cleaner.clean_and_process(buffer)
     
-    assert df['(BM)Agotamiento'].isna().sum() == 0
-    assert report['n_cells_imputed'] > 0
+    assert df['(BM)Agotamiento'].isna().sum() == 5
+    assert report['n_cells_imputed'] == 0
 
 def test_likert_detection_without_prefixes():
     """Archivo sin prefijos de categoría → debe detectar Likert igualmente"""

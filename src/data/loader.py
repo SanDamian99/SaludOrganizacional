@@ -52,6 +52,19 @@ def es_demo(label) -> bool:
     return any(d["label"] == label and d.get("demo", False) for d in PRELOADED_DATASETS)
 
 
+def _posprocesar(df, report):
+    """Lo que solo aplica al archivo de docentes: los códigos de faltante.
+
+    «Número de hijos» = 10 se convierte en NaN al cargar (ver
+    `src/docentes/limpieza.py`); el archivo no se modifica.
+    """
+    from src.docentes import limpieza, scoring
+    if scoring.es_archivo_docentes(df):
+        df, informe = limpieza.codigos_faltantes(df)
+        report["codigos_faltantes"] = informe
+    return df, report
+
+
 @st.cache_data(show_spinner=False)
 def load_dataset(resolved_path: str):
     """Lee y procesa un dataset. Retorna (df, ingestion_report)."""
@@ -61,6 +74,7 @@ def load_dataset(resolved_path: str):
     else:
         raw = pd.read_csv(resolved_path)
         df, report = proc.process_complex_excel(None, df_input=raw)
+    df, report = _posprocesar(df, report)
     report["success"] = True
     return df, report
 
@@ -96,6 +110,7 @@ def _procesar_desde_storage(ruta: str):
     from src.data import almacen
     raw = almacen.Almacen().descargar(ruta)
     df, report = ExcelProcessor().process_complex_excel(None, df_input=raw)
+    df, report = _posprocesar(df, report)
     report["success"] = True
     report["fuente"] = f"storage:{ruta}"
     return df, report
