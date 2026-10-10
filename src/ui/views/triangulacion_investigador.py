@@ -1,8 +1,10 @@
 """
 Vista investigador de la Triangulación 360 — Observatorio 360 (fase 5).
 
-Se lee en capas (spec §6): primero el resumen («dónde coinciden» y «dónde hay
-tensión»), luego las tablas de cada capa, luego la metodología y la descarga.
+Se lee en capas (spec §6): primero el resumen (perfil por colegio, patrones
+entre actores, dónde hay tensión e hipótesis, con los hallazgos fijos de
+`hallazgos_catalogo` que la corrida sustenta), luego las tablas de cada capa,
+luego la metodología y la descarga.
 
 No calcula: consume un `pipeline.Triangulacion` (máquina que procesa) o un
 `lectura.TriangulacionPublicada` (despliegue del equipo), que solo tienen
@@ -21,6 +23,8 @@ import streamlit as st
 from src.triangulacion import catalogo as cat
 from src.triangulacion import enlace as en
 from src.triangulacion import exportar as ex
+from src.triangulacion import hallazgos as hz
+from src.triangulacion import hallazgos_catalogo as hc
 
 PESTANAS = ["Resumen", "Por colegio", "Por grado", "Enlace de díadas", "Acuerdo SDQ",
             "Malestar no visto", "Apoyo familiar", "Asociaciones", "Metodología", "Exportar"]
@@ -83,23 +87,70 @@ def conteos_actores(t) -> pd.DataFrame:
     return pd.DataFrame(filas)
 
 
+def _hallazgo(v: hz.Visible) -> None:
+    h = v.hallazgo
+    donde = f" · {v.grupo}" if v.grupo else ""
+    st.markdown(f"**{h.numero}. {h.titulo}{donde}**  \n"
+                f"<small>Relevante para: {', '.join(h.actores)} · robustez: {h.robustez}</small>",
+                unsafe_allow_html=True)
+    st.markdown(h.texto)
+    st.caption(f"Cifra que lo sustenta ({h.sustento}): {v.cifra}")
+
+
+def _bloque_hallazgos(visibles: list, bloque: str, clasificacion: pd.DataFrame,
+                      tipo: str, titulo_pares: str) -> None:
+    lista = hz.por_bloque(visibles, bloque)
+    if not lista:
+        st.caption(hc.AVISO_SIN_HALLAZGOS)
+    for v in lista:
+        _hallazgo(v)
+    pares = hallazgos(clasificacion, tipo)
+    with st.expander(f"{titulo_pares} ({len(pares)})"):
+        st.caption(cat.AVISO_CLASIFICACION)
+        _df(pares)
+
+
 def _tab_resumen(t) -> None:
+    """Cuatro bloques (decisión del usuario del 10 oct 2026): perfil por colegio,
+    patrones entre actores, dónde hay tensión e hipótesis. Los textos son fijos
+    (`hallazgos_catalogo`) y cada hallazgo sale solo si la corrida lo sustenta."""
     st.info(cat.AVISO_ECOLOGICO.format(n=t.n_colegios))
+    st.warning(hc.ESTADO_TEXTOS + " " + cat.AVISO_TEXTOS)
+    visibles = hz.evaluar(t)
+    todo = pd.concat([t.capa1.clasificacion, t.capa1.clasificacion_grado], ignore_index=True)
+
+    st.subheader(hc.TITULO_PERFIL)
     c1, c2, c3 = st.columns(3)
     c1.metric("Colegios en la capa 1", t.n_colegios)
     c2.metric("Díadas niño–cuidador", en.conteo_legible(t.diadas.n))
     c3.metric("Familias en las díadas", en.conteo_legible(t.diadas.familias))
-    todo = pd.concat([t.capa1.clasificacion, t.capa1.clasificacion_grado], ignore_index=True)
-    st.subheader("Dónde coinciden")
-    _df(hallazgos(todo, cat.COINCIDENCIA))
-    st.subheader("Dónde hay tensión")
-    _df(hallazgos(todo, cat.TENSION))
-    st.caption(cat.AVISO_CLASIFICACION)
-    st.caption(cat.AVISO_TEXTOS)
+    st.caption(hc.AVISO_PERFIL)
+    _df(hz.perfil_colegios(t))
+
+    st.subheader(hc.TITULO_PATRONES)
+    st.caption(hc.AVISO_HALLAZGOS)
+    _bloque_hallazgos(visibles, hc.PATRON, todo, cat.COINCIDENCIA,
+                      "Pares de la capa 1 en coincidencia")
+
+    st.subheader(hc.TITULO_TENSION)
+    _bloque_hallazgos(visibles, hc.TENSION, todo, cat.TENSION, "Pares de la capa 1 en tensión")
+
+    st.subheader(hc.TITULO_HIPOTESIS)
+    st.caption(hc.AVISO_HIPOTESIS)
+    lista = hz.hipotesis_de(visibles)
+    if not lista:
+        st.caption(hc.AVISO_SIN_HALLAZGOS)
+    for h in lista:
+        with st.expander(f"{h.id} · {h.texto}"):
+            st.markdown(f"**Patrón que la sugiere.** {h.patron}")
+            st.markdown(f"**Explicaciones alternativas.** {h.alternativas}")
+            st.markdown(f"**Cómo ponerla a prueba.** {h.prueba}")
+            st.markdown(f"**Confianza.** {h.confianza}")
 
 
 def _tab_colegio(t) -> None:
     st.caption(cat.AVISO_RESTO)
+    st.caption(cat.AVISO_AJUSTE_GRADO)
     st.markdown("**Personas por colegio y actor**")
     _df(conteos_actores(t))
     st.markdown("**Clasificación de los pares**")
@@ -110,6 +161,9 @@ def _tab_colegio(t) -> None:
     for colegio in t.capa1.colegios:
         with st.expander(f"Figura · {colegio}"):
             st.pyplot(ex.figura_capa1(t, colegio))
+    st.markdown("**Cifras municipales**")
+    st.caption(cat.AVISO_MUNICIPAL)
+    _df(getattr(t.capa1, "municipal", None))
 
 
 def _tab_grado(t) -> None:
@@ -162,6 +216,9 @@ def _tab_asociaciones(t) -> None:
     st.caption(cat.AVISO_ASOCIACIONES)
     st.caption(cat.AVISO_SENSIBILIDAD_CONCORDANCIA)
     _df(t.diadas.asociaciones)
+    st.markdown("**El informante: el malestar del cuidador y lo que reporta cada uno**")
+    st.caption(cat.AVISO_INFORMANTE)
+    _df(getattr(t.diadas, "informante", None))
 
 
 def _tab_metodologia(t) -> None:

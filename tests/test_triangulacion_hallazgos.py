@@ -180,3 +180,13 @@ def test_con_la_corrida_publicada_y_la_local_se_ven_los_mismos_hallazgos():
     _, base = datos.publicado()
     leida = lectura.reconstruir(base.tablas["resultados"], base.tablas["corridas"][0])
     assert hz.tabla(hz.evaluar(leida)).equals(hz.tabla(hz.evaluar(local)))
+
+
+def test_perfil_por_colegio_usa_las_etiquetas_cortas_y_solo_ic_que_excluye_0():
+    t = _t()
+    perfil = hz.perfil_colegios(t).set_index("Colegio")
+    assert list(perfil.columns) == hz.COLUMNAS_PERFIL[1:]
+    assert perfil.loc["LauV", "Docentes"] == "▼ apoyo del líder; ▼ demandas / presión de tiempo"
+    assert perfil.loc["JJC", "Docentes"] == "▲ apoyo del líder"
+    assert perfil.loc["JJC", "Estudiantes"] == "sin diferencias claras"
+    assert hz.perfil_colegios(SimpleNamespace()).empty

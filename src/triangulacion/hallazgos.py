@@ -272,3 +272,34 @@ def tabla(visibles: list[Visible]) -> pd.DataFrame:
                   hipotesis=", ".join(v.hallazgo.hipotesis), estado=hc.ESTADO_TEXTOS)
              for v in visibles]
     return pd.DataFrame(filas, columns=COLUMNAS_TABLA)
+
+
+# ── Perfil por colegio (bloque 1 del Resumen) ───────────────────────────────
+MEJOR, PEOR = "▲", "▼"
+COLUMNAS_PERFIL = ["Colegio", "Estudiantes", "Cuidadores", "Docentes"]
+
+
+def perfil_colegios(t) -> pd.DataFrame:
+    """Por colegio y actor, los constructos con IC que excluye 0 (▲ mejor / ▼ peor),
+    con la etiqueta corta del catálogo. Solo cifras ya publicadas; sin conteos."""
+    dif = _tabla(t, "capa1", "diferencias")
+    colegios = list(getattr(getattr(t, "capa1", None), "colegios", None) or [])
+    if dif.empty or not colegios or "d_orientada" not in dif.columns:
+        return pd.DataFrame(columns=COLUMNAS_PERFIL)
+    filas = []
+    for colegio in colegios:
+        fila = {"Colegio": colegio}
+        sub = dif[(dif["agrupacion"] == "Colegio") & (dif["grupo"] == colegio) & dif["d"].notna()]
+        for actor in COLUMNAS_PERFIL[1:]:
+            partes = []
+            for _, f in sub[sub["actor"] == actor].iterrows():
+                c = cat.POR_CLAVE.get(f["clave"])
+                lo, hi = c1._orientado(f) if c is not None else (float("nan"), float("nan"))
+                signo = c1._signo(lo, hi)
+                if signo == 0:
+                    continue
+                corta = c.corta or c.etiqueta
+                partes.append(f"{MEJOR if signo > 0 else PEOR} {corta}")
+            fila[actor] = "; ".join(partes) if partes else "sin diferencias claras"
+        filas.append(fila)
+    return pd.DataFrame(filas, columns=COLUMNAS_PERFIL)
