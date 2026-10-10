@@ -25,6 +25,8 @@ logs/
 # Excepción: dataset de muestra versionado para demo
 !src/data/samples/
 !src/data/samples/*.csv
+# Excepción: ubicación pública de los colegios para el mapa (sin datos de personas)
+!src/geo/colegios_geo.csv
 
 # IDEs
 .vscode/

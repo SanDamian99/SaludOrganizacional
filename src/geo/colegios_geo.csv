@@ -1,0 +1,14 @@
+codigo,nombre_oficial,lat,lon,fuente,verificado,verificado_por,fecha,nota
+Bojacá,Institución Educativa Bojacá,4.86018,-74.04165,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+LauV,Institución Educativa Laura Vicuña,4.86172,-74.05431,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,OSM la ubica a unos 400 m
+JJC,Institución Educativa José Joaquín Casas,4.85843,-74.06120,datos.gov.co + Google Maps,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+LaBalsa,Institución Educativa La Balsa,4.87215,-74.03264,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+SJMEB,Institución Educativa San Josemaría Escrivá de Balaguer,4.84310,-74.05892,datos.gov.co + Google Maps,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+CdP,Institución Educativa Cerca de Piedra,4.85231,-74.07345,datos.gov.co + Google Maps,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+DiosCh,Institución Educativa Diosa Chía,4.85590,-74.05678,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+Fagua,Institución Educativa Fagua,4.88142,-74.05581,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,OSM la ubica a unos 900 m
+Fonquetá,Institución Educativa Fonquetá,4.86687,-74.07823,datos.gov.co + Google Maps,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
+Fusca,Institución Educativa Fusca,4.81974,-74.03152,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,Cae FUERA del contorno de Chía (OSM); revisar antes de publicar
+Tiquiza,Institución Educativa Tiquiza,4.88760,-74.07129,datos.gov.co + Google Maps,true,Aceptado por el responsable del proyecto,2026-10-10,OSM solo halla una sede de Fagua en Tiquiza a unos 1.7 km; confirmar sede principal
+CND,Institución Educativa Colegio Nacional Diversificado,4.86241,-74.05983,datos.gov.co + Google Maps,true,Aceptado por el responsable del proyecto,2026-10-10,OSM la ubica a unos 700 m
+SMR,Institución Educativa Santa María del Río,4.84812,-74.04879,datos.gov.co + OpenStreetMap,true,Aceptado por el responsable del proyecto,2026-10-10,Sin contraste independiente
