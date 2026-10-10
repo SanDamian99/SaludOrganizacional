@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from scripts import preparar_docentes as prep
+from src.docentes import catalogo as cat
 
 CONSENT = ("Consentimiento: Acepto participar en la caracterización para generar "
            "intervenciones basadas en nuestras necesidades.")
@@ -109,6 +110,45 @@ def test_inversiones_y_totales():
     assert d["PSS1"].iloc[0] == 1 and d["PSS3"].iloc[0] == 3
     assert d["PSS_T"].iloc[0] == 5 * 1 + 5 * 3
     assert d["IRI_EC_T"].notna().all() and "Comp_T" in d.columns
+    # Intención de retiro: IR1 («me veo aquí el próximo año») se invierte (5 - 4 = 1)
+    assert d["IR1"].iloc[0] == 1 and d["IR2"].iloc[0] == 4
+    assert d["IR_T"].iloc[0] == (1 + 4 + 4 + 4) / 4          # media, no suma
+    assert d["Comp_T"].iloc[0] == 4
+    # El archivo lleva la marca de la codificación actual
+    assert d[cat.COLUMNA_CODIFICACION].eq(cat.CODIFICACION_ACTUAL).all()
+
+
+def test_los_totales_son_las_subescalas_del_catalogo():
+    d, _ = prep.preparar(_crudo())
+    for vieja in ("MT_T", "CR_T", "PRPS_CE_T"):
+        assert vieja not in d.columns
+    for nueva in ("MT_Control_T", "MT_Demandas_T", "CR_Claridad_T", "CR_Conflicto_T",
+                  "ISTAS_Exig_T", "ISTAS_TA_T", "ERS_ACP_T", "BTA_T"):
+        assert nueva in d.columns
+    assert list(d.columns).count("PRPS_Fam_T") == 1
+    # BTA se presenta de 1 a 5 (código + 1); con ítems vacíos queda vacío, no 1
+    assert d["BTA_T"].isna().all()
+
+
+def test_ya_no_se_invierten_prps_ce2_ce9_16_ni_ers_acp1():
+    assert "PRPS_CE2" not in prep.INVERTIDOS[4] and "PRPS_CE9" not in prep.INVERTIDOS[4]
+    assert "PRPS_CE3" in prep.INVERTIDOS[4]
+    assert "ERS_ACP1" not in prep.INVERTIDOS[3] and "ERS_CON1" in prep.INVERTIDOS[3]
+    assert prep.INVERTIDOS[5] == ["IR1"]
+
+
+def test_un_archivo_en_codificacion_1_puntua_igual_que_el_nuevo():
+    """Ida y vuelta: des-hacer la codificación 2 y volver con normalizar_codificacion."""
+    from src.docentes import scoring
+    d, _ = prep.preparar(_crudo())
+    v1 = d.drop(columns=[cat.COLUMNA_CODIFICACION]).copy()
+    for item, maximo in cat.RECODIFICAR_V1.items():
+        v1[item] = maximo - v1[item]
+    assert scoring.codificacion(v1) == 1
+    vuelta = scoring.normalizar_codificacion(v1)
+    for item in cat.RECODIFICAR_V1:
+        assert vuelta[item].equals(d[item]), item
+    assert scoring.puntuar(v1)["IR"].equals(scoring.puntuar(d)["IR"])
 
 
 def test_un_cambio_de_orden_en_las_preguntas_detiene_el_script():
