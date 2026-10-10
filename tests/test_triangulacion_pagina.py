@@ -187,7 +187,7 @@ def test_la_corrida_en_revision_con_su_franja(monkeypatch, tmp_path):
     texto = _texto(at)
     assert "Vista previa para el equipo" in texto
     assert f"Fuente: corrida en revisión ({oculta['corrida_id']})" in texto
-    assert "nunca es pública" in " ".join(str(m.value) for m in at.markdown)
+    assert "El público no ve esta corrida" in " ".join(str(m.value) for m in at.markdown)
     assert [t.label for t in at.tabs] == vi.PESTANAS
     at.toggle(key="vista_previa_triangulacion").set_value(False).run()
     assert not at.exception

@@ -1,8 +1,10 @@
 """
 Triangulación 360 · lectura de la corrida publicada (despliegue del equipo, sin red).
 
-  · Solo con el cliente del usuario de carga (`vista_previa.cliente_autenticado`),
-    nunca con la clave anon: sin ese cliente no hay nada que leer.
+  · Camino del equipo: el cliente del usuario de carga
+    (`vista_previa.cliente_autenticado`); sin él, `cargar()` no lee nada. El
+    camino público (`publico=True`, clave anon) se prueba en
+    `test_triangulacion_publica.py`.
   · Publicar → leer da los MISMOS agregados que ve la vista local: tablas,
     clasificación, conteos legibles, calidad del enlace, metodología y el ZIP.
   · Lo leído sigue sin identificadores, con n ≥ 10, y la capa 1 leída pasa la
@@ -64,20 +66,24 @@ def test_en_comunidad_nunca_lee(monkeypatch, base):
     assert lectura.cargar() is None
 
 
-def test_con_un_cliente_anonimo_no_hay_filas(monkeypatch, base):
-    """Si algo entregara un cliente anon, RLS no le deja ver la triangulación."""
+def test_con_un_cliente_anonimo_solo_la_publicada(monkeypatch, base):
+    """Desde la 2026-10-10e anon lee la corrida publicada de triangulación, pero
+    nunca una oculta."""
+    oculta = pub.publicar(datos.analisis(), publicar_ya=False, cliente=base.cliente())
     monkeypatch.setattr(vp, "cliente_autenticado", lambda: base.cliente(anonimo=True))
-    assert lectura.cargar() is None
-    assert lectura.id_corrida_publicada() is None
+    assert lectura.cargar() is not None
+    assert lectura.id_corrida_publicada() is not None
+    assert lectura.cargar(corrida_id=oculta["corrida_id"]) is None
 
 
 def test_lectura_no_crea_clientes_propios():
+    """El cargador sale de `vista_previa`; el anónimo, del de estudiantes."""
     import inspect
     fuente = inspect.getsource(lectura)
     assert "create_client" not in fuente
-    assert not re.search(r"^\s*(from|import)\s+.*(estudiantes|cuidadores)\.lectura", fuente,
-                         re.MULTILINE)
     assert "cliente_autenticado" in fuente
+    assert "from src.estudiantes import lectura" in fuente
+    assert not re.search(r"cuidadores\.lectura|cuidadores import lectura", fuente)
 
 
 def test_la_corrida_en_revision_se_lee_por_id(monkeypatch, base):

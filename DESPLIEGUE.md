@@ -277,10 +277,32 @@ recargar la sesión). No se abre a mano con `UPDATE … publicada = true`: cuand
 el equipo apruebe, se ponen las banderas en `True` (commit aparte) y se publica
 de nuevo con `--publicar-ya`, como en «Publicar alertas».
 
-## Triangulación en la app del equipo
+## Triangulación en la app del equipo y en la pública
 
-La Triangulación 360 (estudiantes × cuidadores × docentes) es **solo para el
-equipo investigador**. Se calcula en la máquina que procesa los formularios
+> **Decisión del usuario (10 oct 2026).** Por encima del «nunca público» de la
+> spec (§5.6) y de la migración 2026-10-10b, la Triangulación 360 se ve también
+> en el despliegue **público** (`comunidad`) «todo como lo ve el equipo»: todas
+> las pestañas, díadas, asociaciones y la descarga ZIP, leídas con la clave anon
+> de la **última corrida de triangulación publicada**. Las corridas ocultas
+> siguen siendo solo del equipo (vista previa). Se mantiene visible el aviso de
+> textos provisionales.
+>
+> **Una sola vez:** Supabase → SQL Editor → pegar y correr
+> `supabase/migraciones/2026-10-10e-triangulacion-publica.sql` (requiere la
+> 2026-10-10b). Luego «Reboot app» en los dos despliegues. Comprobar con la
+> clave anon: `SELECT count(*) FROM obs360.resultados WHERE nivel =
+> 'triangulacion';` → > 0 si hay una corrida publicada. Sin la migración, la
+> página pública aparece en el menú pero dice «aún no hay una corrida de
+> triangulación publicada».
+>
+> En público la página solo importa `src.ui.triangulacion.render_publico`, su
+> vista y `triangulacion.{lectura, catalogo, exportar, enlace}`; nunca
+> `fuentes`, `pipeline`, `publicar`, `diadas`, `capa1`, `vista_previa` ni la
+> clave HMAC. El texto de abajo describe la versión anterior (solo equipo) y
+> sigue valiendo para la vista previa del equipo.
+
+La Triangulación 360 (estudiantes × cuidadores × docentes) se pensó **solo para
+el equipo investigador** (hasta la decisión de arriba). Se calcula en la máquina que procesa los formularios
 (los tres archivos, la clave `OBS360_CLAVE_HMAC` y las díadas solo existen
 allí) y sube a Supabase **solo sus agregados**: cada cifra con n ≥ 10, sin
 identificadores, sin seudónimos y sin ninguna díada (el Bland–Altman va como
@@ -323,8 +345,10 @@ muestra con su franja amarilla. Sin ninguna corrida legible (migración sin
 aplicar, nada subido, sin credenciales de carga) dice «aún no hay una corrida
 de triangulación publicada». No necesita secretos nuevos: usa
 `OBS360_CARGA_EMAIL` / `OBS360_CARGA_CLAVE` del despliegue privado. Tras fusionar,
-«Reboot app». El despliegue público (`comunidad`) nunca importa la página, la
-lectura ni el publicador de triangulación.
+«Reboot app». El despliegue público (`comunidad`) muestra «Triangulación 360» en
+su menú desde la decisión del 10 oct 2026 (ver arriba): lee solo la corrida
+publicada con la clave anon (`SUPABASE_URL` / `SUPABASE_KEY`, las mismas de
+Estudiantes) y nunca importa el publicador ni el cálculo local.
 
 ## Qué esperar del arranque
 
@@ -426,13 +450,13 @@ público solo se carga la vista de comunidad
 (`cuidadores_comunidad.render_publico`); nunca la carga del formulario, el
 pipeline ni la vista de investigadores.
 
-**Triangulación 360 (fase 5)** solo funciona en la máquina que tiene los tres
+**Triangulación 360 (fase 5)** se calcula solo en la máquina que tiene los tres
 archivos (estudiantes, cuidadores y docentes, de preferencia el codificado por
 `scripts/preparar_docentes.py`) y la clave `OBS360_CLAVE_HMAC`. Las díadas
-niño–cuidador nunca salen de esa máquina y nada de la triangulación sube a
-Supabase. En el despliegue del equipo la página explica que la capa por
-colegio necesitará los agregados publicados de cuidadores (fase 4b); en el
-público no aparece en el menú ni se importa.
+niño–cuidador nunca salen de esa máquina: a Supabase suben solo agregados
+(`python -m src.triangulacion.publicar`). El despliegue del equipo y, desde el
+10 oct 2026, el público (migración 2026-10-10e) leen la corrida publicada; sin
+ella, la página dice que aún no hay una corrida de triangulación publicada.
 
 ## Antes de dar por terminado
 

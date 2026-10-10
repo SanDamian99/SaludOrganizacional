@@ -1,10 +1,12 @@
 """
-Triangulación 360 · publicación privada en Supabase (sin red).
+Triangulación 360 · publicación en Supabase (sin red).
 
-  · SQL: la migración 2026-10-10b y el esquema completo dicen lo mismo; el
-    público nunca lee triangulación.
-  · Base falsa: anon no lee filas de triangulación ni de una corrida publicada;
-    el usuario de carga sí; Estudiantes y Cuidadores siguen igual.
+  · SQL: la migración 2026-10-10b (histórica: excluía la triangulación de lo
+    público). Desde la 2026-10-10e el público lee la última corrida publicada
+    de triangulación (decisión del usuario); eso y el esquema completo se
+    prueban en `test_triangulacion_publica.py`.
+  · Base falsa: anon lee solo la corrida publicada, el usuario de carga todas;
+    Estudiantes y Cuidadores siguen igual.
   · Lote: solo agregados, nivel/modulo «triangulacion», n ≥ 10 en cada fila,
     ningún identificador, teléfono ni columna prohibida, ninguna díada.
   · Orden de publicación: oculta → resultados → abrir → despublicar las otras
@@ -47,8 +49,9 @@ POLITICA_RESULTADOS = ("USING (obs360_interno.es_publica(corrida_id) AND nivel <
 NIVELES = "CHECK (nivel IN ('secundaria', 'primaria', 'cuidadores', 'triangulacion'))"
 
 
-@pytest.mark.parametrize("partes", [MIGRACION, ("estudiantes_schema.sql",)])
-def test_el_sql_excluye_la_triangulacion_de_lo_publico(partes):
+@pytest.mark.parametrize("partes", [MIGRACION])
+def test_la_migracion_10b_excluia_la_triangulacion_de_lo_publico(partes):
+    """Histórica: la 2026-10-10e la reemplaza (ver test_triangulacion_publica)."""
     sql = _sql(*partes)
     codigo = _codigo(sql)
     assert NIVELES in codigo
@@ -78,34 +81,20 @@ def test_la_migracion_solo_toca_lo_suyo_y_es_idempotente():
 
 
 # ══ Base falsa: quién lee qué ═════════════════════════════════════════════
-def test_anon_no_lee_triangulacion_ni_publicada_y_el_cargador_si():
+def test_anon_lee_solo_la_publicada_y_el_cargador_tambien_la_oculta():
     resumen, base = datos.publicado(publicar_ya=True)
     cid = resumen["corrida_id"]
+    oculta = pub.publicar(datos.analisis(), publicar_ya=False,
+                          cliente=base.cliente())["corrida_id"]
     assert base.corrida(cid)["publicada"] is True
     anon = base.cliente(anonimo=True).postgrest.schema("obs360")
-    assert not anon.table("corridas").select("*").eq("id", cid).execute().data
-    assert not anon.table("resultados").select("*").eq("corrida_id", cid).execute().data
-    assert not [f for f in anon.table("resultados").select("*").execute().data
-                if f["nivel"] == pub.NIVEL]
+    assert anon.table("corridas").select("*").eq("id", cid).execute().data
+    assert not anon.table("corridas").select("*").eq("id", oculta).execute().data
+    assert not anon.table("resultados").select("*").eq("corrida_id", oculta).execute().data
     carg = base.cliente(cargador=True).postgrest.schema("obs360")
-    assert carg.table("corridas").select("*").eq("id", cid).execute().data
+    assert carg.table("corridas").select("*").eq("id", oculta).execute().data
     filas = carg.table("resultados").select("*").eq("corrida_id", cid).execute().data
     assert len(filas) == resumen["filas"] > 0
-
-
-def test_anon_no_lee_una_fila_de_triangulacion_ni_dentro_de_otro_modulo():
-    base = BaseFalsa()
-    corrida = base.cliente().postgrest.schema("obs360").table("corridas").insert(
-        dict(modulo="estudiantes", version_analisis="x")).execute().data[0]
-    tabla = base.cliente().postgrest.schema("obs360").table("resultados")
-    tabla.insert([dict(corrida_id=corrida["id"], nivel="triangulacion", tipo="tri_x",
-                       clave="x", n=50, detalle={}),
-                  dict(corrida_id=corrida["id"], nivel="secundaria", tipo="descriptivo",
-                       clave="SDQ_Total", n=50, detalle={})]).execute()
-    base.corrida(corrida["id"])["publicada"] = True
-    anon = base.cliente(anonimo=True).postgrest.schema("obs360")
-    niveles = {f["nivel"] for f in anon.table("resultados").select("*").execute().data}
-    assert niveles == {"secundaria"}
 
 
 def test_estudiantes_y_cuidadores_siguen_publicos_igual():
@@ -115,7 +104,8 @@ def test_estudiantes_y_cuidadores_siguen_publicos_igual():
     assert publicada is not None
     pub.publicar(datos.analisis(), publicar_ya=True, cliente=base.cliente())
     anon = base.cliente(anonimo=True).postgrest.schema("obs360")
-    assert {c["id"] for c in anon.table("corridas").select("*").execute().data} == {publicada}
+    vistas = anon.table("corridas").select("*").execute().data
+    assert {c["id"] for c in vistas if c["modulo"] != pub.MODULO} == {publicada}
     assert lectura.id_corrida_vigente(base.cliente(anonimo=True)) == publicada
     assert base.corrida(publicada)["publicada"] is True     # no la despublicó
 

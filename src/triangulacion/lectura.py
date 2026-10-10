@@ -1,5 +1,5 @@
 """
-Lectura de la Triangulación 360 publicada — solo en el despliegue del equipo.
+Lectura de la Triangulación 360 publicada — despliegue del equipo y público.
 
 Es la otra mitad de `triangulacion.publicar`. El despliegue privado
 (`OBS360_MODO = "investigador"`) no tiene los archivos de los tres actores: lee
@@ -10,14 +10,16 @@ No hay filas de personas ni díadas: no se puede recalcular nada sobre
 individuos. Las figuras se vuelven a dibujar desde las tablas (Bland–Altman
 solo con las medias de grupo).
 
-SOLO con el usuario de carga: el cliente sale de
-`vista_previa.cliente_autenticado()`, nunca de la clave anon. La base tampoco
-deja que anon lea una corrida ni una fila de triangulación (migración
-2026-10-10b), aunque esté publicada. Sin ese cliente (modo comunidad, sin
-credenciales, inicio de sesión fallido) no hay nada que leer: None.
-
-Sin `corrida_id`, la última corrida de triangulación abierta para el equipo
-(`publicada = true`); con él, esa corrida aunque esté oculta (vista previa).
+Dos caminos:
+  · Equipo (por defecto): el cliente del usuario de carga, de
+    `vista_previa.cliente_autenticado()`. Sin `corrida_id`, la última corrida de
+    triangulación publicada; con él, esa corrida aunque esté oculta (vista
+    previa). Sin ese cliente no hay nada que leer: None.
+  · Público (`publico=True`, decisión del usuario del 10 oct 2026): la clave
+    anon, con el mismo cliente que la página de Estudiantes
+    (`estudiantes.lectura._cliente`). Solo la corrida publicada: la consulta
+    exige `publicada = true` y la base (migración 2026-10-10e) solo deja ver a
+    anon la última publicada de cada módulo. Nunca importa `vista_previa`.
 
 Es un módulo nuevo: quien lo usa lo importa dentro de un `try` y consulta sus
 funciones con `getattr`, y él consulta `vista_previa` igual, así que un módulo
@@ -42,8 +44,12 @@ TABLAS = ("capa1_diferencias", "capa1_por_grado", "diadas_acuerdo",
           "diadas_acuerdo_concordantes", "diadas_bland_altman", "diadas_no_visto",
           "diadas_apoyo", "diadas_asociaciones")
 AVISO_PUBLICADO = ("Triangulación leída de la corrida subida por la máquina que procesa: "
-                   "solo agregados, solo para el equipo (el público nunca la ve). Las "
-                   "figuras se dibujan desde esas tablas.")
+                   "solo agregados (n ≥ 10, sin identificadores ni díadas). Desde el 10 "
+                   "oct 2026 la corrida publicada también la ve el público. Las figuras "
+                   "se dibujan desde esas tablas.")
+AVISO_PUBLICO = ("Triangulación leída de la última corrida publicada por el equipo: solo "
+                 "agregados (n ≥ 10, sin identificadores ni díadas). Las figuras se "
+                 "dibujan desde esas tablas.")
 
 
 @dataclass
@@ -87,7 +93,21 @@ class TriangulacionPublicada:
         return len(self.capa1.colegios)
 
 
-# ── Cliente: solo el usuario de carga ───────────────────────────────────────
+# ── Clientes: usuario de carga (equipo) o clave anon (público) ──────────────
+def cliente_publico():
+    """El cliente anon de la página de Estudiantes, o None (sin credenciales)."""
+    try:
+        from src.estudiantes import lectura as lec_est
+        return lec_est._cliente()
+    except Exception as exc:                               # noqa: BLE001
+        LOG.warning("Triangulación [cliente público]: %s.", type(exc).__name__)
+        return None
+
+
+def _cliente(publico: bool):
+    return cliente_publico() if publico else cliente()
+
+
 def cliente():
     """`vista_previa.cliente_autenticado()`, o None. Nunca la clave anon."""
     try:
@@ -109,9 +129,9 @@ def _corridas(cli):
     return cli.postgrest.schema(ESQUEMA).table("corridas")
 
 
-def id_corrida_publicada() -> int | None:
-    """Id de la última corrida de triangulación abierta para el equipo, o None."""
-    cli = cliente()
+def id_corrida_publicada(publico: bool = False) -> int | None:
+    """Id de la última corrida de triangulación publicada, o None."""
+    cli = _cliente(publico)
     if cli is None:
         return None
     filas = (_corridas(cli).select("id").eq("modulo", MODULO).eq("publicada", True)
@@ -119,10 +139,13 @@ def id_corrida_publicada() -> int | None:
     return int(filas[0]["id"]) if filas else None
 
 
-def _traer(cli, corrida_id: int | None) -> tuple[dict | None, list[dict]]:
+def _traer(cli, corrida_id: int | None, publico: bool = False
+           ) -> tuple[dict | None, list[dict]]:
     consulta = _corridas(cli).select("*").eq("modulo", MODULO)
-    consulta = (consulta.eq("publicada", True) if corrida_id is None
-                else consulta.eq("id", corrida_id))
+    if corrida_id is None or publico:
+        consulta = consulta.eq("publicada", True)       # el público: solo la publicada
+    if corrida_id is not None:
+        consulta = consulta.eq("id", corrida_id)
     corridas = consulta.order("creada_en", desc=True).limit(1).execute().data
     if not corridas:
         return None, []
@@ -139,12 +162,17 @@ def _traer(cli, corrida_id: int | None) -> tuple[dict | None, list[dict]]:
     return corrida, filas
 
 
-def cargar(corrida_id: int | None = None) -> TriangulacionPublicada | None:
-    """La corrida de triangulación (la publicada, o `corrida_id`), o None."""
-    cli = cliente()
+def cargar(corrida_id: int | None = None, publico: bool = False
+           ) -> TriangulacionPublicada | None:
+    """La corrida de triangulación (la publicada, o `corrida_id`), o None.
+
+    Con `publico=True` lee con la clave anon y solo una corrida publicada:
+    `corrida_id`, si se da, solo sirve para fijar cuál (la caché de la página).
+    """
+    cli = _cliente(publico)
     if cli is None:
         return None
-    corrida, filas = _traer(cli, corrida_id)
+    corrida, filas = _traer(cli, corrida_id, publico)
     if corrida is None:
         return None
     return reconstruir(filas, corrida)
