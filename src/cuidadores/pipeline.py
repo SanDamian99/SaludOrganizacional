@@ -64,10 +64,17 @@ class AnalisisCuidadores:
         return {cat.MARCO_CUIDADOR: self.cuidador, cat.MARCO_NINO: self.nino}
 
 
-def localizar_formulario(base: str | None = None) -> str | None:
-    """La exportación más reciente de «Cuidando al Cuidador» en la carpeta de datos."""
+def localizar_formulario(base: str | None = None, desde_storage: bool = False) -> str | None:
+    """La exportación más reciente de «Cuidando al Cuidador» en la carpeta de datos.
+
+    Con `desde_storage=True` (solo el publicador) se baja la versión activa
+    desidentificada del almacén de Supabase.
+    """
     from src.core.rutas import carpeta_datos
     from src.core.texto import norm_txt
+    if desde_storage:
+        from src.data.almacen import rutas_desde_storage
+        return rutas_desde_storage(["cuidadores"]).get("cuidadores")
     base = base or carpeta_datos("cuidadores")
     if not os.path.isdir(base):
         return None
