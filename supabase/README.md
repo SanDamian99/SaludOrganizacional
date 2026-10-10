@@ -42,7 +42,7 @@ hacer ni con acceso total a la base.
 | RLS activo en las tres tablas nuevas | sí |
 | Políticas de lectura para el rol anónimo | solo la **última** corrida con `publicada = true` de cada módulo (función `obs360.es_ultima_publicada`, desde la migración 2026-10-07) |
 | Lectura de corridas ocultas | solo el usuario de carga (`obs360.es_cargador()`, migración 2026-10-10), para la vista previa del equipo |
-| Triangulación 360 (`modulo = nivel = 'triangulacion'`) | **nunca** para anon ni para otros autenticados (`obs360_interno.es_publica`, migración 2026-10-10b); solo el usuario de carga, aunque la corrida esté publicada |
+| Triangulación 360 (`modulo = nivel = 'triangulacion'`) | por decisión del usuario (10 oct 2026, migración 2026-10-10e) anon lee la **última corrida publicada**, como en los otros módulos (`obs360_interno.es_publica` = `es_ultima_publicada`); las ocultas solo el usuario de carga. Antes (2026-10-10b) era solo del equipo |
 | Políticas de escritura para el rol anónimo | **ninguna** |
 | Concesiones `INSERT/UPDATE/DELETE` a `anon` en `public` y `obs360` | **ninguna** |
 | Tablas sin RLS en `public` y `obs360` | ninguna |
@@ -279,7 +279,7 @@ incluida en `estudiantes_schema.sql`).
 - **Sin ella:** la aplicación funciona igual que antes; el interruptor de vista
   previa simplemente no aparece.
 
-## Migración: triangulación solo para el equipo (10 oct 2026)
+## Migración: triangulación solo para el equipo (10 oct 2026; la 10e la abre al público)
 
 Archivo: `supabase/migraciones/2026-10-10b-triangulacion-privada.sql` (ya
 incluida en `estudiantes_schema.sql`). Requiere 2026-10-07b y 2026-10-10.
@@ -304,6 +304,31 @@ incluida en `estudiantes_schema.sql`). Requiere 2026-10-07b y 2026-10-10.
 - **Sin ella:** `python -m src.triangulacion.publicar` falla en el CHECK de
   `nivel` y deshace la corrida; nada queda a medias. **No publicar triangulación
   sin esta migración.**
+
+## Migración: triangulación también pública (10 oct 2026)
+
+Archivo: `supabase/migraciones/2026-10-10e-triangulacion-publica.sql` (ya
+incluida en `estudiantes_schema.sql`). Requiere 2026-10-07b y 2026-10-10b.
+
+- **Por qué:** decisión explícita del usuario (10 oct 2026), por encima del
+  «nunca público» de la spec: la Triangulación 360 se ve en el despliegue
+  público «todo como lo ve el equipo» (todas las pestañas, díadas, asociaciones
+  y el ZIP), leída de la última corrida publicada con la clave anon.
+- **Qué hace:** (1) `obs360_interno.es_publica(id)` pasa a ser
+  `coalesce(es_ultima_publicada(id), false)`, sin excluir el módulo
+  `triangulacion` (sigue SECURITY DEFINER, `search_path` fijo, dueño `postgres`,
+  en `obs360_interno`); (2) recrea la política pública de `resultados` sin
+  `nivel <> 'triangulacion'` (la de `corridas` se recrea igual).
+- **Qué no cambia:** las corridas ocultas siguen ocultas para anon (de
+  triangulación y de cualquier módulo); Estudiantes y Cuidadores se leen igual;
+  el cargador sigue leyendo todo; ninguna política de escritura; los CHECK de
+  n ≥ 10, identificadores y conteos siguen valiendo.
+- **Verificar:** como anon, con una corrida de triangulación publicada,
+  `SELECT count(*) FROM obs360.resultados WHERE nivel = 'triangulacion';` da
+  > 0 y solo de esa corrida; `SELECT count(*) FROM obs360.corridas WHERE
+  publicada = false;` da 0.
+- **Sin ella:** la página pública «Triangulación 360» aparece pero dice «aún no
+  hay una corrida de triangulación publicada» (anon no lee nada).
 
 ## Lo que falta
 
