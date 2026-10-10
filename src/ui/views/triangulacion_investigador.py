@@ -101,7 +101,7 @@ def _bloque_hallazgos(visibles: list, bloque: str, clasificacion: pd.DataFrame,
                       tipo: str, titulo_pares: str) -> None:
     lista = hz.por_bloque(visibles, bloque)
     if not lista:
-        st.caption(hc.AVISO_SIN_HALLAZGOS)
+        st.caption(hc.AVISO_SIN_TENSION if bloque == hc.TENSION else hc.AVISO_SIN_HALLAZGOS)
     for v in lista:
         _hallazgo(v)
     pares = hallazgos(clasificacion, tipo)

@@ -52,8 +52,10 @@ def _t(**cambios):
              ic_inf=0.18, ic_sup=0.42, motivo=""),
         dict(bloque="desgaste_docente", clave="conflicto_rol", grupo=None, n=470, valor=0.25,
              ic_inf=0.12, ic_sup=0.38, motivo=""),
-        dict(bloque="desgaste_docente", clave="lider", grupo=None, n=470, valor=-0.05,
-             ic_inf=-0.15, ic_sup=0.05, motivo="")])
+        dict(bloque="desgaste_docente", clave="lider", grupo=None, n=470, valor=-0.12,
+             ic_inf=-0.22, ic_sup=-0.02, motivo=""),
+        dict(bloque="desgaste_docente", clave="r2", grupo=None, n=470, valor=0.50,
+             ic_inf=np.nan, ic_sup=np.nan, motivo="")])
     por_grado = pd.DataFrame([
         dict(agrupacion="Grado", grupo=g, clave="est_sin_adulto", actor="Estudiantes",
              constructo="Sin adulto", n_grupo=100, n_resto=800, media_grupo=p, media_resto=40.0,
@@ -88,6 +90,32 @@ def _t(**cambios):
     return SimpleNamespace(capa1=capa1, diadas=diadas, n_colegios=2)
 
 
+def test_las_hipotesis_solo_se_apoyan_en_los_hallazgos_fuertes():
+    assert set(hc.HIPOTESIS_POR_ID) == {"H1", "H4", "H8", "H10", "H11", "H12"}
+    todo = " ".join(h.texto + h.patron + h.alternativas + h.prueba for h in hc.HIPOTESIS)
+    for ajeno in ("no visto", "no lo ven", "niñas", "brecha emocional"):
+        assert ajeno not in todo.lower()
+    assert "mitad del peso" in hc.HIPOTESIS_POR_ID["H8"].texto
+
+
+def test_el_hallazgo_8_exige_el_doble_del_lider_con_los_dos_ic():
+    t = _t()
+    m = t.capa1.municipal
+    lid = m["clave"] == "lider"
+    t.capa1.municipal = m.assign(ic_sup=np.where(lid, 0.02, m["ic_sup"]))   # líder cruza 0
+    assert 8 not in {v.hallazgo.numero for v in hz.evaluar(t)}
+    t.capa1.municipal = m[m["clave"] != "r2"]                                # sin R²: igual sale
+    assert 8 in {v.hallazgo.numero for v in hz.evaluar(t)}
+
+
+def test_el_hallazgo_4_acepta_dos_grupos_de_apoyo():
+    t = _t()
+    m = t.capa1.municipal
+    t.capa1.municipal = m[m["grupo"] != "medio"]
+    v = next(v for v in hz.evaluar(t) if v.hallazgo.numero == 4)
+    assert "bajo" in v.cifra and "alto" in v.cifra and "medio" not in v.cifra
+
+
 def test_el_catalogo_son_los_ocho_hallazgos_fuertes_sin_aprobar():
     assert [h.numero for h in hc.HALLAZGOS] == list(range(1, 9))
     assert hc.TEXTOS_APROBADOS is False
@@ -107,8 +135,7 @@ def test_una_corrida_que_sustenta_todo_muestra_los_ocho():
     siete = next(v for v in vis if v.hallazgo.numero == 7)
     assert siete.grupo == "LauV"                           # JJC no cumple
     assert "0.14" in siete.cifra and "-0.68" in siete.cifra and "0.62" in siete.cifra
-    assert [h.id for h in hz.hipotesis_de(vis)] == ["H1", "H2", "H3", "H4", "H8", "H10", "H11",
-                                                     "H12"]
+    assert [h.id for h in hz.hipotesis_de(vis)] == ["H1", "H4", "H8", "H10", "H11", "H12"]
 
 
 def test_las_cifras_salen_de_las_tablas_y_no_de_texto_libre():
@@ -119,7 +146,7 @@ def test_las_cifras_salen_de_las_tablas_y_no_de_texto_libre():
     assert "43.0 %" in vis[4] and "8.0 %" in vis[4]
     assert "14.4" in vis[5] and "14.3" in vis[5]
     assert "Cuarto" in vis[6] and "Noveno" in vis[6] and "Décimo" not in vis[6]
-    assert "0.30" in vis[8] and "-0.05" in vis[8]
+    assert "0.30" in vis[8] and "-0.12" in vis[8] and "R² 0.50" in vis[8]
 
 
 @pytest.mark.parametrize("numero, cambio", [
@@ -134,7 +161,7 @@ def test_las_cifras_salen_de_las_tablas_y_no_de_texto_libre():
     (6, lambda b: b["por_grado"].assign(ic_inf=[-0.6, -0.25, -0.05, -0.3])),
     (7, lambda b: b["diferencias"].assign(ic_inf=[-0.93, -0.1, 0.23])),
     (8, lambda b: b["municipal"].assign(valor=np.where(
-        b["municipal"]["clave"] == "lider", 0.5, b["municipal"]["valor"]))),
+        b["municipal"]["clave"] == "lider", -0.16, b["municipal"]["valor"]))),   # < 2×
 ])
 def test_cada_hallazgo_desaparece_cuando_su_condicion_no_se_cumple(numero, cambio):
     base = {k: getattr(_t().capa1 if hasattr(_t().capa1, k) else _t().diadas, k)

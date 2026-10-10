@@ -245,12 +245,16 @@ AVISO_TEXTOS = ("Textos provisionales: el equipo los revisa antes de usarlos fue
                 "vista.")
 AVISO_MUNICIPAL = ("Cifras municipales de la capa 1, sobre el mismo universo de personas que "
                    "las comparaciones por colegio: el cruce de la señal de malestar con el "
-                   "ítem 18 (secundaria; solo si las cuatro celdas tienen 10 o más), el ánimo "
-                   "del cuidador por tercil de apoyo familiar (cada tercil con 10 o más "
-                   "cuidadores y 3 ≤ casos ≤ n − 3), la PSS-10 en cuidadores y docentes (media "
-                   "con IC y d con IC de Welch) y el desgaste docente sobre demandas, "
-                   "conflicto de rol y apoyo del líder (MCO estandarizado, errores agrupados "
-                   "por colegio).")
+                   "ítem 18 (secundaria; solo si las cuatro celdas tienen 10 o más; el n del % "
+                   "entre quienes marcan el ítem 18 es ese denominador), el ánimo del cuidador "
+                   "por tercil de apoyo familiar (cortes por valor del puntaje, sin partir "
+                   "empates: con muchos empates quedan dos grupos, bajo y alto; cada grupo con "
+                   "10 o más cuidadores y 3 ≤ casos ≤ n − 3), la PSS-10 en cuidadores y "
+                   "docentes (media con IC y d con IC de Welch) y el desgaste docente sobre los "
+                   "predictores que trae el archivo (demandas, exigencias psicológicas, "
+                   "conflicto de rol, conflicto familia→trabajo, claridad de rol y apoyo del "
+                   "líder; MCO estandarizado, errores agrupados por colegio, sin docentes de "
+                   "colegio no reconocido; fila r2 = R²).")
 AVISO_INFORMANTE = ("El informante: correlación de Spearman (IC por bootstrap de familias) del "
                     "ánimo y el estrés del cuidador con el SDQ total que él mismo da del niño "
                     "y con el que da el niño. Si la primera es mayor que la segunda, lo que el "

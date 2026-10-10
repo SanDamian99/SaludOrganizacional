@@ -110,12 +110,30 @@ def test_el_ajuste_por_grado_solo_aplica_a_estudiantes_por_colegio(capa):
     assert (grado["ajuste"] == "").all()
 
 
-def test_sin_columna_de_grado_no_se_ajusta():
+def test_con_ajuste_apagado_d_es_el_bruto_y_ajuste_vacio():
     d = _estudiantes_por_grado((("A", "Noveno", 15, 2.5), ("B", "Sexto", 15, 3.5)))
-    d = d.drop(columns=["Grado"]).assign(Grado=None)
     c = cat.POR_CLAVE["est_pssm"]
-    f = c1.diferencias_constructo(d, c1.atomos(d, cat.ESTUDIANTE), c, ["A"], "Colegio")[0]
-    assert f["ajuste"] == "" or np.isnan(f["d"])
+    f = c1.diferencias_constructo(d, c1.atomos(d, cat.ESTUDIANTE), c, ["A"], "Colegio",
+                                  ajuste_grado=False)[0]
+    x, y = d.loc[d.Colegio == "A", "PSSM_Total"], d.loc[d.Colegio == "B", "PSSM_Total"]
+    assert f["ajuste"] == "" and f["motivo"] == ""
+    assert f["d"] == pytest.approx(round((x.mean() - y.mean()) / d["PSSM_Total"].std(ddof=1), 3))
+
+
+def test_grados_vacios_en_el_universo_no_se_ajusta_en_silencio():
+    d = _estudiantes_por_grado((("A", "Noveno", 15, 2.5), ("B", "Sexto", 15, 3.5),
+                                ("C", "Noveno", 15, 2.5), ("C", "Sexto", 15, 3.5)))
+    d.loc[d.index[:3], "Grado"] = None            # 3 sin grado (siguen en el colegio A)
+    d["Grado"] = d["Grado"].fillna("Noveno")      # átomos como antes…
+    d2 = d.copy()
+    c = cat.POR_CLAVE["est_pssm"]
+    lista = c1.atomos(d2, cat.ESTUDIANTE)
+    d2.loc[d2.index[:3], "Grado"] = None          # …pero el grado falta al ajustar
+    f = c1.diferencias_constructo(d2, lista, c, ["A"], "Colegio")[0]
+    bruto = c1.diferencias_constructo(d2, lista, c, ["A"], "Colegio", ajuste_grado=False)[0]
+    assert f["ajuste"] == "" and f["d"] == bruto["d"]
+    assert f["motivo"] == c1.MOTIVO_SIN_GRADO.format(n="<10")
+    assert "3" not in f["motivo"]                 # el conteo pequeño no se muestra
 
 
 def _docentes(conteos: dict, valor=lambda i: float(i % 5)) -> pd.DataFrame:

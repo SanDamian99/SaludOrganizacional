@@ -17,15 +17,16 @@ Reglas (una por hallazgo; «IC» = intervalo del 95 %):
      excluye 0 y no se solapa con el IC de ρ con el reporte del niño (menor).
   3. Señales: el IC del % con señal de malestar entre quienes marcan el ítem
      18 con frecuencia queda por debajo del 50 %.
-  4. Apoyo y ánimo: % EPDS ≥ 13 decreciente del tercil bajo al alto y los IC
-     de bajo y alto no se solapan.
+  4. Apoyo y ánimo: % EPDS ≥ 13 decreciente a lo largo de los grupos de apoyo
+     (3 terciles o, con empates, 2) y los IC del más bajo y el más alto no se
+     solapan.
   5. PSS: el IC de d (cuidadores − docentes) cae dentro de ± `MARGEN_PSS`.
   6. Sin adulto por grado: el grado más bajo con cifra mejor que el resto y
      el grado con el % más alto, posterior, peor que el resto (IC excluyen 0).
   7. Por colegio: apoyo familiar niño–cuidador en coincidencia positiva y, en
      los docentes, apoyo del líder peor y demandas peores (IC excluyen 0).
-  8. Desgaste docente: β de demandas y de conflicto de rol excluyen 0 por
-     arriba y |β del líder| es menor que ambos.
+  8. Desgaste docente: β de demandas excluye 0 por arriba, β del apoyo del
+     líder excluye 0 por abajo y β de demandas ≥ 2 · |β del líder|.
 """
 from __future__ import annotations
 
@@ -131,22 +132,24 @@ def _h3(t):
         return None
     return (f"Solo el {_f(entre['valor'], 1)} % {_ic(entre['ic_inf'], entre['ic_sup'], 1)} de "
             f"quienes marcan el ítem 18 «con frecuencia» o más tiene además la señal de "
-            f"malestar (ítem 18 frecuente: {_f(i18['valor'], 1)} %; señal de malestar: "
-            f"{_f(mal['valor'], 1)} %; {_n(entre['n'])} estudiantes de secundaria).")
+            f"malestar ({_n(entre['n'])} estudiantes con el ítem 18 frecuente, de "
+            f"{_n(i18['n'])} de secundaria; ítem 18 frecuente: {_f(i18['valor'], 1)} %; señal "
+            f"de malestar: {_f(mal['valor'], 1)} %).")
 
 
 def _h4(t):
     m = _tabla(t, "capa1", "municipal")
-    filas = [_fila(m, bloque=c1.BLOQUE_APOYO_ANIMO, grupo=g) for g in c1.TERCILES]
-    if not all(_con_cifra(f, "valor", "ic_inf", "ic_sup") for f in filas):
+    filas = [f for f in (_fila(m, bloque=c1.BLOQUE_APOYO_ANIMO, grupo=g) for g in c1.TERCILES)
+             if _con_cifra(f, "valor", "ic_inf", "ic_sup")]
+    if len(filas) < 2:
         return None
-    bajo, medio, alto = filas
-    if not (bajo["valor"] > medio["valor"] > alto["valor"] and bajo["ic_inf"] > alto["ic_sup"]):
+    valores = [f["valor"] for f in filas]
+    if not (all(a > b for a, b in zip(valores, valores[1:]))
+            and filas[0]["ic_inf"] > filas[-1]["ic_sup"]):
         return None
-    return (f"EPDS ≥ 13: {_f(bajo['valor'], 1)} % {_ic(bajo['ic_inf'], bajo['ic_sup'], 1)} en el "
-            f"tercil bajo de apoyo familiar, {_f(medio['valor'], 1)} % en el medio y "
-            f"{_f(alto['valor'], 1)} % {_ic(alto['ic_inf'], alto['ic_sup'], 1)} en el alto "
-            f"({_n(bajo['n'])}, {_n(medio['n'])} y {_n(alto['n'])} cuidadores).")
+    partes = [f"{_f(f['valor'], 1)} % {_ic(f['ic_inf'], f['ic_sup'], 1)} en el grupo "
+              f"{f['grupo']} de apoyo familiar ({_n(f['n'])} cuidadores)" for f in filas]
+    return "EPDS ≥ 13: " + ", ".join(partes) + "."
 
 
 def _h5(t):
@@ -210,19 +213,27 @@ def _h7(t) -> list[tuple[str, str]]:
     return salida
 
 
+ETIQUETAS_DESGASTE = {"demandas": "demandas", "exigencias": "exigencias psicológicas",
+                      "conflicto_rol": "conflicto de rol",
+                      "conflicto_ft": "conflicto familia→trabajo", "claridad": "claridad de rol",
+                      "lider": "apoyo del líder"}
+
+
 def _h8(t):
     m = _tabla(t, "capa1", "municipal")
     filas = {k: _fila(m, bloque=c1.BLOQUE_DESGASTE, clave=k) for k, _ in c1.PREDICTORES_DESGASTE}
-    if not all(_con_cifra(f, "valor", "ic_inf", "ic_sup") for f in filas.values()):
+    filas = {k: f for k, f in filas.items() if _con_cifra(f, "valor", "ic_inf", "ic_sup")}
+    if any(k not in filas for k in c1.PREDICTORES_DESGASTE_MINIMOS):
         return None
-    dem, conf, lid = filas["demandas"], filas["conflicto_rol"], filas["lider"]
-    if not (dem["ic_inf"] > 0 and conf["ic_inf"] > 0
-            and abs(lid["valor"]) < min(dem["valor"], conf["valor"])):
+    dem, lid = filas["demandas"], filas["lider"]
+    if not (dem["ic_inf"] > 0 and lid["ic_sup"] < 0 and dem["valor"] >= 2 * abs(lid["valor"])):
         return None
-    return (f"β estandarizado del desgaste: demandas {_f(dem['valor'])} "
-            f"{_ic(dem['ic_inf'], dem['ic_sup'])}, conflicto de rol {_f(conf['valor'])} "
-            f"{_ic(conf['ic_inf'], conf['ic_sup'])}, apoyo del líder {_f(lid['valor'])} "
-            f"{_ic(lid['ic_inf'], lid['ic_sup'])} ({_n(dem['n'])} docentes).")
+    partes = [f"{ETIQUETAS_DESGASTE.get(k, k)} {_f(f['valor'])} {_ic(f['ic_inf'], f['ic_sup'])}"
+              for k, f in filas.items()]
+    r2 = _fila(m, bloque=c1.BLOQUE_DESGASTE, clave=c1.CLAVE_R2)
+    cola = f"; R² {_f(r2['valor'])}" if _con_cifra(r2, "valor") else ""
+    return (f"β estandarizado del desgaste: {', '.join(partes)}{cola} ({_n(dem['n'])} docentes "
+            f"con colegio reconocido).")
 
 
 REGLAS = {1: _h1, 2: _h2, 3: _h3, 4: _h4, 5: _h5, 6: _h6, 8: _h8}

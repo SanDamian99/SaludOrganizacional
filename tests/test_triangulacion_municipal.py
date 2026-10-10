@@ -31,7 +31,9 @@ def test_senales_con_cifras_conocidas():
     assert por["item18_frecuente"]["valor"] == pytest.approx(50.0)
     assert por["malestar"]["valor"] == pytest.approx(40.0)
     assert por["malestar_entre_item18"]["valor"] == pytest.approx(40.0)
-    assert all(f["n"] == 60 and f["motivo"] == "" for f in t)
+    assert por["item18_frecuente"]["n"] == 60 and por["malestar"]["n"] == 60
+    assert por["malestar_entre_item18"]["n"] == 30          # el denominador: ítem 18 frecuente
+    assert all(f["motivo"] == "" for f in t)
     assert por["malestar_entre_item18"]["ic_inf"] < 40 < por["malestar_entre_item18"]["ic_sup"]
 
 
@@ -51,7 +53,7 @@ def test_senales_solo_secundaria():
     pri = d.iloc[:20].assign(nivel="primaria", Grado="Quinto", RCADS18=np.nan)
     d = pd.concat([d, pri], ignore_index=True)
     t = c1.senales(d, c1.atomos(d, cat.ESTUDIANTE))
-    assert {f["n"] for f in t} == {60}
+    assert [f["n"] for f in t] == [60, 60, 30]
 
 
 def test_senales_sin_columnas_da_motivo():
@@ -84,6 +86,30 @@ def test_apoyo_animo_por_terciles():
     assert [f["valor"] for f in t] == [pytest.approx(60.0), pytest.approx(30.0),
                                         pytest.approx(10.0)]
     assert t[0]["ic_inf"] > t[2]["ic_sup"]
+
+
+def test_apoyo_animo_corta_por_valor_no_por_rango():
+    # 7 puntajes posibles (13 o 12 cuidadores cada uno): el grupo es función del
+    # puntaje, así que los tamaños son sumas de niveles enteros, no 30/30/30.
+    d = _cuidadores({"A": 45, "B": 45}, apoyo=lambda i: 1 + (i % 7) * 0.5,
+                    epds=lambda i: 1 if i % 4 == 0 else 0)
+    t = c1.apoyo_animo(d, c1.atomos(d, cat.CUIDADOR))
+    esperado = pd.qcut(d["MSPSS_Fam"], 3, labels=False, duplicates="drop").value_counts().sort_index()
+    assert [f["n"] for f in t] == list(esperado)
+    assert [f["n"] for f in t] != [30, 30, 30]
+    assert [f["grupo"] for f in t] == list(c1.TERCILES)
+
+
+def test_apoyo_animo_con_pocos_puntajes_distintos_da_menos_grupos_o_nada():
+    # tres puntajes: 45 / 30 / 15 → por valor caben 2 grupos (bajo / alto)
+    d = _cuidadores({"A": 45, "B": 45}, apoyo=lambda i: 2.0 if i < 45 else 4.0 if i < 75 else 5.0,
+                    epds=lambda i: 1 if i % 3 == 0 else 0)
+    t = c1.apoyo_animo(d, c1.atomos(d, cat.CUIDADOR))
+    assert [f["grupo"] for f in t] == ["bajo", "alto"] and [f["n"] for f in t] == [75, 15]
+    # un solo puntaje: ningún grupo
+    d = _cuidadores({"A": 45, "B": 45}, apoyo=lambda i: 3.0, epds=lambda i: i % 3 == 0)
+    t = c1.apoyo_animo(d, c1.atomos(d, cat.CUIDADOR))
+    assert all(np.isnan(f["valor"]) and f["motivo"] for f in t)
 
 
 def test_apoyo_animo_se_suprime_si_un_tercil_tiene_menos_de_3_casos():
@@ -129,30 +155,47 @@ def test_pss_actores_con_pocos_da_motivo():
 # ── desgaste docente (hallazgo 8) ───────────────────────────────────────────
 def _docentes(n: int, seed: int = 3) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
-    dem = rng.normal(size=n)
-    conf = rng.normal(size=n)
-    lider = rng.normal(size=n)
-    desg = 4 + 0.6 * dem + 0.4 * conf + 0.05 * lider + rng.normal(scale=0.5, size=n)
+    dem, exi, conf, cft, cla, lider = (rng.normal(size=n) for _ in range(6))
+    desg = (4 + 0.6 * dem + 0.3 * exi + 0.3 * conf + 0.2 * cft - 0.2 * cla - 0.2 * lider
+            + rng.normal(scale=0.5, size=n))
     colegios = [chr(65 + i % 8) for i in range(n)]            # 8 colegios (G − 1 gl)
-    return pd.DataFrame(dict(Colegio=colegios,
-                             DOC_DESGASTE=desg, DOC_DEMANDAS=dem + 2, DOC_CONFLICTO_ROL=conf + 2,
-                             DOC_LIDER=lider + 3, DOC_PSS=14.0))
+    return pd.DataFrame(dict(Colegio=colegios, DOC_DESGASTE=desg, DOC_DEMANDAS=dem + 2,
+                             DOC_EXIGENCIAS=exi + 2, DOC_CONFLICTO_ROL=conf + 2,
+                             DOC_CONFLICTO_FT=cft + 3, DOC_CLARIDAD=cla + 3, DOC_LIDER=lider + 3,
+                             DOC_PSS=14.0))
 
 
-def test_desgaste_docente_una_fila_por_predictor():
-    d = _docentes(120)
+def test_desgaste_docente_una_fila_por_predictor_y_r2():
+    d = _docentes(160)
     t = c1.desgaste_docente(d, c1.atomos(d, cat.DOCENTE))
     por = {f["clave"]: f for f in t}
-    assert set(por) == {k for k, _ in c1.PREDICTORES_DESGASTE}
-    assert por["demandas"]["ic_inf"] > 0 and por["conflicto_rol"]["ic_inf"] > 0
-    assert por["lider"]["ic_inf"] < 0 < por["lider"]["ic_sup"]
-    assert all(f["n"] == 120 and f["motivo"] == "" for f in t)
+    assert set(por) == {k for k, _ in c1.PREDICTORES_DESGASTE} | {c1.CLAVE_R2}
+    assert por["demandas"]["ic_inf"] > 0 and por["lider"]["ic_sup"] < 0
+    assert por["demandas"]["valor"] > 2 * abs(por["lider"]["valor"])
+    assert 0 < por[c1.CLAVE_R2]["valor"] < 1 and np.isnan(por[c1.CLAVE_R2]["ic_inf"])
+    assert all(f["n"] == 160 and f["motivo"] == "" for f in t)
 
 
-def test_desgaste_docente_sin_las_dimensiones_da_motivo():
-    d = _docentes(120).drop(columns=["DOC_DEMANDAS"])
+def test_desgaste_docente_usa_los_predictores_que_haya():
+    d = _docentes(160).drop(columns=["DOC_EXIGENCIAS", "DOC_CONFLICTO_FT"])
     t = c1.desgaste_docente(d, c1.atomos(d, cat.DOCENTE))
-    assert t and all(np.isnan(f["valor"]) and f["motivo"] for f in t)
+    assert {f["clave"] for f in t} == {"demandas", "conflicto_rol", "claridad", "lider",
+                                       c1.CLAVE_R2}
+
+
+def test_desgaste_docente_sin_demandas_o_lider_da_motivo():
+    for col in ("DOC_DEMANDAS", "DOC_LIDER"):
+        d = _docentes(160).drop(columns=[col])
+        t = c1.desgaste_docente(d, c1.atomos(d, cat.DOCENTE))
+        assert t and all(np.isnan(f["valor"]) and f["motivo"] for f in t)
+
+
+def test_desgaste_docente_excluye_colegio_no_reconocido_y_sin_dato():
+    d = _docentes(160)
+    d.loc[d.index[:10], "Colegio"] = "OTRO"
+    d.loc[d.index[10:20], "Colegio"] = np.nan
+    t = c1.desgaste_docente(d, c1.atomos(d, cat.DOCENTE))
+    assert all(f["n"] == 140 for f in t)
 
 
 def test_puntuar_docentes_suma_las_dimensiones_opcionales():
@@ -170,6 +213,10 @@ def test_puntuar_docentes_suma_las_dimensiones_opcionales():
     p = fu.puntuar_docentes(bruto)
     assert p["DOC_DEMANDAS"].iloc[0] == pytest.approx(np.mean([4 % 3, 5 % 3, 6 % 3, 7 % 3]))
     assert p["DOC_CONFLICTO_ROL"].iloc[0] == pytest.approx(np.mean([1 + 5 % 2, 1 + 6 % 2, 1 + 7 % 2]))
+    assert p["DOC_CLARIDAD"].iloc[0] == pytest.approx(np.mean([1 + j % 2 for j in range(1, 5)]))
+    assert "DOC_EXIGENCIAS" not in p.columns and "DOC_CONFLICTO_FT" not in p.columns
+    assert [c for c in fu.ITEMS_DOCENTES_OPCIONALES["DOC_EXIGENCIAS"]] == \
+        [f"PRPS_CE{i}" for i in range(1, 17) if i not in (2, 7, 8, 11)]
     sin = fu.puntuar_docentes(bruto.drop(columns=[f"MT{j}" for j in range(1, 8)]))
     assert "DOC_DEMANDAS" not in sin.columns and "DOC_CONFLICTO_ROL" in sin.columns
     assert fu.es_docentes_codificado(bruto.drop(columns=[f"MT{j}" for j in range(1, 8)]))

@@ -63,15 +63,22 @@ MOTIVO_POCOS = "menos de 10 con dato o cifras pequeñas"
 MOTIVO_RESTO = "el resto no llega a 10"
 MOTIVO_CELDAS = "alguna celda del cruce con menos de 10"
 MOTIVO_TERCIL = "algún tercil con menos de 10 cuidadores o con menos de 3 casos o no casos"
-MOTIVO_MODELO = "menos de 30 docentes con las cuatro dimensiones o menos de 2 colegios"
-MOTIVO_SIN_DIMENSION = "el archivo de docentes no trae demandas o conflicto de rol"
+MOTIVO_MODELO = "menos de 30 docentes con todas las dimensiones o menos de 2 colegios"
+MOTIVO_SIN_DIMENSION = "el archivo de docentes no trae demandas o apoyo del líder"
+MOTIVO_SIN_GRADO = "sin ajuste por grado: faltan grados en {n} casos del universo"
 AJUSTE_GRADO = "grado"
 COLUMNAS_MUNICIPAL = ["bloque", "clave", "grupo", "n", "valor", "ic_inf", "ic_sup", "motivo"]
 BLOQUE_SENALES, BLOQUE_APOYO_ANIMO = "senales", "apoyo_animo"
 BLOQUE_PSS, BLOQUE_DESGASTE = "pss", "desgaste_docente"
 TERCILES = ("bajo", "medio", "alto")
-PREDICTORES_DESGASTE = (("demandas", "DOC_DEMANDAS"), ("conflicto_rol", "DOC_CONFLICTO_ROL"),
+# El modelo del desgaste (hallazgo 8): los predictores del análisis del 10 oct
+# 2026 que el archivo traiga; demandas y apoyo del líder son obligatorios.
+PREDICTORES_DESGASTE = (("demandas", "DOC_DEMANDAS"), ("exigencias", "DOC_EXIGENCIAS"),
+                        ("conflicto_rol", "DOC_CONFLICTO_ROL"),
+                        ("conflicto_ft", "DOC_CONFLICTO_FT"), ("claridad", "DOC_CLARIDAD"),
                         ("lider", "DOC_LIDER"))
+PREDICTORES_DESGASTE_MINIMOS = ("demandas", "lider")
+CLAVE_R2 = "r2"
 
 
 @dataclass(frozen=True)
@@ -207,14 +214,19 @@ def _del_grupo(a: Atomo, agrupacion: str, grupo: str) -> bool:
     return (a.colegio if agrupacion == "Colegio" else a.grado) == grupo
 
 
-def _residuo_grado(universo: pd.Series, d: pd.DataFrame) -> pd.Series | None:
-    """Valor menos la media de su grado, dentro del universo; None si falta algún grado."""
+def _residuo_grado(universo: pd.Series, d: pd.DataFrame) -> tuple[pd.Series | None, int]:
+    """(valor menos la media de su grado dentro del universo, casos sin grado).
+
+    Sin columna de grado o con algún grado vacío no se ajusta (None); el
+    segundo valor dice cuántos casos del universo no tienen grado.
+    """
     if "Grado" not in d.columns or universo.empty:
-        return None
+        return None, 0
     grados = d.loc[universo.index, "Grado"]
-    if grados.isna().any():
-        return None
-    return universo - universo.groupby(grados).transform("mean")
+    sin = int(grados.isna().sum())
+    if sin:
+        return None, sin
+    return universo - universo.groupby(grados).transform("mean"), 0
 
 
 def diferencias_constructo(d: pd.DataFrame, lista: list[Atomo], c: cat.Constructo,
@@ -236,9 +248,12 @@ def diferencias_constructo(d: pd.DataFrame, lista: list[Atomo], c: cat.Construct
 
     universo = valores(ok)
     de = float(universo.std(ddof=1)) if ok else float("nan")
-    residuo = None
+    residuo, motivo = None, ""
     if ajuste_grado and c.marco == cat.ESTUDIANTE and agrupacion == "Colegio":
-        residuo = _residuo_grado(universo, d)
+        residuo, sin_grado = _residuo_grado(universo, d)
+        if sin_grado:                        # se avisa, nunca en silencio
+            motivo = MOTIVO_SIN_GRADO.format(
+                n=sin_grado if sin_grado >= cat.MIN_GROUP_N else f"<{cat.MIN_GROUP_N}")
     ajuste = AJUSTE_GRADO if residuo is not None else ""
     escala, dec = (100.0, 1) if c.binario else (1.0, 2)
     filas = []
@@ -261,7 +276,7 @@ def diferencias_constructo(d: pd.DataFrame, lista: list[Atomo], c: cat.Construct
             media_grupo=round(escala * x.mean(), dec), media_resto=round(escala * y.mean(), dec),
             de_actor=round(escala * de, dec), d=round(dif, 3),
             ic_inf=round(dif - Z95 * se, 3), ic_sup=round(dif + Z95 * se, 3),
-            d_orientada=round(c.direccion * dif, 3), ajuste=ajuste))
+            d_orientada=round(c.direccion * dif, 3), ajuste=ajuste, motivo=motivo))
     return filas
 
 
@@ -396,9 +411,12 @@ def senales(d: pd.DataFrame, lista: list[Atomo]) -> list[dict]:
         return [_fila_m(BLOQUE_SENALES, k, motivo=MOTIVO_CELDAS) for k in claves]
     idx, i18, mal, ambas = conj[0], conj[1], conj[2], conj[3]
     n = len(idx)
-    cifras = (wilson(len(i18), n), wilson(len(mal), n), wilson(len(ambas), len(i18)))
-    return [_fila_m(BLOQUE_SENALES, k, n=n, valor=p, ic_inf=lo, ic_sup=hi)
-            for k, (p, lo, hi) in zip(claves, cifras)]
+    # `n` es el denominador de cada %: el universo en las dos primeras y, en la
+    # tercera, quienes marcan el ítem 18 (≥ 20, porque sus dos celdas son ≥ 10).
+    cifras = ((n, wilson(len(i18), n)), (n, wilson(len(mal), n)),
+              (len(i18), wilson(len(ambas), len(i18))))
+    return [_fila_m(BLOQUE_SENALES, k, n=den, valor=p, ic_inf=lo, ic_sup=hi)
+            for k, (den, (p, lo, hi)) in zip(claves, cifras)]
 
 
 def conjuntos_terciles(d: pd.DataFrame, lista: list[Atomo]) -> list[pd.Index]:
@@ -410,8 +428,13 @@ def conjuntos_terciles(d: pd.DataFrame, lista: list[Atomo]) -> list[pd.Index]:
     if len(idx) < 3 * cat.MIN_GROUP_N:
         return []
     apoyo = d.loc[idx, "MSPSS_Fam"].astype(float)
-    tercil = pd.qcut(apoyo.rank(method="first"), 3, labels=False)
-    partes = [idx[(tercil == t).to_numpy()] for t in range(3)]
+    # Cortes por VALOR (terciles del puntaje, sin partir empates): el grupo es
+    # función del puntaje. Con muchos empates pueden quedar 2 grupos; con 1, nada.
+    tercil = pd.qcut(apoyo, 3, labels=False, duplicates="drop")
+    grupos = sorted(tercil.dropna().unique())
+    if len(grupos) < 2:
+        return []
+    partes = [idx[(tercil == t).to_numpy()] for t in grupos]
     for parte in partes:
         sub = d.loc[parte]
         if n_unidades(sub, cat.CUIDADOR) < cat.MIN_GROUP_N:
@@ -419,6 +442,11 @@ def conjuntos_terciles(d: pd.DataFrame, lista: list[Atomo]) -> list[pd.Index]:
         if not partes_seguras(sub[cat.EPDS_PROBABLE], _unidades(sub, cat.CUIDADOR), [1.0]):
             return []
     return [idx, *partes]
+
+
+def nombres_grupos_apoyo(k: int) -> tuple:
+    """Etiquetas de los grupos de apoyo: 3 → bajo/medio/alto; 2 → bajo/alto."""
+    return TERCILES if k == 3 else (TERCILES[0], TERCILES[-1]) if k == 2 else ()
 
 
 def apoyo_animo(d: pd.DataFrame, lista: list[Atomo]) -> list[dict]:
@@ -429,7 +457,7 @@ def apoyo_animo(d: pd.DataFrame, lista: list[Atomo]) -> list[dict]:
         return [_fila_m(BLOQUE_APOYO_ANIMO, "epds_probable", grupo=t, motivo=MOTIVO_TERCIL)
                 for t in TERCILES]
     filas = []
-    for nombre, parte in zip(TERCILES, conj[1:]):
+    for nombre, parte in zip(nombres_grupos_apoyo(len(conj) - 1), conj[1:]):
         sub = d.loc[parte]
         k = int((sub[cat.EPDS_PROBABLE] == 1).sum())
         p, lo, hi = wilson(k, len(sub))
@@ -476,26 +504,36 @@ def pss_actores(tablas: dict, atomos_por_marco: dict) -> list[dict]:
 
 
 def desgaste_docente(d: pd.DataFrame, lista: list[Atomo]) -> list[dict]:
-    """Desgaste (z) sobre demandas, conflicto de rol y apoyo del líder (z), por colegio."""
-    columnas = ["DOC_DESGASTE", *(col for _, col in PREDICTORES_DESGASTE)]
-    if any(c not in d.columns for c in columnas):
+    """Desgaste (z) sobre los predictores de `PREDICTORES_DESGASTE` que el archivo
+    traiga (z), MCO con errores agrupados por colegio; una fila por predictor
+    y una fila `r2`. Docentes de colegio no reconocido o sin colegio quedan
+    fuera del modelo (no forman un clúster). Demandas y líder son obligatorios."""
+    presentes = [(k, col) for k, col in PREDICTORES_DESGASTE if col in d.columns]
+    claves = [k for k, _ in presentes]
+    if "DOC_DESGASTE" not in d.columns or any(k not in claves for k in PREDICTORES_DESGASTE_MINIMOS):
         return [_fila_m(BLOQUE_DESGASTE, k, motivo=MOTIVO_SIN_DIMENSION)
                 for k, _ in PREDICTORES_DESGASTE]
+    columnas = ["DOC_DESGASTE", *(col for _, col in presentes)]
     cs = [_constructo_aux(cat.DOCENTE, c, False) for c in columnas]
     idx = universo(d, lista, cs)
+    con_colegio = d.loc[idx, "Colegio"].notna() & ~d.loc[idx, "Colegio"].isin(cat.COLEGIOS_SIN_GRUPO)
+    idx = idx[con_colegio.to_numpy()]
     sub = d.loc[idx, columnas].astype(float)
-    colegios = d.loc[idx, "Colegio"].fillna(cat.COLEGIOS_SIN_GRUPO[-1]).astype(str)
+    colegios = d.loc[idx, "Colegio"].astype(str)
+    sin_cifra = [_fila_m(BLOQUE_DESGASTE, k, motivo=MOTIVO_MODELO) for k in [*claves, CLAVE_R2]]
     if len(sub) < cat.MIN_MODELO or colegios.nunique() < 2 or (sub.std(ddof=1) <= 0).any():
-        return [_fila_m(BLOQUE_DESGASTE, k, motivo=MOTIVO_MODELO) for k, _ in PREDICTORES_DESGASTE]
+        return sin_cifra
     z = lambda v: (v - v.mean()) / v.std(ddof=1)                 # noqa: E731
-    X = pd.DataFrame({k: z(sub[col]) for k, col in PREDICTORES_DESGASTE}, index=sub.index)
+    X = pd.DataFrame({k: z(sub[col]) for k, col in presentes}, index=sub.index)
     try:
         res = est.ols_agrupado(z(sub["DOC_DESGASTE"]), X, colegios)
     except np.linalg.LinAlgError:
-        return [_fila_m(BLOQUE_DESGASTE, k, motivo=MOTIVO_MODELO) for k, _ in PREDICTORES_DESGASTE]
-    return [_fila_m(BLOQUE_DESGASTE, f["predictor"], n=len(sub), valor=round(f["beta"], 3),
-                    ic_inf=round(f["ic_inf"], 3), ic_sup=round(f["ic_sup"], 3))
-            for _, f in res.iterrows()]
+        return sin_cifra
+    filas = [_fila_m(BLOQUE_DESGASTE, f["predictor"], n=len(sub), valor=round(f["beta"], 3),
+                     ic_inf=round(f["ic_inf"], 3), ic_sup=round(f["ic_sup"], 3))
+             for _, f in res.iterrows()]
+    filas.append(_fila_m(BLOQUE_DESGASTE, CLAVE_R2, n=len(sub), valor=round(float(res["R2"].iloc[0]), 3)))
+    return filas
 
 
 def municipal(tablas: dict, atomos_por_marco: dict) -> pd.DataFrame:

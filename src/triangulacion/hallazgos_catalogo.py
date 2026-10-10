@@ -4,8 +4,9 @@ Catálogo de hallazgos e hipótesis del «Resumen» de la Triangulación 360.
 TEXTOS FIJOS, pendientes de aprobación del equipo (`TEXTOS_APROBADOS = False`).
 Vienen del análisis exploratorio `docs/analisis/2026-10-10-hallazgos-triangulacion.md`
 (§0, §F y §G) y de la decisión del usuario del 10 oct 2026: entran los ocho
-hallazgos fuertes (1–8) y las hipótesis que los acompañan; los moderados
-(9–12) no entran todavía. Nunca los redacta ni los cambia la IA en tiempo de
+hallazgos fuertes (1–8) y las hipótesis que se apoyan SOLO en ellos (H1, H4,
+H8, H10, H11, H12); los moderados (9–12) no entran todavía, ni las hipótesis
+que dependían de ellos (H2 y H3, que se apoyaban en los hallazgos 9 y 13). Nunca los redacta ni los cambia la IA en tiempo de
 ejecución: la vista solo rellena cifras que ya están en las tablas publicadas.
 
 Cada hallazgo dice a qué actor le es relevante (colegio, Secretaría, familias,
@@ -55,14 +56,14 @@ HALLAZGOS: tuple[Hallazgo, ...] = (
         "Los niños y niñas describen más dificultades emocionales de las que perciben sus "
         "cuidadores. Escuchar directamente a los niños aporta información que la familia no "
         "siempre ve.",
-        "Fuerte", "díadas · acuerdo SDQ (diferencia niño − cuidador y CCI)", ("H1", "H3")),
+        "Fuerte", "díadas · acuerdo SDQ (diferencia niño − cuidador y CCI)", ("H1",)),
     Hallazgo(
         2, PATRON, (FAMILIAS, SECRETARIA),
         "Lo que un cuidador reporta de su hijo refleja sobre todo su propio malestar",
         "Cuando el cuidador está más estresado o desanimado, tiende a describir más "
         "dificultades en su hijo. Cuidar al cuidador también cambia cómo ve a su hijo.",
         "Fuerte", "díadas · informante (ρ con el reporte del cuidador y con el del niño)",
-        ("H1", "H2")),
+        ("H1",)),
     Hallazgo(
         3, PATRON, (COLEGIO, SECRETARIA),
         "La señal de malestar (SDQ) y el ítem 18 del RCADS identifican a estudiantes "
@@ -101,11 +102,12 @@ HALLAZGOS: tuple[Hallazgo, ...] = (
         "líder y demandas de los docentes)", ("H10",)),
     Hallazgo(
         8, PATRON, (DOCENTES, SECRETARIA),
-        "El desgaste docente va con las demandas y el conflicto de rol, más que con el "
-        "líder",
-        "El desgaste de los docentes se asocia sobre todo con la carga y la claridad de su "
-        "trabajo.",
-        "Moderado-fuerte", "capa 1 · cifras municipales (desgaste docente)", ("H8",)),
+        "Las demandas pesan más que el apoyo del líder en el desgaste docente",
+        "El desgaste de los docentes se asocia con las demandas y la presión de tiempo; el "
+        "apoyo del líder también se asocia a menos desgaste, pero con la mitad del peso de "
+        "las demandas o menos.",
+        "Moderado-fuerte", "capa 1 · cifras municipales (modelo del desgaste docente)",
+        ("H8",)),
 )
 POR_NUMERO = {h.numero: h for h in HALLAZGOS}
 
@@ -122,26 +124,6 @@ HIPOTESIS: tuple[Hipotesis, ...] = (
         "cruzado); observación estructurada.",
         "Asociación alta; dirección baja-media."),
     Hipotesis(
-        "H2",
-        "Los cuidadores con poco estrés normalizan el malestar del hijo (baja "
-        "sensibilidad), y por eso no lo ven.",
-        "El «malestar no visto» se concentra en los cuidadores con menos estrés y menos "
-        "estrés parental.",
-        "El mismo sesgo que H1 al revés (anclaje de la escala); el niño muestra su malestar "
-        "fuera de casa; regresión a la media.",
-        "Preguntas directas al cuidador sobre el estado emocional del hijo; comparar con "
-        "el docente; psicoeducación y ver si cambia el porcentaje no visto.",
-        "Media."),
-    Hipotesis(
-        "H3",
-        "El malestar de las niñas es menos visible para los cuidadores (se internaliza).",
-        "La brecha emocional niño − cuidador es mayor en las niñas; el malestar no visto "
-        "entre quienes lo tienen es más frecuente en ellas.",
-        "Diferencias de expresión por género; las niñas reportan más (sesgo del "
-        "autoinforme).",
-        "Replicar con más díadas; SDQ-docente; segunda ola.",
-        "Media-baja."),
-    Hipotesis(
         "H4",
         "El apoyo familiar protege el ánimo del cuidador (amortiguación del estrés).",
         "El porcentaje con EPDS ≥ 13 baja de forma marcada del tercil bajo al alto de "
@@ -153,12 +135,13 @@ HIPOTESIS: tuple[Hipotesis, ...] = (
         "Asociación alta; dirección media."),
     Hipotesis(
         "H8",
-        "El desgaste docente depende de la organización del trabajo (demandas, "
-        "exigencias, conflicto de rol, interfaz trabajo-familia) más que del liderazgo.",
-        "Las demandas y el conflicto de rol explican el desgaste; el apoyo del líder deja "
-        "de pesar una vez incluidas las demandas.",
+        "El desgaste docente depende sobre todo de la organización del trabajo (demandas "
+        "y presión de tiempo): el apoyo del líder sigue asociado al desgaste, pero con la "
+        "mitad del peso de las demandas o menos.",
+        "En el modelo del desgaste, la β de las demandas es al menos el doble de la del "
+        "apoyo del líder, y las dos excluyen 0 en el sentido esperado.",
         "Método común (quien está agotado lo percibe todo peor); selección (quien se fue "
-        "no respondió).",
+        "no respondió); el líder puede actuar a través de las demandas.",
         "Segunda ola con seudónimo docente; medidas objetivas (horas, estudiantes por "
         "docente, cargas).",
         "Media."),
@@ -212,6 +195,8 @@ AVISO_HIPOTESIS = ("Hipótesis de trabajo que acompañan a los hallazgos visible
                    "transversales y, por colegio, ecológicos: cada hipótesis trae sus "
                    "explicaciones alternativas y cómo ponerla a prueba.")
 AVISO_SIN_HALLAZGOS = "Esta corrida no sustenta ninguno de los hallazgos de este bloque."
+AVISO_SIN_TENSION = ("Ningún hallazgo de tensión se sostiene en el universo de la capa 1 con "
+                     "esta corrida; abajo, los pares en tensión.")
 AVISO_PERFIL = ("Por actor, los constructos en que el colegio difiere del resto del "
                 "municipio (IC 95 % que excluye 0): ▲ mejor, ▼ peor; entre paréntesis, si "
                 "el colegio tiene más o menos que el resto. En estudiantes, ajustado por "
