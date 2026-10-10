@@ -153,7 +153,10 @@ def test_estatica_ninguna_etiqueta_se_superpone_con_otra_ni_sale_de_la_figura():
     fig = mf.figura_estatica(_filas_reales(puntos), "respuestas", puntos)
     ax = fig.axes[0]
     renderer = fig.canvas.get_renderer()
-    cajas = [t.get_window_extent(renderer) for t in ax.texts]
+    from matplotlib.text import Text
+    for t in ax.texts:
+        t.update_positions(renderer)
+    cajas = [Text.get_window_extent(t, renderer) for t in ax.texts]
     assert len(cajas) == len(puntos), "todas las etiquetas deben colocarse"
     for a, b in itertools.combinations(cajas, 2):
         assert not a.overlaps(b)

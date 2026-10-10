@@ -19,6 +19,7 @@ import plotly.graph_objects as go
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
+from matplotlib.text import Text
 from matplotlib.transforms import Bbox
 
 from src.estudiantes import catalog as cat
@@ -177,6 +178,12 @@ def _partir(nombre: str) -> str:
     return nombre[:i] + "\n" + nombre[i + 1:]
 
 
+def _caja_texto(texto, renderer):
+    """Caja del texto solo: la de una anotación incluye la flecha hasta el punto."""
+    texto.update_positions(renderer)     # aplica el desplazamiento antes de medir
+    return Text.get_window_extent(texto, renderer)
+
+
 def _etiquetar_estatica(fig, ax, marcas, fuente: float) -> int:
     """Pone cada nombre donde no choque con otro texto ni con un círculo.
 
@@ -208,7 +215,7 @@ def _etiquetar_estatica(fig, ax, marcas, fuente: float) -> int:
                     linespacing=1.0,
                     arrowprops=(dict(arrowstyle="-", color=COLOR_GRIS, lw=0.6,
                                      shrinkA=0, shrinkB=0) if anillo else None))
-                caja = texto.get_window_extent(renderer).expanded(1.04, 1.25)
+                caja = _caja_texto(texto, renderer).expanded(1.04, 1.25)
                 dentro = (caja.x0 >= fig.bbox.x0 and caja.x1 <= fig.bbox.x1
                           and caja.y0 >= fig.bbox.y0 and caja.y1 <= fig.bbox.y1)
                 if dentro and not any(caja.overlaps(o) for o in ocupado):
@@ -222,18 +229,34 @@ def _etiquetar_estatica(fig, ax, marcas, fuente: float) -> int:
     return puestas
 
 
+def _por_aglomeracion(ax, marcas):
+    """Primero los puntos con más vecinos cerca: son los que menos opciones tienen."""
+    px = [ax.transData.transform((p.lon, p.lat)) for _, p, _ in marcas]
+    cerca = [sum(1 for j, q in enumerate(px) if j != i
+                 and math.hypot(q[0] - c[0], q[1] - c[1]) < 90)
+             for i, c in enumerate(px)]
+    orden = sorted(range(len(marcas)), key=lambda i: (-cerca[i], i))
+    return [marcas[i] for i in orden]
+
+
 def _etiquetar_lo_mejor_posible(fig, ax, marcas) -> None:
-    """La fuente más grande en la que caben todos los nombres; si ninguna, la que más."""
-    mejor, mejor_n = FUENTES_PT[-1], -1
+    """La fuente más grande en la que caben todos los nombres; si ninguna, la que más.
+
+    Prueba dos órdenes de colocación (los más rodeados primero, y el de entrada).
+    """
+    fig.canvas.draw()
+    ordenes = [_por_aglomeracion(ax, marcas), list(marcas)]
+    mejor, mejor_n = (FUENTES_PT[-1], ordenes[0]), -1
     for fuente in FUENTES_PT:
-        n = _etiquetar_estatica(fig, ax, marcas, fuente)
-        if n == len(marcas):
-            return
-        if n > mejor_n:
-            mejor, mejor_n = fuente, n
-        for texto in list(ax.texts):
-            texto.remove()
-    _etiquetar_estatica(fig, ax, marcas, mejor)
+        for orden in ordenes:
+            n = _etiquetar_estatica(fig, ax, orden, fuente)
+            if n == len(marcas):
+                return
+            if n > mejor_n:
+                mejor, mejor_n = (fuente, orden), n
+            for texto in list(ax.texts):
+                texto.remove()
+    _etiquetar_estatica(fig, ax, mejor[1], mejor[0])
 
 
 def figura_estatica(filas, capa: str, puntos) -> Figure:
