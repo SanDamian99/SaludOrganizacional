@@ -24,7 +24,7 @@ VIDEO_NOMBRES_COLEGIOS = False         # nombrar los colegios en los mapas del v
 VIDEO_ACCIONES = True                  # escena «qué podemos hacer» (de catalog.MENSAJES)
 VIDEO_RUTAS = False                    # rutas en el cierre; además exige RUTAS_VALIDADAS
 VIDEO_VARIANTE_CELULAR = True          # además del 16:9, una versión cuadrada
-VIDEO_APROBADO = False                 # llave de publicación del guion (a mano, en un commit)
+VIDEO_APROBADO = True                  # llave de publicación del guion; aprobado por el equipo el 10 oct 2026
 
 # No es un parámetro: las únicas capas que el mapa sabe dibujar. Ninguna es de
 # malestar, alertas, SDQ ni RCADS.

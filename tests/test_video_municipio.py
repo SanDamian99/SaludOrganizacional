@@ -64,16 +64,16 @@ def test_sin_acciones_si_el_equipo_las_apaga(monkeypatch):
     assert cat.MENSAJES["pertenencia"].accion_municipio.lower() not in texto
 
 
-def test_hasta_que_se_aprueba_todas_las_escenas_llevan_el_sello_de_borrador(por_defecto):
-    assert opciones.VIDEO_APROBADO is False
-    assert all(e.sello for e in por_defecto["horizontal"] + por_defecto["cuadrado"])
-    assert vm.es_borrador() is True
+def test_el_guion_aprobado_por_el_equipo_sale_sin_sello(por_defecto):
+    assert opciones.VIDEO_APROBADO is True
+    assert not any(e.sello for e in por_defecto["horizontal"] + por_defecto["cuadrado"])
+    assert vm.es_borrador() is False
 
 
-def test_aprobado_no_lleva_sello(monkeypatch):
-    monkeypatch.setattr(opciones, "VIDEO_APROBADO", True)
+def test_sin_aprobacion_todas_las_escenas_llevan_el_sello_de_borrador(monkeypatch):
+    monkeypatch.setattr(opciones, "VIDEO_APROBADO", False)
     escenas = vm.construir_escenas(_analisis(), "horizontal")
-    assert not any(e.sello for e in escenas) and vm.es_borrador() is False
+    assert all(e.sello for e in escenas) and vm.es_borrador() is True
 
 
 def test_por_defecto_el_video_no_nombra_los_colegios(monkeypatch):
@@ -132,9 +132,9 @@ def test_los_formatos_los_decide_el_equipo(monkeypatch):
 
 
 def test_el_nombre_del_archivo_marca_el_borrador(monkeypatch):
-    assert vm.nombre_archivo("horizontal").endswith("_BORRADOR.mp4")
-    monkeypatch.setattr(opciones, "VIDEO_APROBADO", True)
     assert "BORRADOR" not in vm.nombre_archivo("horizontal")
+    monkeypatch.setattr(opciones, "VIDEO_APROBADO", False)
+    assert vm.nombre_archivo("horizontal").endswith("_BORRADOR.mp4")
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
