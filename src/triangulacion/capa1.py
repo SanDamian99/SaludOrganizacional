@@ -29,6 +29,12 @@ constructo, un átomo con 1 a 9 unidades con dato sale (todo o nada, igual que
 el todo o nada del módulo), y en un constructo binario también si tiene menos
 de 3 casos o no casos (filas o unidades).
 
+Ajuste por grado (decisión del 10 oct 2026): en estudiantes, por colegio, d y
+su IC se calculan sobre el residuo de la media del grado (dentro del universo
+de átomos válidos del constructo), así la mezcla de grados de un colegio no se
+confunde con una diferencia. Las medias mostradas siguen brutas y la DE del
+actor también; la columna `ajuste` lo marca. Por grado no se ajusta.
+
 Clasificación (solo pares del mismo objeto): «tensión» si los dos IC excluyen
 el cero en direcciones opuestas (orientadas: positivo = mejor que el resto),
 «coincidencia» si lo excluyen en la misma, y si no «sin diferencia clara».
@@ -49,11 +55,12 @@ from src.triangulacion.estadistica import Z95, partes_seguras
 RESTO = "__resto__"
 COLUMNAS_DIFERENCIAS = ["agrupacion", "grupo", "clave", "actor", "constructo", "objeto",
                         "binario", "n_grupo", "n_resto", "media_grupo", "media_resto",
-                        "de_actor", "d", "ic_inf", "ic_sup", "d_orientada", "motivo"]
+                        "de_actor", "d", "ic_inf", "ic_sup", "d_orientada", "ajuste", "motivo"]
 COLUMNAS_CLASIFICACION = ["agrupacion", "grupo", "par", "tipo", "a", "d_a", "ic_a", "b",
                           "d_b", "ic_b", "clasificacion"]
 MOTIVO_POCOS = "menos de 10 con dato o cifras pequeñas"
 MOTIVO_RESTO = "el resto no llega a 10"
+AJUSTE_GRADO = "grado"
 
 
 @dataclass(frozen=True)
@@ -179,6 +186,7 @@ def _fila(agrupacion, grupo, c: cat.Constructo, **valores) -> dict:
                 constructo=c.etiqueta, objeto=c.objeto, binario=c.binario)
     for k in COLUMNAS_DIFERENCIAS:
         fila.setdefault(k, valores.get(k, np.nan))
+    fila["ajuste"] = valores.get("ajuste", "")
     fila["motivo"] = valores.get("motivo", "")
     return fila
 
@@ -187,9 +195,24 @@ def _del_grupo(a: Atomo, agrupacion: str, grupo: str) -> bool:
     return (a.colegio if agrupacion == "Colegio" else a.grado) == grupo
 
 
+def _residuo_grado(universo: pd.Series, d: pd.DataFrame) -> pd.Series | None:
+    """Valor menos la media de su grado, dentro del universo; None si falta algún grado."""
+    if "Grado" not in d.columns or universo.empty:
+        return None
+    grados = d.loc[universo.index, "Grado"]
+    if grados.isna().any():
+        return None
+    return universo - universo.groupby(grados).transform("mean")
+
+
 def diferencias_constructo(d: pd.DataFrame, lista: list[Atomo], c: cat.Constructo,
-                           grupos: list, agrupacion: str) -> list[dict]:
-    """Filas de `diferencias` de un constructo para cada grupo pedido."""
+                           grupos: list, agrupacion: str, ajuste_grado: bool = True
+                           ) -> list[dict]:
+    """Filas de `diferencias` de un constructo para cada grupo pedido.
+
+    Con `ajuste_grado` (solo estudiantes por colegio), d y su IC salen del
+    residuo de la media del grado; las medias mostradas y la DE son brutas.
+    """
     if c.columna not in d.columns:
         return [_fila(agrupacion, g, c, motivo=MOTIVO_POCOS) for g in grupos]
     ok = [a for a in lista if _atomo_ok(d, a, c.marco, c)]
@@ -199,7 +222,12 @@ def diferencias_constructo(d: pd.DataFrame, lista: list[Atomo], c: cat.Construct
         idx = priv_est.union(a.idx for a in atomos_)
         return v.loc[idx].dropna() if len(idx) else v.iloc[0:0]
 
-    de = float(valores(ok).std(ddof=1)) if ok else float("nan")
+    universo = valores(ok)
+    de = float(universo.std(ddof=1)) if ok else float("nan")
+    residuo = None
+    if ajuste_grado and c.marco == cat.ESTUDIANTE and agrupacion == "Colegio":
+        residuo = _residuo_grado(universo, d)
+    ajuste = AJUSTE_GRADO if residuo is not None else ""
     escala, dec = (100.0, 1) if c.binario else (1.0, 2)
     filas = []
     for g in grupos:
@@ -213,14 +241,15 @@ def diferencias_constructo(d: pd.DataFrame, lista: list[Atomo], c: cat.Construct
         if n_unidades(sub_resto, c.marco) < cat.MIN_GROUP_N or not de > 0:
             filas.append(_fila(agrupacion, g, c, motivo=MOTIVO_RESTO))
             continue
-        dif = (x.mean() - y.mean()) / de
-        se = np.sqrt(x.var(ddof=1) / len(x) + y.var(ddof=1) / len(y)) / de
+        xr, yr = (residuo.loc[x.index], residuo.loc[y.index]) if residuo is not None else (x, y)
+        dif = (xr.mean() - yr.mean()) / de
+        se = np.sqrt(xr.var(ddof=1) / len(xr) + yr.var(ddof=1) / len(yr)) / de
         filas.append(_fila(
             agrupacion, g, c, n_grupo=len(x), n_resto=len(y),
             media_grupo=round(escala * x.mean(), dec), media_resto=round(escala * y.mean(), dec),
             de_actor=round(escala * de, dec), d=round(dif, 3),
             ic_inf=round(dif - Z95 * se, 3), ic_sup=round(dif + Z95 * se, 3),
-            d_orientada=round(c.direccion * dif, 3)))
+            d_orientada=round(c.direccion * dif, 3), ajuste=ajuste))
     return filas
 
 
