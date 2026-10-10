@@ -131,6 +131,20 @@ def _seguro(funcion, *args, **kwargs) -> str:
         return ""
 
 
+def _bloque_mapa(a) -> str:
+    """Mapa de Chía del informe de la Secretaría, o «» si no corresponde o falla.
+
+    Es un complemento: si el mapa o su auditoría fallan, el informe sale igual.
+    """
+    try:
+        from src.geo import mapa_informe
+        visibles, pequenos = vc.grupos_visibles(a, "Colegio")
+        return mapa_informe.bloque_html(a, visibles, pequenos)
+    except Exception:                                      # noqa: BLE001
+        logging.getLogger(__name__).exception("El mapa del informe no se dibuja")
+        return ""
+
+
 def _sin_muerte(a, columnas, panel_dibujado: bool) -> list[str]:
     """Sin la columna de muerte si el panel de alertas la reemplaza (spec §5.4).
 
@@ -577,6 +591,7 @@ def informe_secretaria_html(analisis: dict, fecha: date | None = None) -> str:
             + '<h2>Resultados y qué hacer</h2><div class="tarjetas">'
             + "".join(tarjetas_html) + "</div>"
             + senales
+            + _bloque_mapa(a)
             + _tabla_comparativa(a, "Colegio", _sin_muerte(a, list(COLUMNAS_TABLA),
                                                              bool(senales)), {},
                                  "Por colegio", nombre_colegio, nota=nota_peq)

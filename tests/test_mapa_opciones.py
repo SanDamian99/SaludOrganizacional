@@ -33,3 +33,18 @@ def test_municipio_y_colegio_ven_el_mapa_por_defecto():
     assert opciones.rol_ve_mapa("municipio") is True
     assert opciones.rol_ve_mapa("colegio") is True
     assert opciones.rol_ve_mapa("otro") is False
+
+
+def test_en_informes_por_defecto_van_respuestas_y_sentirse_parte():
+    assert opciones.MAPA_EN_INFORMES is True
+    assert opciones.capas_informe() == ["respuestas", "sentirse_parte"]
+
+
+def test_capas_del_informe_respetan_las_capas_activas(monkeypatch):
+    monkeypatch.setattr(opciones, "MAPA_CAPAS", ("respuestas",))
+    assert opciones.capas_informe() == ["respuestas"]
+
+
+def test_capas_del_informe_solo_permitidas(monkeypatch):
+    monkeypatch.setattr(opciones, "MAPA_CAPAS_INFORME", ("sdq_total", "rcads"))
+    assert opciones.capas_informe() == []
