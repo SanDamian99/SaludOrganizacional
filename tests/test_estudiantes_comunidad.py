@@ -264,6 +264,21 @@ def test_render_sin_datos_no_lanza(entrada):
     vc.render_comunidad(entrada)
 
 
+def test_la_vista_no_dibuja_los_enunciados_de_pertenencia_mas_bajos():
+    """Auditoría de relevancia (10-oct-2026): medias casi iguales y sin IC.
+
+    Sale de la pantalla; los informes descargables no se tocan y siguen usando
+    `items_pertenencia_bajos`.
+    """
+    fuente = inspect.getsource(vc.render_comunidad)
+    assert "items_pertenencia_bajos" not in fuente
+    assert "pertenencia con la media más baja" not in fuente
+    assert not hasattr(vc, "figura_items_pssm")
+    assert "items_pertenencia_bajos" in inspect.getsource(vc.informe_markdown)
+    # El mapa y las tarjetas siguen en su sitio.
+    assert "render_mapa" in fuente and "tarjetas(a, rol, filtros" in fuente
+
+
 def test_la_vista_no_dibuja_la_tabla_de_datos():
     fuente = inspect.getsource(vc)
     assert "st.dataframe" not in fuente
