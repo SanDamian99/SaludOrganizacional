@@ -660,15 +660,8 @@ def render_comunidad(ac) -> None:
     panel_dibujado = _panel(ac, rol, filtros)
     fichas = tarjetas(ac, rol, filtros, panel_dibujado=panel_dibujado)
     if fichas:
-        for col, t in zip(st.columns(len(fichas)), fichas):
-            with col, st.container(border=True):
-                st.markdown(f"**{t.titulo}**")
-                st.markdown(f"## {t.cifra}")
-                st.caption(t.etiqueta)
-                st.markdown(f"**Qué significa:** {t.significa}")
-                st.markdown(f"**Qué hacer:** {t.accion}")
-                if t.detalle:
-                    st.caption(t.detalle)
+        from src.ui.views import tarjetas as vt
+        vt.render([vt.ficha(t) for t in fichas])
     else:
         st.info("Aún no hay indicadores con base suficiente para este grupo.", icon="ℹ️")
 
