@@ -142,3 +142,8 @@ def test_la_pestana_muestra_engancha_el_avance_y_no_se_rompe_si_falla():
     fuente = inspect.getsource(vi._tab_muestra)
     assert "render_avance" in fuente
     assert "except" in fuente[fuente.index("render_avance"):][:400]
+
+
+def test_el_avance_no_usa_toggle_porque_esa_pagina_busca_el_de_la_vista_previa():
+    from src.ui.views import estudiantes_avance
+    assert "st.toggle" not in inspect.getsource(estudiantes_avance)

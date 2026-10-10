@@ -74,5 +74,5 @@ def render_avance(a, nivel: str) -> None:
         st.markdown(f"**Se espera en la próxima exportación:** {pendientes}. "
                     "Cuando llegue, desde «Cargar Datos», estas celdas pasan solas a "
                     "«✔» si tienen 10 o más respuestas.")
-    if st.toggle("Ver las últimas corridas de Supabase", key="inv_avance_corridas"):
+    if st.checkbox("Ver las últimas corridas de Supabase", key="inv_avance_corridas"):
         _corridas()
