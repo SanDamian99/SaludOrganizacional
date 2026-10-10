@@ -100,3 +100,26 @@ def test_estatica_de_puntaje_tambien_se_genera():
     buf = io.BytesIO()
     fig.savefig(buf, format="png")
     assert len(buf.getvalue()) > 5000
+
+
+def test_interactiva_se_centra_en_el_contorno_y_no_en_los_puntos():
+    from src.geo import colegios_geo
+    anillos = colegios_geo.cargar_limite()
+    xs = [x for a in anillos for x, _ in a]
+    ys = [y for a in anillos for _, y in a]
+    fig = mf.figura_interactiva(_filas_respuestas(), "respuestas", PUNTOS)
+    assert fig.layout.map.center.lon == (min(xs) + max(xs)) / 2
+    assert fig.layout.map.center.lat == (min(ys) + max(ys)) / 2
+
+
+def test_la_escala_de_color_no_arranca_en_blanco():
+    fig = mf.figura_interactiva(_filas_puntaje(), "sentirse_parte", PUNTOS)
+    escala = [tr.marker.colorscale for tr in fig.data
+              if tr.marker is not None and tr.marker.showscale][0]
+    assert escala[0][1].lower() == mf.ESCALA[0][1].lower() == "#9ecae1"
+
+
+def test_las_etiquetas_tienen_color_propio():
+    fig = mf.figura_interactiva(_filas_respuestas(), "respuestas", PUNTOS)
+    rotuladas = [tr for tr in fig.data if tr.mode and "text" in tr.mode]
+    assert rotuladas and all(tr.textfont.color for tr in rotuladas)

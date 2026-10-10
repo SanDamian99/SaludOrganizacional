@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 
 import plotly.graph_objects as go
-from matplotlib import colormaps
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
 
 from src.estudiantes import catalog as cat
@@ -26,6 +26,11 @@ TAMANOS = {"100 o más": 24, "30 a 99": 17, "10 a 29": 11}
 TAMANO_BASE = 16
 TAMANO_GRIS = 10
 CENTRO_POR_DEFECTO = (4.86, -74.06)
+COLOR_TEXTO = "#202124"
+# Un solo tono, de azul claro a oscuro; el más claro sigue viéndose sobre el mapa.
+ESCALA = [[0, "#9ECAE1"], [1, "#08306B"]]
+ZOOM = 11.5
+ALTURA = 520
 
 
 def texto_hover(fila: md.FilaMapa, capa: str) -> str:
@@ -54,7 +59,12 @@ def _con_punto(filas, puntos):
     return [(f, por_codigo[f.codigo]) for f in filas if f.codigo in por_codigo]
 
 
-def _centro(puntos) -> tuple[float, float]:
+def _centro(puntos, anillos=None) -> tuple[float, float]:
+    """Centro del contorno del municipio; si no carga, el de los puntos."""
+    if anillos:
+        xs = [x for a in anillos for x, _ in a]
+        ys = [y for a in anillos for _, y in a]
+        return (min(ys) + max(ys)) / 2, (min(xs) + max(xs)) / 2
     if not puntos:
         return CENTRO_POR_DEFECTO
     return (sum(p.lat for p in puntos) / len(puntos),
@@ -69,7 +79,8 @@ def _rango(valores) -> tuple[float, float]:
 def figura_interactiva(filas, capa: str, puntos) -> go.Figure:
     pares = _con_punto(filas, puntos)
     fig = go.Figure()
-    for anillo in colegios_geo.cargar_limite():
+    anillos = colegios_geo.cargar_limite()
+    for anillo in anillos:
         fig.add_trace(go.Scattermap(
             lon=[x for x, _ in anillo], lat=[y for _, y in anillo], mode="lines",
             line=dict(width=2, color=COLOR_LIMITE), hoverinfo="skip",
@@ -82,13 +93,13 @@ def figura_interactiva(filas, capa: str, puntos) -> go.Figure:
         if capa != "respuestas":
             lo, hi = _rango([f.valor for f, _ in con])
             marcador = dict(size=TAMANO_BASE, color=[f.valor for f, _ in con],
-                            colorscale="Blues", cmin=lo, cmax=hi, showscale=True,
+                            colorscale=ESCALA, cmin=lo, cmax=hi, showscale=True,
                             colorbar=dict(title=md.ETIQUETAS_CAPA[capa], thickness=12),
                             opacity=0.95)
         fig.add_trace(go.Scattermap(
             lon=[p.lon for _, p in con], lat=[p.lat for _, p in con], mode=modo,
             marker=marcador, text=[p.nombre for _, p in con],
-            textposition="top right",
+            textposition="top right", textfont=dict(size=12, color=COLOR_TEXTO),
             customdata=[texto_hover(f, capa) for f, _ in con],
             hovertemplate="%{customdata}<extra></extra>", showlegend=False))
     sin = [(f, p) for f, p in pares if f.estado != md.CON_CIFRA]
@@ -97,12 +108,13 @@ def figura_interactiva(filas, capa: str, puntos) -> go.Figure:
             lon=[p.lon for _, p in sin], lat=[p.lat for _, p in sin], mode=modo,
             marker=dict(size=TAMANO_GRIS, color=COLOR_GRIS, opacity=0.8),
             text=[p.nombre for _, p in sin], textposition="top right",
+            textfont=dict(size=11, color="#5F6368"),
             customdata=[texto_hover(f, capa) for f, _ in sin],
             hovertemplate="%{customdata}<extra></extra>", showlegend=False))
-    lat, lon = _centro(puntos)
+    lat, lon = _centro(puntos, anillos)
     fig.update_layout(
-        map=dict(style="open-street-map", center=dict(lat=lat, lon=lon), zoom=11.3),
-        margin=dict(l=0, r=0, t=0, b=0), height=460, showlegend=False)
+        map=dict(style="open-street-map", center=dict(lat=lat, lon=lon), zoom=ZOOM),
+        margin=dict(l=0, r=0, t=0, b=0), height=ALTURA, showlegend=False)
     return fig
 
 
@@ -126,8 +138,8 @@ def figura_estatica(filas, capa: str, puntos) -> Figure:
                        color=COLOR_PUNTO, alpha=0.9, zorder=4)
         else:
             lo, hi = _rango([f.valor for f, _ in con])
-            mapa = colormaps["Blues"]
-            colores = [mapa(0.35 + 0.6 * (f.valor - lo) / (hi - lo)) for f, _ in con]
+            mapa = LinearSegmentedColormap.from_list("obs360", [c for _, c in ESCALA])
+            colores = [mapa((f.valor - lo) / (hi - lo)) for f, _ in con]
             ax.scatter([p.lon for _, p in con], [p.lat for _, p in con], s=260,
                        color=colores, edgecolors=COLOR_LIMITE, linewidths=0.6, zorder=4)
     if opciones.MAPA_MOSTRAR_NOMBRES:
@@ -135,7 +147,7 @@ def figura_estatica(filas, capa: str, puntos) -> Figure:
             if f.estado == md.CON_CIFRA or opciones.MAPA_MOSTRAR_SIN_CIFRA:
                 ax.annotate(p.nombre, (p.lon, p.lat), xytext=(6, 6),
                             textcoords="offset points", fontsize=7, color="#202124")
-    lat, _ = _centro(puntos)
+    lat, _ = _centro(puntos, colegios_geo.cargar_limite())
     ax.set_aspect(1 / math.cos(math.radians(lat)))
     ax.axis("off")
     fig.tight_layout()
