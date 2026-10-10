@@ -997,7 +997,7 @@ def tarjetas(analisis, rol: str, filtros: dict | None = None,
                         + CONTRASTES[clave]["etiqueta"])
             detalle = (f"{uno_de_cada(c['pct_tercil_alto'])} entre quienes sienten mucho, "
                        f"{uno_de_cada(c['pct_tercil_bajo'])} entre quienes sienten poco "
-                       f"(n = {c['n_alto']} y {c['n_bajo']})")
+                       f"(n = {int(c['n_alto'])} y {int(c['n_bajo'])})")
         salida.append(Tarjeta(clave=clave, cifra=cifra, etiqueta=etiqueta,
                               significa=mensaje.significa, accion=accion, detalle=detalle))
         if len(salida) == MAX_TARJETAS:

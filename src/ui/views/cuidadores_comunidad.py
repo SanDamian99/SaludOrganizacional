@@ -260,8 +260,8 @@ def tarjetas(ac, rol: str, filtros: dict | None = None,
             if hay_filtro(filtros):
                 ref = media(ac, escala, {})
                 if ref:
-                    detalle += f" · municipio: {ref['M']:.1f} de {maximo}"
-            salida.append(Tarjeta(clave, m.titulo, f"{x['M']:.1f} de {maximo}", m.etiqueta,
+                    detalle += f" · municipio: {ref['M']:.1f} de {maximo}".replace(".", ",")
+            salida.append(Tarjeta(clave, m.titulo, f"{x['M']:.1f}".replace(".", ",") + f" de {maximo}", m.etiqueta,
                                   m.significa, accion, detalle))
         else:
             indicador = INDICADOR_TARJETA[clave]
