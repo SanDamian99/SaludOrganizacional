@@ -228,8 +228,26 @@ def ruta_para_rol(rol: str) -> list[tuple[str, str]]:
         return list(cat.RUTA_ATENCION)
 
 
+def en_vista_previa(modulo: str) -> bool:
+    """¿La página del módulo muestra la corrida en revisión (vista previa del equipo)?
+
+    Solo en el modo investigador se pregunta; en comunidad no se importa
+    `vista_previa`. Un módulo rancio o ausente cuenta como «no».
+    """
+    try:
+        from src.core import modo as modo_app
+        if modo_app.modo() != modo_app.INVESTIGADOR:
+            return False
+        from src.core import vista_previa as vp
+        en_uso = getattr(vp, "en_uso", None)
+        return bool(en_uso(modulo)) if callable(en_uso) else False
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
 def aviso_ruta_pendiente() -> str:
-    """Aviso interno «ruta pendiente de validación»: solo en el modo completo.
+    """Aviso interno «ruta pendiente de validación»: en el modo completo y en la
+    vista previa del equipo (corrida en revisión, despliegue privado).
 
     Nunca sale en el despliegue público ni en los informes, que se comparten.
     """
@@ -240,7 +258,9 @@ def aviso_ruta_pendiente() -> str:
         return ""
     if ac.RUTAS_VALIDADAS:
         return ""
-    return ac.RUTA_PENDIENTE if modo_app.modo() == modo_app.COMPLETO else ""
+    if modo_app.modo() == modo_app.COMPLETO or en_vista_previa("estudiantes"):
+        return ac.RUTA_PENDIENTE
+    return ""
 
 
 def _panel_alertas(a, rol: str, filtros: dict) -> bool:

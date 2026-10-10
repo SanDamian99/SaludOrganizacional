@@ -22,8 +22,13 @@ Esa limitación es el diseño, no un defecto: un despliegue público no debería
 poder recalcular nada sobre individuos.
 
 Solo lee la ÚLTIMA corrida publicada del módulo de estudiantes (filtro por
-`modulo` y, desde la migración 2026-10-07, también la política RLS), y lo hace
-con la clave `anon`, que no tiene permiso de escritura.
+`modulo` y `publicada = true` y, desde la migración 2026-10-07, también la
+política RLS), y lo hace con la clave `anon`, que no tiene permiso de escritura.
+
+La única excepción es la vista previa del equipo (`src.core.vista_previa`, solo
+en el despliegue privado): `cargar_desde_supabase(cli, corrida_id=N)` lee la
+corrida N con el cliente del usuario de carga, publicada o no. Con la clave
+anon la base no la deja ver (RLS) y no hay nada que leer.
 """
 from __future__ import annotations
 
@@ -94,17 +99,28 @@ def id_corrida_vigente() -> int | None:
     clave cambia y se vuelve a leer todo, sin esperar a que el proceso reinicie.
     """
     cli = _cliente()
+    # `publicada = true` también lo exige la base (RLS); aquí se repite por si
+    # el cliente ve todo (clave de servicio o usuario de carga).
     filas = (cli.postgrest.schema(ESQUEMA).table("corridas").select("id")
-             .eq("modulo", MODULO)
+             .eq("modulo", MODULO).eq("publicada", True)
              .order("creada_en", desc=True).limit(1).execute().data)
     return int(filas[0]["id"]) if filas else None
 
 
-def _traer_filas(cli) -> tuple[dict | None, list[dict]]:
-    """(corrida publicada, filas de resultados). RLS ya filtra por `publicada`."""
+def _traer_filas(cli, corrida_id: int | None = None) -> tuple[dict | None, list[dict]]:
+    """(corrida, filas de resultados).
+
+    Sin `corrida_id`, la última publicada (`publicada = true` aquí y en RLS).
+    Con `corrida_id`, esa corrida del módulo, publicada o no: es la vista previa,
+    y solo el usuario de carga la puede leer.
+    """
     tabla = cli.postgrest.schema(ESQUEMA)
-    corridas = (tabla.table("corridas").select("*").eq("modulo", MODULO)
-                .order("creada_en", desc=True).limit(1).execute().data)
+    consulta = tabla.table("corridas").select("*").eq("modulo", MODULO)
+    if corrida_id is None:
+        consulta = consulta.eq("publicada", True)
+    else:
+        consulta = consulta.eq("id", corrida_id)
+    corridas = consulta.order("creada_en", desc=True).limit(1).execute().data
     if not corridas:
         return None, []
     corrida = corridas[0]
@@ -385,10 +401,14 @@ def _subgrupos(nivel: str, filas: list[dict]) -> dict:
     return salida
 
 
-def cargar_desde_supabase() -> tuple[dict, list, dict | None]:
-    """(analisis por nivel, informes, corrida). Vacío si no hay corrida publicada."""
-    cli = _cliente()
-    corrida, filas = _traer_filas(cli)
+def cargar_desde_supabase(cli=None, corrida_id: int | None = None
+                          ) -> tuple[dict, list, dict | None]:
+    """(analisis por nivel, informes, corrida). Vacío si no hay corrida publicada.
+
+    `corrida_id` solo para la vista previa del equipo (ver `_traer_filas`).
+    """
+    cli = cli or _cliente()
+    corrida, filas = _traer_filas(cli, corrida_id)
     if not corrida or not filas:
         return {}, [], corrida
 

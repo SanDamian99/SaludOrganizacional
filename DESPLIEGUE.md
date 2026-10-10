@@ -228,6 +228,55 @@ no se abre a mano antes de la aprobación.
 6. Los mensajes por rol de las alertas se suben a `obs360.mensajes` en un paso
    aparte, cuando el equipo apruebe los textos.
 
+## Vista previa para el equipo
+
+Sirve para que el equipo revise en el despliegue **privado** la última corrida
+**oculta** (subida sin `--publicar-ya`) de cada módulo antes de aprobarla: el
+panel de alertas de Estudiantes y la vista de comunidad de Cuidadores con sus
+señales, aunque los textos y las rutas todavía no estén aprobados. Lo público no
+cambia: la clave anon sigue viendo solo la última corrida publicada de cada
+módulo.
+
+**Cómo funciona.** Cuando la página lee de Supabase (no hay archivos en disco) y
+existe una corrida oculta más nueva que la publicada, la barra lateral muestra
+el interruptor «Vista previa: corrida en revisión (N)», encendido por defecto en
+el modo `investigador` (apagado en `completo`). Encendido, la página lee esa
+corrida con el usuario de carga y pone arriba una franja: «Vista previa para el
+equipo: esta corrida no está publicada; los textos de alertas y de Cuidadores
+son provisionales y están pendientes de aprobación. Lo público sigue mostrando
+la corrida X.» También aparece el aviso interno «ruta pendiente de validación».
+Apagado, la página muestra lo publicado, como siempre. Las banderas
+`TEXTOS_APROBADOS` / `RUTAS_VALIDADAS` siguen siendo la puerta de lo público y
+de `--publicar-ya`; la vista previa no las toca.
+
+**Qué necesita.**
+
+1. Ningún secreto nuevo: los que el despliegue privado ya tiene
+   (`OBS360_CARGA_EMAIL` / `OBS360_CARGA_CLAVE`, del usuario con
+   `app_metadata.obs360_rol = 'cargador'`, más `SUPABASE_URL` / `SUPABASE_KEY`).
+   El despliegue público no los tiene y en modo `comunidad` el módulo
+   `src/core/vista_previa.py` ni se importa.
+2. La migración `supabase/migraciones/2026-10-10-vista-previa-cargador.sql`
+   aplicada (SQL Editor → Run). Da al cargador **solo lectura** de todas las
+   corridas y sus resultados. Sin ella el interruptor no aparece: el cargador
+   no ve ninguna corrida oculta.
+3. «Reboot app» después de fusionar.
+
+**Cómo dejar una corrida en revisión** (en la máquina que procesa, con
+`SUPABASE_SERVICE_KEY`):
+
+```bash
+python -m src.estudiantes.publicar --notas "revisión equipo"      # sin --publicar-ya
+python -m src.cuidadores.publicar --notas "revisión equipo"       # sin --publicar-ya
+```
+
+Sin `--publicar-ya` la corrida queda oculta **con** sus filas de alertas
+(estudiantes) y de señales del adulto (cuidadores), aunque los textos no estén
+aprobados; el despliegue del equipo la muestra en hasta dos minutos (o al
+recargar la sesión). No se abre a mano con `UPDATE … publicada = true`: cuando
+el equipo apruebe, se ponen las banderas en `True` (commit aparte) y se publica
+de nuevo con `--publicar-ya`, como en «Publicar alertas».
+
 ## Qué esperar del arranque
 
 La primera carga tarda unos segundos: lee la corrida completa y rearma las

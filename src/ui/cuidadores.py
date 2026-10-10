@@ -16,6 +16,13 @@ Dos fuentes, en este orden:
      olas. `OBS360_FUENTE=supabase` la fuerza aunque haya archivos.
 Sin ninguna de las dos, dice que Cuidadores aún no está publicado y no falla.
 
+Vista previa del equipo (`src.core.vista_previa`): sin archivo, si hay una
+corrida de cuidadores OCULTA más nueva que la publicada y las credenciales de
+carga, un interruptor de la barra lateral la muestra (encendido por defecto en
+el modo investigador), con una franja arriba que lo advierte. El panel de
+señales y la vista de comunidad salen de esa corrida aunque los textos no estén
+aprobados: esa puerta es para lo público y para publicar, no para revisar.
+
 El despliegue público nunca importa este módulo (`main.py` corta antes): allí
 la página es `cuidadores_comunidad.render_publico`.
 """
@@ -85,15 +92,78 @@ def _sin_datos() -> None:
     st.info(NO_PUBLICADO, icon="⏳")
 
 
+# ── Vista previa del equipo ─────────────────────────────────────────────────
+def _vista_previa():
+    """Módulo `vista_previa`, o None (modo comunidad, ausente o rancio)."""
+    if modo_app.modo() == modo_app.COMUNIDAD:
+        return None
+    try:
+        from src.core import vista_previa as vp
+    except Exception:                                      # noqa: BLE001
+        return None
+    necesarias = ("interruptor", "banner", "cliente_autenticado", "marcar_en_uso")
+    return vp if all(callable(getattr(vp, n, None)) for n in necesarias) else None
+
+
+def _marcar_en_uso(en_uso: bool) -> None:
+    vp = _vista_previa()
+    if vp is not None:
+        vp.marcar_en_uso(cat.MODULO, en_uso)
+
+
+@st.cache_resource(show_spinner="Leyendo la corrida de cuidadores en revisión…")
+def _leer_revision(_clave: str, corrida_id: int):
+    """La corrida oculta `corrida_id`, con el usuario de carga. Lanza si no hay sesión."""
+    from src.cuidadores import lectura
+    vp = _vista_previa()
+    cli = vp.cliente_autenticado() if vp is not None else None
+    if cli is None:
+        raise RuntimeError("Sin sesión del usuario de carga.")
+    return lectura.cargar_desde_supabase(cli, corrida_id=corrida_id)[0]
+
+
+def en_revision():
+    """(información de la revisión, cuidadores de la corrida oculta) o (None, None).
+
+    Dibuja el interruptor; nunca lanza: ante cualquier fallo, lo publicado.
+    """
+    vp = _vista_previa()
+    if vp is None:
+        return None, None
+    try:
+        from src.cuidadores import lectura
+        if not lectura.disponible():
+            return None, None
+        info = vp.interruptor(cat.MODULO)
+        if not info:
+            return None, None
+        corrida = info["en_revision"]
+        datos = _leer_revision(f"{cat.MODULO}-corrida-{corrida}-vista-previa", corrida)
+        return (info, datos) if datos is not None else (None, None)
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning(
+            "No se pudo leer la corrida de cuidadores en revisión; se muestra la publicada")
+        return None, None
+
+
 def _desde_supabase(vista: str) -> None:
     from src.cuidadores import lectura
     from src.ui.views import cuidadores_comunidad as vc
-    publicado = vc.publicado()
-    if publicado is None:
-        _sin_datos()
-        return
-    st.sidebar.caption("Fuente: corrida publicada")
-    st.info(lectura.AVISO_PUBLICADO, icon="🗄️")
+    info, revision = en_revision()
+    _marcar_en_uso(revision is not None)
+    if revision is not None:
+        _vista_previa().banner(info)
+        st.sidebar.caption(f"Fuente: corrida en revisión ({info['en_revision']}), "
+                           "no publicada")
+        publicado = revision
+    else:
+        publicado = vc.publicado()
+        if publicado is None:
+            _sin_datos()
+            return
+        st.sidebar.caption("Fuente: corrida publicada")
+        st.info(lectura.AVISO_PUBLICADO, icon="🗄️")
     if vista == "comunidad":
         from src.ui import estado
         estado.aplicar_colegio_de_url(vc.colegio_de_la_url(publicado))
@@ -108,6 +178,7 @@ def render_cuidadores() -> None:
     from src.cuidadores import pipeline
 
     vista = _vista()
+    _marcar_en_uso(False)
     forzada = os.environ.get("OBS360_FUENTE", "").strip().lower() == "supabase"
     ruta = None if forzada else pipeline.localizar_formulario()
     if not ruta:

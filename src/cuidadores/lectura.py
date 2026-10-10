@@ -12,6 +12,11 @@ Solo lee la ÚLTIMA corrida publicada del módulo «cuidadores» (filtro por
 `modulo`, y la política RLS solo deja ver la última publicada de cada módulo),
 con la clave `anon`, que no escribe. Nunca toca la de estudiantes.
 
+La única excepción es la vista previa del equipo (`src.core.vista_previa`, solo
+en el despliegue privado): `cargar_desde_supabase(cli, corrida_id=N)` lee la
+corrida N con el cliente del usuario de carga, publicada o no. Con la clave
+anon la base no la deja ver (RLS).
+
 Es un módulo nuevo y liviano: no importa ingesta, pipeline ni puntuación, así
 que puede cargarse en el despliegue público.
 """
@@ -92,11 +97,16 @@ def id_corrida_vigente(cli=None) -> int | None:
     return int(filas[0]["id"]) if filas else None
 
 
-def _traer_filas(cli) -> tuple[dict | None, list[dict]]:
+def _traer_filas(cli, corrida_id: int | None = None) -> tuple[dict | None, list[dict]]:
+    """(corrida, filas). Sin `corrida_id`, la última publicada; con él, esa
+    corrida de cuidadores, publicada o no (vista previa del usuario de carga)."""
     tabla = cli.postgrest.schema(ESQUEMA)
-    corridas = (tabla.table("corridas").select("*").eq("modulo", MODULO)
-                .eq("publicada", True)
-                .order("creada_en", desc=True).limit(1).execute().data)
+    consulta = tabla.table("corridas").select("*").eq("modulo", MODULO)
+    if corrida_id is None:
+        consulta = consulta.eq("publicada", True)
+    else:
+        consulta = consulta.eq("id", corrida_id)
+    corridas = consulta.order("creada_en", desc=True).limit(1).execute().data
     if not corridas:
         return None, []
     corrida = corridas[0]
@@ -256,10 +266,14 @@ def reconstruir(filas: list[dict], corrida: dict | None = None) -> CuidadoresPub
         informe=informe_desde(propias), corrida=dict(corrida or {}))
 
 
-def cargar_desde_supabase(cli=None) -> tuple[CuidadoresPublicados | None, dict | None]:
-    """(cuidadores publicados, corrida). (None, corrida o None) si no hay nada que leer."""
+def cargar_desde_supabase(cli=None, corrida_id: int | None = None
+                          ) -> tuple[CuidadoresPublicados | None, dict | None]:
+    """(cuidadores publicados, corrida). (None, corrida o None) si no hay nada que leer.
+
+    `corrida_id` solo para la vista previa del equipo (ver `_traer_filas`).
+    """
     cli = cli or _cliente()
-    corrida, filas = _traer_filas(cli)
+    corrida, filas = _traer_filas(cli, corrida_id)
     if not corrida or not filas:
         return None, corrida
     return reconstruir(filas, corrida), corrida

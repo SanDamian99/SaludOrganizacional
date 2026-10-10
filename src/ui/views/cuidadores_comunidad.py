@@ -615,12 +615,14 @@ def colegio_de_la_url(ac) -> str | None:
 
 
 def avisos_internos() -> list[str]:
-    """Avisos de textos y ruta pendientes: solo en el modo completo, nunca en público."""
+    """Avisos de textos y ruta pendientes: en el modo completo y en la vista previa
+    del equipo (corrida en revisión, despliegue privado); nunca en público."""
     try:
         from src.core import modo as modo_app
+        from src.ui.views.estudiantes_comunidad import en_vista_previa
     except Exception:                                      # noqa: BLE001
         return []
-    if modo_app.modo() != modo_app.COMPLETO:
+    if modo_app.modo() != modo_app.COMPLETO and not en_vista_previa(cat.MODULO):
         return []
     salida = []
     if not cc.TEXTOS_APROBADOS:

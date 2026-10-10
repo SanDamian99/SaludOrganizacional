@@ -41,6 +41,7 @@ hacer ni con acceso total a la base.
 |---|---|
 | RLS activo en las tres tablas nuevas | sí |
 | Políticas de lectura para el rol anónimo | solo la **última** corrida con `publicada = true` de cada módulo (función `obs360.es_ultima_publicada`, desde la migración 2026-10-07) |
+| Lectura de corridas ocultas | solo el usuario de carga (`obs360.es_cargador()`, migración 2026-10-10), para la vista previa del equipo |
 | Políticas de escritura para el rol anónimo | **ninguna** |
 | Concesiones `INSERT/UPDATE/DELETE` a `anon` en `public` y `obs360` | **ninguna** |
 | Tablas sin RLS en `public` y `obs360` | ninguna |
@@ -256,6 +257,26 @@ barrera contra conteos de casos y se recomienda antes de la primera corrida.
 - **Verificar después de publicar:** `SELECT modulo, id, creada_en FROM
   obs360.ultima_corrida;` debe dar una fila de `estudiantes` y otra de
   `cuidadores`. La de estudiantes no cambia al publicar cuidadores.
+
+## Migración: vista previa del cargador (10 oct 2026)
+
+Archivo: `supabase/migraciones/2026-10-10-vista-previa-cargador.sql` (ya
+incluida en `estudiantes_schema.sql`).
+
+- **Qué hace:** añade dos políticas `FOR SELECT TO authenticated USING
+  (obs360.es_cargador())`, en `corridas` y en `resultados`: el usuario de carga
+  (`app_metadata.obs360_rol = 'cargador'`, solo en los secretos del despliegue
+  privado) lee cualquier corrida, publicada u oculta. Es lo que usa la vista
+  previa del equipo (`src/core/vista_previa.py`, ver DESPLIEGUE.md).
+- **Qué no cambia:** las políticas públicas (`es_ultima_publicada`) siguen
+  igual, así que anon y cualquier otro usuario autenticado solo ven la última
+  corrida publicada de cada módulo. No se crea ninguna política de escritura.
+  `mensajes` no se toca: la aplicación no la lee.
+- **Verificar:** `SELECT tablename, policyname, cmd, roles FROM pg_policies
+  WHERE schemaname = 'obs360' AND tablename IN ('corridas', 'resultados');`
+  debe listar, por tabla, la política pública y la del cargador, ambas `SELECT`.
+- **Sin ella:** la aplicación funciona igual que antes; el interruptor de vista
+  previa simplemente no aparece.
 
 ## Lo que falta
 

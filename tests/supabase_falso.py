@@ -8,7 +8,11 @@ Imita lo que importa del esquema real (supabase/estudiantes_schema.sql):
     `grupo`, ningún conteo de casos en `detalle` y alertas con estado solo
     donde hay cifra;
   · RLS: el cliente anónimo no escribe y solo ve la ÚLTIMA corrida publicada
-    de cada módulo (`es_ultima_publicada`) y sus resultados.
+    de cada módulo (`es_ultima_publicada`) y sus resultados;
+  · el usuario de carga (`cargador`, migración 2026-10-10) tampoco escribe en
+    `corridas` ni en `resultados`, pero lee todas las corridas, publicadas o no.
+    `cliente_sin_sesion()` empieza como anónimo y pasa a cargador al iniciar
+    sesión con `CREDENCIALES_CARGADOR` (imita `auth.sign_in_with_password`).
 Y la cadena de PostgREST que usan los publicadores y los lectores: select, eq,
 neq, order, limit, range, insert, update, delete y execute.
 """
@@ -45,11 +49,22 @@ class _Respuesta:
         self.data = data
 
 
+class _Sesion:
+    """Rol con el que consulta un cliente: «servicio», «anon» o «cargador»."""
+
+    def __init__(self, rol: str):
+        self.rol = rol
+
+
 class _Consulta:
-    def __init__(self, base: "BaseFalsa", tabla: str, anonimo: bool):
-        self.b, self.t, self.anon = base, tabla, anonimo
+    def __init__(self, base: "BaseFalsa", tabla: str, sesion: _Sesion):
+        self.b, self.t, self.sesion = base, tabla, sesion
         self.filtros, self.orden, self.tope, self.rango = [], None, None, None
         self.accion, self.valores = "select", None
+
+    @property
+    def anon(self) -> bool:
+        return self.sesion.rol == "anon"
 
     # lectura
     def select(self, *_):
@@ -99,8 +114,8 @@ class _Consulta:
         return [f for f in filas if all(c(f) for c in self.filtros)]
 
     def execute(self):
-        if self.accion != "select" and self.anon:
-            raise PermissionError("RLS: el rol anónimo no escribe")
+        if self.accion != "select" and self.sesion.rol != "servicio":
+            raise PermissionError(f"RLS: el rol {self.sesion.rol} no escribe")
         if self.accion == "insert":
             filas = self.valores if isinstance(self.valores, list) else [self.valores]
             nuevas = []
@@ -135,10 +150,18 @@ class _Consulta:
         return _Respuesta(copy.deepcopy(filas))
 
 
+CREDENCIALES_CARGADOR = {"email": "cargador@prueba.invalid", "password": "clave-secreta-de-prueba"}
+
+
+class CredencialesInvalidas(Exception):
+    """Lo que lanza gotrue cuando el usuario o la clave no son válidos."""
+
+
 class BaseFalsa:
     def __init__(self):
         self.tablas: dict[str, list[dict]] = {"corridas": [], "resultados": []}
         self._id = 0
+        self.inicios_de_sesion = 0
 
     def siguiente(self) -> int:
         self._id += 1
@@ -157,17 +180,36 @@ class BaseFalsa:
     def corrida(self, corrida_id) -> dict:
         return next(c for c in self.tablas["corridas"] if c["id"] == corrida_id)
 
-    def cliente(self, anonimo: bool = False):
+    def cliente(self, anonimo: bool = False, cargador: bool = False):
+        """Cliente de servicio (por defecto), anónimo o del usuario de carga."""
+        rol = "anon" if anonimo else "cargador" if cargador else "servicio"
+        return self._cliente(_Sesion(rol))
+
+    def cliente_sin_sesion(self):
+        """Cliente con la clave anon: es cargador solo tras iniciar sesión bien."""
+        return self._cliente(_Sesion("anon"))
+
+    def _cliente(self, sesion: _Sesion):
         base = self
 
         class _Esquema:
             def table(self, nombre):
-                return _Consulta(base, nombre, anonimo)
+                return _Consulta(base, nombre, sesion)
 
         class _Postgrest:
             def schema(self, _):
                 return _Esquema()
 
+        class _Auth:
+            def sign_in_with_password(self, credenciales):
+                base.inicios_de_sesion += 1
+                if dict(credenciales) != CREDENCIALES_CARGADOR:
+                    raise CredencialesInvalidas(
+                        f"Invalid login credentials for {credenciales.get('email')} "
+                        f"with {credenciales.get('password')}")
+                sesion.rol = "cargador"
+
         class _Cliente:
             postgrest = _Postgrest()
+            auth = _Auth()
         return _Cliente()

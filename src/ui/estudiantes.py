@@ -9,6 +9,11 @@ La carga y el análisis se cachean con `st.cache_resource` porque el resultado n
 es un DataFrame serializable sino un grafo de objetos; la clave incluye la ruta y
 la fecha de modificación de cada archivo, así que basta con volver a guardar un
 formulario para que se recalcule.
+
+Vista previa del equipo (`src.core.vista_previa`): en el despliegue privado, sin
+formularios en disco, un interruptor de la barra lateral muestra la última
+corrida OCULTA en lugar de la publicada, con una franja que lo advierte. En el
+modo comunidad ese módulo ni se importa.
 """
 from __future__ import annotations
 
@@ -58,7 +63,61 @@ def _leer_publicado(_clave: str) -> tuple:
     return lectura.cargar_desde_supabase()
 
 
-def cargar_analisis(base: str | None = None):
+# ── Vista previa del equipo ─────────────────────────────────────────────────
+def _vista_previa():
+    """Módulo `vista_previa`, o None.
+
+    Nunca en el modo comunidad: ahí no se importa. Y como Streamlit puede
+    conservar módulos viejos tras un despliegue, se importa dentro de un `try` y
+    se comprueba que traiga lo que se usa: un módulo rancio no tumba la página.
+    """
+    if modo_app.modo() == modo_app.COMUNIDAD:
+        return None
+    try:
+        from src.core import vista_previa as vp
+    except Exception:                                      # noqa: BLE001
+        return None
+    necesarias = ("interruptor", "banner", "cliente_autenticado", "marcar_en_uso")
+    return vp if all(callable(getattr(vp, n, None)) for n in necesarias) else None
+
+
+def _fuente_supabase(base: str) -> bool:
+    """True si la página va a leer de Supabase (no hay formularios o se fuerza)."""
+    if os.environ.get("OBS360_FUENTE", "").strip().lower() == "supabase":
+        return True
+    return not pipeline.localizar_formularios(base)
+
+
+def _revision_activa(base: str) -> dict | None:
+    """Interruptor de la vista previa; la corrida en revisión si está encendido."""
+    vp = _vista_previa()
+    if vp is None:
+        return None
+    try:
+        if not lectura.disponible() or not _fuente_supabase(base):
+            return None
+        return vp.interruptor(lectura.MODULO)
+    except Exception:                                      # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("Vista previa no disponible en esta ejecución")
+        return None
+
+
+@st.cache_resource(show_spinner="Leyendo la corrida en revisión…")
+def _leer_revision(_clave: str, corrida_id: int) -> tuple:
+    """La corrida oculta `corrida_id`, con el usuario de carga.
+
+    `_clave` es (módulo, corrida, vista previa): nunca coincide con la de la
+    corrida publicada. Si no hay sesión, lanza y no se guarda en caché.
+    """
+    vp = _vista_previa()
+    cli = vp.cliente_autenticado() if vp is not None else None
+    if cli is None:
+        raise RuntimeError("Sin sesión del usuario de carga.")
+    return lectura.cargar_desde_supabase(cli, corrida_id=corrida_id)
+
+
+def cargar_analisis(base: str | None = None, revision: int | None = None):
     """(analisis, informes, origen).
 
     Dos fuentes, en este orden:
@@ -69,7 +128,9 @@ def cargar_analisis(base: str | None = None):
          eso es deliberado: un despliegue no debería poder recalcular nada sobre
          individuos.
 
-    `origen` es "archivos", "supabase" o None si no hay ninguna de las dos.
+    `origen` es "archivos", "supabase" o None si no hay ninguna de las dos; y
+    "revision" si se pidió la corrida oculta `revision` (vista previa del
+    equipo) y se pudo leer. Si no se puede, se sigue con la publicada.
     """
     base = base or _raiz_proyecto()
     # `OBS360_FUENTE=supabase` fuerza la segunda fuente aunque los archivos estén
@@ -80,6 +141,18 @@ def cargar_analisis(base: str | None = None):
         firma = tuple((r, os.path.getmtime(r)) for r in rutas)
         analisis, informes = _analizar(firma)
         return analisis, informes, "archivos"
+
+    if revision is not None:
+        try:
+            analisis, informes, _ = _leer_revision(
+                f"{lectura.MODULO}-corrida-{revision}-vista-previa", revision)
+        except Exception:                                  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning(
+                "No se pudo leer la corrida en revisión; se muestra la publicada")
+            analisis = None
+        if analisis:
+            return analisis, informes, "revision"
 
     if lectura.disponible():
         analisis, informes, corrida = _leer_publicado(f"corrida-{_corrida_vigente()}")
@@ -153,8 +226,10 @@ def colegio_de_la_url(analisis) -> str | None:
 
 def render_estudiantes() -> None:
     base = _raiz_proyecto()
+    revision = _revision_activa(base)
     try:
-        analisis, informes, origen = cargar_analisis(base)
+        analisis, informes, origen = cargar_analisis(
+            base, revision=revision["en_revision"] if revision else None)
     except Exception as exc:                                   # noqa: BLE001
         st.title("🎒 Estudiantes 360")
         texto = str(exc)
@@ -175,6 +250,12 @@ def render_estudiantes() -> None:
                        "ítems estén completos. El detalle queda en los registros "
                        "de la aplicación.")
         return
+
+    vp = _vista_previa()
+    if vp is not None:
+        vp.marcar_en_uso(lectura.MODULO, origen == "revision")
+        if origen == "revision":
+            vp.banner(revision)
 
     if not analisis:
         _sin_datos(base)
@@ -202,6 +283,9 @@ def render_estudiantes() -> None:
         st.caption(f"{total:,}".replace(",", " ") + " respuestas válidas")
         if origen == "supabase":
             st.caption("Fuente: corrida publicada")
+        elif origen == "revision":
+            st.caption(f"Fuente: corrida en revisión ({revision['en_revision']}), "
+                       "no publicada")
 
     if origen == "supabase":
         st.info(lectura.AVISO_SIN_DATOS_CRUDOS, icon="🗄️")
