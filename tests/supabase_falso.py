@@ -4,11 +4,12 @@ Una base `obs360` en memoria para las pruebas de publicar → leer (sin red).
 Imita lo que importa del esquema real (supabase/estudiantes_schema.sql):
   · `corridas` con `id` y `creada_en` crecientes y `publicada = false` al entrar;
   · los CHECK de `resultados`: n ≥ 10, nivel en ('secundaria', 'primaria',
-    'cuidadores'), ningún identificador ^[ECN][0-9a-f]{8}$ en `clave` ni en
+    'cuidadores', 'triangulacion'), ningún identificador ^[ECN][0-9a-f]{8}$ en `clave` ni en
     `grupo`, ningún conteo de casos en `detalle` y alertas con estado solo
     donde hay cifra;
   · RLS: el cliente anónimo no escribe y solo ve la ÚLTIMA corrida publicada
-    de cada módulo (`es_ultima_publicada`) y sus resultados;
+    de cada módulo y sus resultados, nunca de triangulación (`es_publica`,
+    migración 2026-10-10b: ni la corrida ni una fila de nivel 'triangulacion');
   · el usuario de carga (`cargador`, migración 2026-10-10) tampoco escribe en
     `corridas` ni en `resultados`, pero lee todas las corridas, publicadas o no.
     `cliente_sin_sesion()` empieza como anónimo y pasa a cargador al iniciar
@@ -22,7 +23,8 @@ import copy
 import re
 
 PATRON_ID = re.compile(r"^[ECN][0-9a-f]{8}$", re.IGNORECASE)
-NIVELES = ("secundaria", "primaria", "cuidadores")
+NIVELES = ("secundaria", "primaria", "cuidadores", "triangulacion")
+PRIVADO = "triangulacion"          # módulo y nivel que el público nunca lee
 
 
 class ViolacionCheck(ValueError):
@@ -108,9 +110,10 @@ class _Consulta:
         filas = self.b.tablas[self.t]
         if self.anon:
             if self.t == "corridas":
-                filas = [f for f in filas if self.b.es_ultima_publicada(f["id"])]
+                filas = [f for f in filas if self.b.es_publica(f["id"])]
             elif self.t == "resultados":
-                filas = [f for f in filas if self.b.es_ultima_publicada(f["corrida_id"])]
+                filas = [f for f in filas if self.b.es_publica(f["corrida_id"])
+                         and f.get("nivel") != PRIVADO]
         return [f for f in filas if all(c(f) for c in self.filtros)]
 
     def execute(self):
@@ -176,6 +179,13 @@ class BaseFalsa:
         if not publicadas:
             return False
         return max(publicadas, key=lambda c: (c["creada_en"], c["id"]))["id"] == corrida_id
+
+    def es_publica(self, corrida_id) -> bool:
+        """`obs360_interno.es_publica`: última publicada y que no sea de triangulación."""
+        propia = next((c for c in self.tablas["corridas"] if c["id"] == corrida_id), None)
+        if propia is None or str(propia["modulo"]).strip().lower() == PRIVADO:
+            return False
+        return self.es_ultima_publicada(corrida_id)
 
     def corrida(self, corrida_id) -> dict:
         return next(c for c in self.tablas["corridas"] if c["id"] == corrida_id)

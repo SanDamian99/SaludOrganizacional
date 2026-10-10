@@ -164,19 +164,20 @@ AVISO_CLASIFICACION = ("«Tensión»: los intervalos de los dos actores excluyen
                        "direcciones opuestas. «Coincidencia»: lo excluyen en la misma "
                        "dirección. En otro caso, «sin diferencia clara». Con muchas "
                        "comparaciones, alguna puede deberse al azar.")
-AVISO_DESPLIEGUE = ("La triangulación solo funciona en la máquina que procesa los "
-                    "formularios (estudiantes, cuidadores y docentes). En el despliegue del "
-                    "equipo, la capa por colegio necesitará los agregados publicados de "
-                    "cuidadores, que llegan con la fase 4b; las díadas nunca salen de la "
-                    "máquina local.")
+AVISO_DESPLIEGUE = ("No hay en esta máquina los archivos de los tres actores (estudiantes, "
+                    "cuidadores y docentes) y aún no hay una corrida de triangulación "
+                    "publicada para el equipo. La máquina que procesa los formularios la sube "
+                    "con «python -m src.triangulacion.publicar»: solo agregados, y solo la "
+                    "lee el despliegue del equipo, nunca el público.")
 AVISO_ENLACE = ("Enlace exacto: el seudónimo HMAC del nombre normalizado del niño, calculado "
                 "con la misma clave local en los dos formularios, y verificado con el "
                 "colegio. No hay coincidencias aproximadas: un nombre escrito distinto no "
                 "enlaza. Un seudónimo repetido dentro de un mismo colegio, en cualquiera de "
                 "los dos formularios, es ambiguo: se descarta y se cuenta. Los seudónimos no "
                 "se guardan ni se muestran.")
-AVISO_DIADAS = ("Las díadas solo existen en esta máquina. Toda cifra exige 10 o más díadas de "
-                "10 o más familias distintas; ninguna salida muestra una díada.")
+AVISO_DIADAS = ("Las díadas solo existen en la máquina que procesa los formularios. Toda "
+                "cifra exige 10 o más díadas de 10 o más familias distintas; ninguna salida "
+                "muestra una díada.")
 AVISO_SDQ = ("Cada informante se lee con sus propias bandas: autoinforme para el niño y "
              "versión para padres para el cuidador (sdqinfo.org). " + cat_est.AVISO_PRIMARIA)
 AVISO_MSPSS = cat_cuid.AVISO_MSPSS
