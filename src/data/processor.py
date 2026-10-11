@@ -195,33 +195,6 @@ class ExcelProcessor:
             "extra_variables": []
         }
 
-    def _impute_missing(self, df: pd.DataFrame, protected=None) -> pd.DataFrame:
-        """Imputación responsable: solo ítems numéricos/escala (mediana).
-
-        Columnas protegidas (identificadores) y categóricas/texto NO se imputan;
-        sus faltantes se conservan y quedan visibles en el diagnóstico.
-        """
-        protected = protected or set()
-        imputations = 0
-        by_col = {}
-        for col in df.columns:
-            if col in protected:
-                continue
-            missing_count = int(df[col].isna().sum())
-            if missing_count <= 0:
-                continue
-            if pd.api.types.is_numeric_dtype(df[col]):
-                median_val = df[col].median()
-                if pd.isna(median_val):
-                    continue  # columna totalmente vacía: no se inventan datos
-                df[col] = df[col].fillna(median_val)
-                imputations += missing_count
-                by_col[col] = missing_count
-            # categóricas/texto: se preservan los NaN (no se imputan)
-        self.report["n_cells_imputed"] = int(imputations)
-        self.report["imputation_by_column"] = by_col
-        return df
-
     def _detect_likert_and_ranges(self, df: pd.DataFrame):
         for col in df.columns:
             if pd.api.types.is_numeric_dtype(df[col]):
@@ -363,7 +336,10 @@ class ExcelProcessor:
             self.report["scale_map"] = scale_map
             self.report["n_cols_scaled"] = len(scale_map)
 
-            df = self._impute_missing(df, protected=protected)
+            # Sin imputación: un dato que no se recogió queda faltante y el N de cada
+            # constructo es el de quienes respondieron (propuesta Docentes 10-oct-2026, §2.2).
+            self.report["n_cells_imputed"] = 0
+            self.report["imputation_by_column"] = {}
             self._detect_likert_and_ranges(df)
 
             self.report["n_rows_final"] = len(df)
@@ -412,6 +388,10 @@ class DataCleaner:
             # Merge inner report into our standard format
             report.update(inner_report)
             report["unmapped_columns"] = inner_report.get("extra_variables", [])
+            # Lo mismo que hace el cargador con el archivo de docentes (códigos de
+            # faltante): una subida manual no debe entrar con «hijos = 10».
+            from src.docentes.limpieza import posprocesar
+            df, report = posprocesar(df, report)
             report["success"] = True
             return df, report
         except ValueError as e:

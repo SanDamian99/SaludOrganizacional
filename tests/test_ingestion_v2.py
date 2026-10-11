@@ -38,15 +38,15 @@ def test_standard_csv_loads_without_loss(processor):
 
 
 # --- TEST 2: Archivo con datos faltantes ---
-def test_missing_data_gets_imputed(processor):
+def test_missing_data_stays_missing(processor):
     data = {
         "(BM),(SB)Burnout_1": [3, None, 7, None, 5],
         "(BM),(SB)Burnout_2": [2, 4, None, 6, 1],
     }
     df, report = processor.process_file(make_csv(data))
     assert report["success"] is True
-    assert report["n_cells_imputed"] > 0
-    assert df.isna().sum().sum() == 0  # No quedan nulos
+    assert report["n_cells_imputed"] == 0
+    assert df.isna().sum().sum() == 3  # los faltantes se conservan
 
 
 # --- TEST 3: Escala 1-5 y 1-7 en el mismo archivo ---

@@ -3,8 +3,9 @@ Prepara el archivo de docentes para la plataforma — Observatorio 360.
 
 Toma la exportación cruda del formulario «360 - Profesores (respuestas)» y
 produce el archivo codificado que entiende el dashboard: ítems numéricos con
-sus inversiones, totales por escala (`*_T`), colegio normalizado y sin la
-columna de nombres. Reemplaza al script heredado de la carpeta
+sus inversiones, totales por dimensión del catálogo (`*_T`, ver
+`src/docentes/catalogo.py`), la marca de codificación, colegio normalizado y
+sin la columna de nombres. Reemplaza al script heredado de la carpeta
 «Preprocesamiento 360», que estaba atado a 189 filas y a un solo export.
 
 Reglas:
@@ -179,15 +180,18 @@ MAPA_POR_PREFIJO = [
     ("CO", "FRECUENCIA6"), ("RO", "FRECUENCIA6"), ("Descon", "ACUERDO5"),
     ("BLG", "FRECUENCIA7"), ("Conf", "FRECUENCIA7"),
 ]
-# Ítems invertidos según la documentación de cada escala (igual que el heredado)
+# Ítems invertidos (codificación 2, octubre de 2026; ver src/docentes/catalogo.py).
+# Respecto al script heredado: PRPS_CE2 y CE9–16 ya no se invierten (en ISTAS21
+# solo el ítem 3 de exigencias va al revés), ERS_ACP1 tampoco, e IR1 («me veo
+# aquí el próximo año») sí, para que mida intención de irse como IR2–4.
 INVERTIDOS = {4: ["IRI_PT(3)", "IRI_PT(15)", "IRI_EC(4)", "IRI_EC(13)", "IRI_EC(14)", "IRI_EC(18)",
-                  "PSS3", "PSS4", "PSS5", "PSS7", "PSS9",
-                  "PRPS_CE2", "PRPS_CE3", "PRPS_CE9", "PRPS_CE10", "PRPS_CE11", "PRPS_CE12",
-                  "PRPS_CE13", "PRPS_CE14", "PRPS_CE15", "PRPS_CE16"],
-              3: ["ERS_CON1", "ERS_CON2", "ERS_CON3", "ERS_CON4", "ERS_ACP1"]}
-TOTALES = ["PSS", "MT", "CL", "AP", "CR", "CO", "RO", "Conf_FaTr", "Conf_TrFa", "BTA", "Comp",
-           "DefO", "Sat", "IR", "BLG_Psicoso", "BLG_Som", "BLG_Desg", "BLG_Alie", "Descon",
-           "PRPS_CE", "ERS_CLA", "ERS_CON", "ERS_ACP", "ERS_MET", "IRI_PT", "IRI_EC"]
+                  "PSS3", "PSS4", "PSS5", "PSS7", "PSS9", "PRPS_CE3"],
+              3: ["ERS_CON1", "ERS_CON2", "ERS_CON3", "ERS_CON4"],
+              5: ["IR1"]}
+# Los totales (`<clave>_T`) son las dimensiones del catálogo, calculadas por
+# src/docentes/scoring: subescalas con polaridad homogénea (control / demandas,
+# claridad / conflicto de rol, exigencias / trabajo activo…). Los totales viejos
+# con polaridad mezclada (MT_T, CR_T, PRPS_CE_T) desaparecen.
 
 
 class FormatoInesperado(ValueError):
@@ -296,12 +300,14 @@ def preparar(bruto: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             if c in d.columns:
                 d[c] = maximo - d[c]
 
-    # ── totales por escala (suma de ítems; NaN si faltan todos)
-    totales = {}
-    for prefijo in TOTALES:
-        cols = [c for c in items if re.fullmatch(rf"{re.escape(prefijo)}\d+|{re.escape(prefijo)}\(\d+\)", c)]
-        if cols:
-            totales[f"{prefijo}_T"] = d[cols].sum(axis=1, min_count=1)
+    # ── marca de codificación y totales por dimensión del catálogo
+    from src.docentes import catalogo as cat
+    from src.docentes import scoring as puntuacion
+    d = d.copy()                      # desfragmenta tras tantas columnas nuevas
+    d[cat.COLUMNA_CODIFICACION] = cat.CODIFICACION_ACTUAL
+    puntajes = puntuacion.puntuar(d)
+    totales = {f"{clave}_T": puntajes[clave] for clave in puntajes.columns
+               if f"{clave}_T" not in d.columns}
     d = pd.concat([d, pd.DataFrame(totales, index=d.index)], axis=1)
 
     informe["filas_validas"] = len(d)

@@ -52,6 +52,19 @@ def es_demo(label) -> bool:
     return any(d["label"] == label and d.get("demo", False) for d in PRELOADED_DATASETS)
 
 
+def _posprocesar(df, report):
+    """Lo que solo aplica al archivo de docentes: los códigos de faltante.
+
+    «Número de hijos» = 10 se convierte en NaN al cargar (ver
+    `src/docentes/limpieza.py`); el archivo no se modifica. Se ejecuta DENTRO
+    de las funciones cacheadas con `cache_resource`, una sola vez por archivo
+    y antes de que el objeto se comparta entre sesiones; nunca sobre el objeto
+    devuelto.
+    """
+    from src.docentes.limpieza import posprocesar
+    return posprocesar(df, report)
+
+
 # Los DataFrames van en `cache_resource`, no en `cache_data`: `cache_data`
 # serializa el resultado y entrega una COPIA en cada acceso, así que cada sesión
 # (cada visitante) guardaba su propio dataset de docentes en memoria. Con
@@ -67,6 +80,7 @@ def load_dataset(resolved_path: str):
     else:
         raw = pd.read_csv(resolved_path)
         df, report = proc.process_complex_excel(None, df_input=raw)
+    df, report = _posprocesar(df, report)
     report["success"] = True
     return df, report
 
@@ -102,6 +116,7 @@ def _procesar_desde_storage(ruta: str):
     from src.data import almacen
     raw = almacen.Almacen().descargar(ruta)
     df, report = ExcelProcessor().process_complex_excel(None, df_input=raw)
+    df, report = _posprocesar(df, report)
     report["success"] = True
     report["fuente"] = f"storage:{ruta}"
     return df, report

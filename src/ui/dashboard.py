@@ -15,6 +15,10 @@ from src.core.config import DATA_DICTIONARY, get_scale_range
 from src.core.state import get_processed_data
 from src.analysis import scoring, indicators
 from src.analysis import grupo_minimo as gm
+from src.docentes import catalogo as cat_doc
+from src.docentes import estadistica as doc_est
+from src.docentes import scoring as doc_scoring
+from src.docentes import universo
 from src.ui.components.filtering import render_filtering_sidebar
 
 SEM_COLORS = {"green": "#1A7F4B", "yellow": "#B07D0D", "red": "#C0392B", "grey": "#5F6368"}
@@ -345,6 +349,54 @@ def _enriched(df, cols):
     return indicators.enrich_indicators(df, cols)
 
 
+@st.cache_data(show_spinner=False)
+def _universo(df):
+    return universo.aplicar(df)
+
+
+@st.cache_data(show_spinner=False)
+def _resumen_docentes(df):
+    """Resumen anclado del archivo de docentes (src/docentes/scoring) y puntajes por docente.
+
+    Devuelve el resumen con las claves que esperan las vistas genéricas (label, theme,
+    mean, oriented, level, color…) para tocar lo mínimo de la vista en la fase 1:
+    `oriented` es el % de la escala teórica (no la posición en la muestra), `level`
+    la zona anclada al corte publicado o al tercio de la escala, y `min`/`max` la
+    escala teórica.
+    """
+    res = doc_scoring.resumen(df, solo_tablero=True)
+    enr = {}
+    for clave, i in res.items():
+        enr[clave] = {
+            "label": i["nombre"], "theme": i["tema"], "mean": i["media"], "std": i["de"],
+            "min": i["escala"][0], "max": i["escala"][1], "n": i["n"],
+            "oriented": i["pct_escala"] if i["pct_escala"] is not None else 50.0,
+            "pct": i["pct_escala"], "level": i["zona_etiqueta"], "color": i["color"],
+            "higher_is_better": i["mayor_mejor"], "ic_inf": i["ic_inf"], "ic_sup": i["ic_sup"],
+            "alfa": i["alfa"], "banda": i["banda"], "nota": i["nota"],
+            "aviso_version": i["aviso_version"], "comprobar": i["comprobar_en_manual"],
+        }
+    puntajes = doc_scoring.puntuar(df)[list(enr.keys())] if enr else pd.DataFrame(index=df.index)
+    return enr, puntajes
+
+
+def _nota_indicador(i) -> str:
+    partes = []
+    if i.get("banda"):
+        partes.append(f"banda: {i['banda']}" + (" (corte por confirmar)" if i.get("comprobar") else ""))
+    if i.get("aviso_version"):
+        partes.append("cambió el formulario en 2026")
+    if i.get("nota"):
+        partes.append(i["nota"])
+    return "; ".join(partes)
+
+
+def _ic_txt(i) -> str:
+    if i.get("ic_inf") is None:
+        return "—"
+    return f"{i['ic_inf']:.2f}–{i['ic_sup']:.2f}"
+
+
 def _group_columns(df, exclude):
     """Columnas categóricas/de agrupación (baja cardinalidad), excluyendo indicadores."""
     cols = []
@@ -375,24 +427,53 @@ def _label(c):
     return str(c).split(")")[-1].strip()
 
 
-def _theme_bar(items):
-    """Barra horizontal de posición relativa (0-100, orientada a mejor) por indicador."""
+def _tabla_grupo_vs_resto(comp, sel, gcol, grupos):
+    """Media [IC95] de cada grupo publicado y su diferencia con el resto [IC95, Welch]."""
+    filas = []
+    for g in grupos:
+        es = comp[gcol].astype(str) == str(g)
+        a, b = comp.loc[es, sel], comp.loc[~es, sel]
+        media, inf, sup = doc_est.ic_media(a)
+        dif, dinf, dsup = doc_est.ic_welch(a, b)
+        filas.append({
+            "Grupo": g, "n": int(a.notna().sum()),
+            "Media [IC 95 %]": f"{media:.2f} [{inf:.2f}–{sup:.2f}]" if inf is not None else f"{media:.2f}",
+            "Diferencia con el resto [IC 95 %]":
+                f"{dif:+.2f} [{dinf:+.2f}; {dsup:+.2f}]" if dinf is not None else (f"{dif:+.2f}" if dif is not None else "—"),
+        })
+    return pd.DataFrame(filas)
+
+
+def _theme_bar(items, anclado=False):
+    """Barra horizontal por indicador (0-100, orientada a mejor).
+
+    Con `anclado` el eje es el % de la escala teórica y el color la zona anclada;
+    si no, la posición relativa en la muestra (datasets genéricos).
+    """
     items = sorted(items, key=lambda kv: kv[1]["oriented"])
     labels = [i["label"] for _, i in items]
     vals = [i["oriented"] for _, i in items]
     colors = [i["color"] for _, i in items]
-    raw = [f"{i['mean']:.1f}  (rango {i['min']:.0f}–{i['max']:.0f}, N={i['n']})" for _, i in items]
+    if anclado:
+        raw = [f"{i['mean']:.2f} [IC95 {_ic_txt(i)}]  (escala {i['min']:.0f}–{i['max']:.0f}, N={i['n']})"
+               for _, i in items]
+        titulo = "% de la escala teórica (0 = mínimo posible, 100 = máximo posible; mayor = mejor)"
+        hover = "<b>%{y}</b><br>Escala: %{x:.0f}/100<br>Media: %{customdata[0]}<br>%{customdata[1]}<extra></extra>"
+    else:
+        raw = [f"{i['mean']:.1f}  (rango {i['min']:.0f}–{i['max']:.0f}, N={i['n']})" for _, i in items]
+        titulo = "Posición relativa en la muestra (0-100, orientada a mejor)"
+        hover = "<b>%{y}</b><br>Posición: %{x:.0f}/100<br>Media: %{customdata[0]}<br>%{customdata[1]}<extra></extra>"
     dirn = ["↑ mejor" if i["higher_is_better"] else "↑ riesgo" if i["higher_is_better"] is False
             else "dirección no definida" for _, i in items]
     fig = go.Figure(go.Bar(
         x=vals, y=labels, orientation="h", marker_color=colors,
         text=[f"{v:.0f}" for v in vals], textposition="outside",
         customdata=list(zip(raw, dirn)),
-        hovertemplate="<b>%{y}</b><br>Posición: %{x:.0f}/100<br>Media: %{customdata[0]}<br>%{customdata[1]}<extra></extra>",
+        hovertemplate=hover,
     ))
     fig.add_vline(x=50, line_dash="dash", line_color="#CBD5E1")
     fig.update_layout(height=max(190, len(labels) * 42), margin=dict(l=10, r=40, t=10, b=10),
-                      xaxis=dict(range=[0, 108], title="Posición relativa en la muestra (0-100, orientada a mejor)"),
+                      xaxis=dict(range=[0, 108], title=titulo),
                       showlegend=False)
     return fig
 
@@ -404,32 +485,58 @@ TEMA_OTROS = "📊 Otros indicadores"
 TEMAS_VISIBLES = [t for t in indicators.THEMES_ORDER if t != TEMA_OTROS]
 
 
-def _view_indicators(df, enr):
-    themes = indicators.by_theme(enr)
+AVISO_ANCLADO = ("Cada barra muestra la media del grupo en la escala original del cuestionario. "
+                 "El color indica en qué zona de la escala cae: verde (favorable), ámbar "
+                 "(intermedia) o naranja (a vigilar). En el estrés, el burnout y las exigencias "
+                 "se usan cortes publicados. No es un diagnóstico individual.")
+
+
+def _por_tema(enr, orden):
+    grupos = {t: [] for t in orden}
+    for col, info in enr.items():
+        grupos.setdefault(info["theme"], []).append((col, info))
+    return {t: v for t, v in grupos.items() if v}
+
+
+def _view_indicators(df, enr, puntajes=None):
+    """`puntajes` (un puntaje por docente y dimensión) activa la lectura anclada de
+    Docentes; sin él, la vista genérica de datasets con totales precalculados."""
+    anclado = puntajes is not None
+    themes = _por_tema(enr, cat_doc.TEMAS if anclado else TEMAS_VISIBLES)
 
     c1, c2 = st.columns(2)
     c1.metric("👥 Docentes", f"{len(df):,}")
     c2.metric("📐 Indicadores", len(enr))
 
-    st.info("Las barras muestran la **posición relativa dentro de esta muestra** (0-100), "
-            "orientada a *mayor = mejor* cuando se conoce la dirección del instrumento. "
-            "El nivel (Favorable/Intermedio/Atención) es relativo a la muestra, no un punto "
-            "de corte clínico. Ajusta etiquetas y direcciones en `docs/GUIA_DATASETS.md`.")
+    if anclado:
+        st.info(AVISO_ANCLADO)
+    else:
+        st.info("Las barras muestran la **posición relativa dentro de esta muestra** (0-100), "
+                "orientada a *mayor = mejor* cuando se conoce la dirección del instrumento. "
+                "El nivel (Favorable/Intermedio/Atención) es relativo a la muestra, no un punto "
+                "de corte clínico.")
 
-    for theme in TEMAS_VISIBLES:
-        items = themes.get(theme)
-        if not items:
-            continue
+    for theme, items in themes.items():
         st.markdown(f"##### {theme}")
-        st.plotly_chart(_theme_bar(items), width="stretch")
+        st.plotly_chart(_theme_bar(items, anclado=anclado), width="stretch")
 
     with st.expander("📋 Tabla completa de indicadores"):
-        table = pd.DataFrame([
-            {"Indicador": i["label"], "Tema": i["theme"], "Media": round(i["mean"], 2),
-             "DE": round(i["std"], 2), "Rango": f"{i['min']:.0f}–{i['max']:.0f}",
-             "N": gm.texto_n(i["n"]), "Nivel (muestra)": i["level"]}
-            for _, i in enr.items()
-        ])
+        if anclado:
+            table = pd.DataFrame([
+                {"Indicador": i["label"], "Tema": i["theme"], "Media": round(i["mean"], 2),
+                 "IC 95 %": _ic_txt(i), "DE": round(i["std"], 2),
+                 "Escala": f"{i['min']:.0f}–{i['max']:.0f}", "N": gm.texto_n(i["n"]),
+                 "α": round(i["alfa"], 2) if isinstance(i["alfa"], float) else None,
+                 "Zona": i["level"], "Nota": _nota_indicador(i)}
+                for _, i in enr.items()
+            ])
+        else:
+            table = pd.DataFrame([
+                {"Indicador": i["label"], "Tema": i["theme"], "Media": round(i["mean"], 2),
+                 "DE": round(i["std"], 2), "Rango": f"{i['min']:.0f}–{i['max']:.0f}",
+                 "N": gm.texto_n(i["n"]), "Nivel (muestra)": i["level"]}
+                for _, i in enr.items()
+            ])
         st.dataframe(table, width="stretch", hide_index=True)
 
     st.markdown("#### Explorar un indicador")
@@ -437,23 +544,39 @@ def _view_indicators(df, enr):
     sel = st.selectbox("Indicador:", keys, format_func=lambda c: enr[c]["label"])
     if sel:
         info = enr[sel]
+        serie = puntajes[sel] if anclado else df[sel]
         g, h = st.columns([1, 1.4])
         with g:
             st.metric(info["label"], f"{info['mean']:.2f}")
-            st.metric("Rango observado", f"{info['min']:.0f} – {info['max']:.0f}")
+            if anclado:
+                st.metric("IC 95 %", _ic_txt(info))
+                st.metric("Escala teórica", f"{info['min']:.0f} – {info['max']:.0f}")
+            else:
+                st.metric("Rango observado", f"{info['min']:.0f} – {info['max']:.0f}")
             st.metric("N", gm.texto_n(info["n"]))
         with h:
-            fig = px.histogram(df, x=sel, nbins=20, color_discrete_sequence=["#2E5FAC"])
+            fig = px.histogram(serie.dropna().to_frame(sel), x=sel, nbins=20,
+                               color_discrete_sequence=["#2E5FAC"])
             fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40),
                               xaxis_title=info["label"], yaxis_title="Frecuencia")
             st.plotly_chart(fig, width="stretch")
 
-        groups = _group_columns(df, exclude=set(enr.keys()))
+        excluir = set(enr.keys())
+        if anclado:
+            excluir |= set(cat_doc.todos_los_items()) | {cat_doc.COLUMNA_CODIFICACION}
+            excluir |= {c for c in df.columns if str(c).endswith("_T")}
+        groups = _group_columns(df, exclude=excluir)
         if groups:
             gcol = st.selectbox("Comparar por grupo:", groups, format_func=_label,
                                 key="doc_comparar_por")
-            agg = df.groupby(gcol)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
-            agg, ocultos = gm.grupos_comparables(agg, gcol)
+            comp = pd.DataFrame({sel: serie.values, gcol: df[gcol].values})
+            agg = comp.groupby(gcol)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
+            if anclado:
+                # Universo publicable: los grupos de menos de 10 van en «otros» y el
+                # total menos los mostrados nunca deja de 1 a 9 (src/docentes/universo).
+                agg, otros, absorbido, ocultos = universo.grupos_publicables(agg, gcol)
+            else:
+                agg, ocultos = gm.grupos_comparables(agg, gcol)
             if not agg.empty:
                 fig2 = px.bar(agg, x=gcol, y="mean", text=agg["mean"].round(2),
                               color="mean", color_continuous_scale="Blues",
@@ -462,7 +585,14 @@ def _view_indicators(df, enr):
                                    coloraxis_showscale=False,
                                    xaxis=dict(tickangle=-30, automargin=True))
                 st.plotly_chart(fig2, width="stretch")
-            st.caption(_pie_grupos(agg, gcol, ocultos))
+            if anclado:
+                st.caption(universo.pie(agg, gcol, otros, absorbido, ocultos))
+                if not agg.empty:
+                    st.dataframe(_tabla_grupo_vs_resto(comp, sel, gcol, agg[gcol].tolist()),
+                                 width="stretch", hide_index=True)
+                    st.caption("Diferencia grupo − resto del universo con IC 95 % (t de Welch).")
+            else:
+                st.caption(_pie_grupos(agg, gcol, ocultos))
 
 
 # ── Sidebar (reporte + filtros) ──────────────────────
@@ -534,6 +664,10 @@ def render_dashboard():
         )
 
     wellbeing = indicators.is_wellbeing_dataset(df)
+    if doc_scoring.es_archivo_docentes(df):
+        # Universo publicable: sedes fundidas con su institución y Secretaría fuera.
+        # El KPI «Docentes», los filtros y las comparaciones parten de aquí.
+        df = _universo(df)
     df_view = _sidebar(df, wellbeing)
     if not gm.grupo_suficiente(len(df_view)):
         # Grupo mínimo de 10: ni figuras ni cifras, solo el mensaje fijo.
@@ -554,12 +688,18 @@ def render_dashboard():
         with tab_acad:
             _view_academic(df_view, scores)
     else:
-        inds = indicators.detect_indicators(df_view)
-        enr = _enriched(df_view, inds) if inds else {}
+        puntajes = None
+        if doc_scoring.es_archivo_docentes(df_view):
+            # Archivo de docentes: puntuación desde los ítems, sin imputar y con
+            # semáforo anclado (src/docentes). Los *_T del archivo no se usan.
+            enr, puntajes = _resumen_docentes(df_view)
+        else:
+            inds = indicators.detect_indicators(df_view)
+            enr = _enriched(df_view, inds) if inds else {}
         tab_ind, tab_perfil = st.tabs(["🧠 Salud mental e indicadores", "👥 Perfil"])
         with tab_ind:
             if enr:
-                _view_indicators(df_view, enr)
+                _view_indicators(df_view, enr, puntajes)
             else:
                 st.warning("No se detectaron indicadores numéricos en este dataset.")
         with tab_perfil:
