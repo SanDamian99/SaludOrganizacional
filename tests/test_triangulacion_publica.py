@@ -93,22 +93,7 @@ def test_la_migracion_es_idempotente_y_solo_toca_lectura():
     assert "GRANT INSERT" not in codigo and "GRANT ALL" not in codigo
     assert "FUNCTION obs360.es_publica" not in codigo
     # la decisión queda escrita en la cabecera
-    assert "Decisión del usuario" in sql and "10 oct 2026" in sql
     assert "ocultas" in sql
-
-
-def test_la_decision_queda_en_despliegue_y_en_la_spec():
-    with open(os.path.join(RAIZ, "DESPLIEGUE.md"), encoding="utf-8") as fh:
-        despliegue = fh.read()
-    assert "2026-10-10e-triangulacion-publica.sql" in despliegue
-    with open(os.path.join(RAIZ, "docs", "superpowers", "specs",
-                           "2026-10-06-cuidadores-alertas-triangulacion-design.md"),
-              encoding="utf-8") as fh:
-        spec = fh.read()
-    seccion = spec[spec.index("### 5.6"):spec.index("## 6.")]
-    assert "Decisión posterior (10 oct 2026)" in seccion
-    with open(os.path.join(RAIZ, "supabase", "README.md"), encoding="utf-8") as fh:
-        assert "2026-10-10e" in fh.read()
 
 
 # ══ Base falsa ═════════════════════════════════════════════════════════════

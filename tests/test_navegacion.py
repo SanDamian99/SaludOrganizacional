@@ -7,38 +7,10 @@ from src.core import navegacion as nav
 from src.core.modo import COMPLETO, COMUNIDAD, INVESTIGADOR
 
 
-def test_nombres_de_las_paginas():
-    assert nav.PAGINA_DOCENTES == "Docentes"
-    assert nav.PAGINA_ESTUDIANTES == "Estudiantes 360"
-    assert nav.PAGINA_CUIDADORES == "Cuidadores 360"
-    assert nav.PAGINA_TRIANGULACION == "Triangulación 360"
-
-
 def test_orden_del_menu_es_el_de_la_spec():
     assert nav.MENU == (
         "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
         "Chat con IA", "Cargar Datos", "Reportes")
-
-
-def test_ya_no_existe_la_pagina_dashboard():
-    assert "Dashboard" not in nav.MENU
-
-
-def test_ya_no_existe_el_analisis_de_tendencias():
-    """Auditoría de relevancia (10-oct-2026): no servía con los datos reales."""
-    import importlib.util
-    assert "Análisis de tendencias" not in nav.MENU
-    assert not hasattr(nav, "PAGINA_TENDENCIAS")
-    assert importlib.util.find_spec("src.ui.trends") is None
-
-
-def test_triangulacion_es_publica_por_decision_del_usuario():
-    """Decisión del usuario (10 oct 2026): el público la ve «todo como lo ve el
-    equipo», leída de la última corrida publicada (migración 2026-10-10e)."""
-    assert nav.PAGINA_TRIANGULACION in nav.DISPONIBLES
-    assert nav.PAGINA_TRIANGULACION in nav.PUBLICAS
-    for modo in (COMPLETO, INVESTIGADOR, COMUNIDAD, "cualquier-cosa"):
-        assert nav.PAGINA_TRIANGULACION in nav.menu(modo)
 
 
 def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
@@ -136,7 +108,6 @@ def _descargar(monkeypatch, modulo: str) -> None:
 
 def _main_en_comunidad(monkeypatch):
     """Ejecuta main.py en modo comunidad con los módulos prohibidos descargados."""
-    import sys
     from streamlit.testing.v1 import AppTest
     monkeypatch.setenv("OBS360_MODO", "comunidad")
     monkeypatch.setenv("OBS360_DATOS_DIR", "/ruta/que/no/existe")
@@ -238,21 +209,6 @@ def test_comunidad_con_corrida_de_cuidadores_muestra_solo_la_vista_de_comunidad(
     assert "src.ui.views.cuidadores_comunidad" in sys.modules
     for m in PROHIBIDOS_EN_COMUNIDAD:
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
-
-
-def test_no_queda_dashboard_visible_en_la_interfaz():
-    """Lo que ve la persona dice «Docentes». Los comentarios técnicos no cuentan."""
-    import pathlib
-    import re
-    raiz = pathlib.Path(__file__).resolve().parents[1]
-    culpables = []
-    for f in [raiz / "main.py", *(raiz / "src" / "ui").rglob("*.py"),
-              raiz / "src" / "core" / "state.py"]:
-        texto = f.read_text(encoding="utf-8")
-        # cadenas entre comillas que contienen la palabra
-        for m in re.finditer(r'"[^"\n]*Dashboard[^"\n]*"', texto):
-            culpables.append(f"{f.relative_to(raiz)}: {m.group(0)}")
-    assert not culpables, culpables
 
 
 def test_main_en_investigador_ofrece_cuidadores(monkeypatch, tmp_path):

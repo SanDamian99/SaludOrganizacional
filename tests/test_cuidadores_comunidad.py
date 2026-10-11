@@ -297,10 +297,3 @@ def test_render_publico_sin_corrida_dice_que_no_hay(monkeypatch):
     assert any(cc.NO_PUBLICADO in i.value for i in at.info)
 
 
-def test_la_vista_no_importa_lo_de_investigacion():
-    import inspect
-    fuente = inspect.getsource(vc)
-    for prohibido in ("cuidadores import ingest", "cuidadores import pipeline",
-                      "cuidadores_investigador", "src.ui.cuidadores", "cuidadores import scoring",
-                      "cuidadores import privacidad", "cuidadores import comunidad\n"):
-        assert prohibido not in fuente

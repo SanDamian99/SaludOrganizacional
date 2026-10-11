@@ -297,7 +297,6 @@ def _fugas(jer: Jerarquia, partes: dict, pub, minimo: int = MIN_CASOS, extra=Non
     rango = int((s > 1e-9).sum())
     z = vt[rango:]                                   # base del espacio nulo (k × átomos)
     salida: list[frozenset] = []
-    P = np.array([np.asarray(partes[a], dtype=np.int64) for a in vivos]).reshape(len(vivos), largo)
     determinados = ([j for j in range(len(vivos))] if z.shape[0] == 0 else
                     [j for j in range(len(vivos)) if not np.any(np.abs(z[:, j]) > _TOL)])
     for j in determinados:

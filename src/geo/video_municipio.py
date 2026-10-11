@@ -315,6 +315,6 @@ def escribir_video(escenas: list[Escena], ruta: str, t_cruce: float = T_CRUCE,
         cmd += ["-filter_complex", ";".join(filtros), "-map", f"[{salida}]",
                 "-c:v", "libx264", "-crf", "20", "-preset", "medium",
                 "-pix_fmt", "yuv420p", "-movflags", "+faststart", ruta]
-        resultado = subprocess.run(cmd, capture_output=True, text=True)
+        resultado = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603 (ffmpeg con lista de argumentos, sin shell)
         if resultado.returncode != 0:
             raise RuntimeError("ffmpeg falló: " + resultado.stderr[-800:])

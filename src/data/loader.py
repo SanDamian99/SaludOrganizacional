@@ -131,8 +131,8 @@ def invalidar() -> None:
     for fn in (version_activa_storage, _procesar_desde_storage, load_dataset):
         try:
             fn.clear()
-        except Exception:                                  # noqa: BLE001
-            pass
+        except Exception:                                  # noqa: BLE001, S110
+            pass                                           # sin runtime de Streamlit no hay caché que vaciar
 
 
 def dataset_activo_en_storage(conjunto: str = "docentes"):

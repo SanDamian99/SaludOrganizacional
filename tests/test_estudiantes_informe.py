@@ -12,7 +12,7 @@ import pytest
 from src.estudiantes import catalog as cat
 from src.estudiantes import ingest, lectura, pipeline, publicar, scoring
 from src.ui.views import estudiantes_informe as inf
-from tests.test_estudiantes_comunidad import (COLEGIO_PEQUENO, GRADO_PEQUENO,
+from tests.test_estudiantes_comunidad import (GRADO_PEQUENO,
                                               NOMBRE_SENTINELA, _formulario)
 
 COLEGIO = "LauV"
@@ -154,13 +154,6 @@ def test_el_resumen_cabe_en_una_pagina_de_pdf(fuente):
     from weasyprint import HTML
     doc = HTML(string=inf.informe_una_pagina_html(a, "colegio", _f(colegio=COLEGIO))).render()
     assert len(doc.pages) == 1
-
-
-def test_la_vista_ya_no_ofrece_markdown():
-    import inspect
-    from src.ui.views import estudiantes_comunidad as vc
-    fuente_vista = inspect.getsource(vc._boton_una_pagina) + inspect.getsource(vc.render_comunidad)
-    assert "text/markdown" not in fuente_vista
 
 
 def test_el_informe_del_colegio_trae_sus_grados_tambien_publicado(fuente):

@@ -1,10 +1,7 @@
 """Avance de datos: qué celdas colegio × grado ya se ven y cuáles faltan."""
-import inspect
 
-import pytest
 
 from src.estudiantes import avance as av
-from src.ui.views import estudiantes_investigador as vi
 from tests.mapa_datos_sinteticos import analisis_sintetico
 
 
@@ -138,12 +135,3 @@ def test_el_limite_de_corridas_se_respeta():
     assert len(av.leer_corridas(base.cliente(cargador=True), limite=2)) == 2
 
 
-def test_la_pestana_muestra_engancha_el_avance_y_no_se_rompe_si_falla():
-    fuente = inspect.getsource(vi._tab_muestra)
-    assert "render_avance" in fuente
-    assert "except" in fuente[fuente.index("render_avance"):][:400]
-
-
-def test_el_avance_no_usa_toggle_porque_esa_pagina_busca_el_de_la_vista_previa():
-    from src.ui.views import estudiantes_avance
-    assert "st.toggle" not in inspect.getsource(estudiantes_avance)

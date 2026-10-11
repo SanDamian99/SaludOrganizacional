@@ -137,7 +137,7 @@ def mapear_bloque(raw: pd.DataFrame, bloque: cat.Bloque, informe: InformeCuidado
     out, no_mapeadas, declaradas = {}, 0, 0
     for i, (pos, mapa) in enumerate(zip(bloque.posiciones, bloque.mapas), start=1):
         texto = raw.iloc[:, pos].map(norm_txt)
-        valor = texto.map(lambda t: mapa.get(t, np.nan) if t else np.nan).astype(float)
+        valor = texto.map(lambda t, mapa=mapa: mapa.get(t, np.nan) if t else np.nan).astype(float)
         sin = (texto != "") & valor.isna()
         declaradas += int((sin & texto.isin(bloque.faltantes)).sum())
         no_mapeadas += int((sin & ~texto.isin(bloque.faltantes)).sum())

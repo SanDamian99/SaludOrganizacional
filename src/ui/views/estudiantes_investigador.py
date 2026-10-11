@@ -131,7 +131,7 @@ def _hash_estructura(a) -> str:
     if datos is None:
         return _SIN_DATO
     firma = "|".join(map(str, datos.columns)) + f"|{datos.shape[0]}x{datos.shape[1]}"
-    return hashlib.sha1(firma.encode("utf-8")).hexdigest()
+    return hashlib.sha1(firma.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 # ══════════════════════════════════════════════════════════════════════════

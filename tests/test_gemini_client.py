@@ -1,8 +1,5 @@
 """Tests del cliente Gemini — usan mocks para no consumir API real."""
-import pytest
 from unittest.mock import MagicMock, patch
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 @patch('src.ai.gemini_client.get_gemini_api_key', return_value=None)

@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import io
 from src.core import perezoso
-from src.core.config import DATA_DICTIONARY, get_scale_range as _config_scale_range
+from src.core.config import get_scale_range as _config_scale_range
 
 # matplotlib solo hace falta al generar un PDF; en pantalla se dibuja con Plotly.
 # Importarlo aquí arriba costaba ~0,25 s y ~60 MB en cada arranque.
@@ -385,6 +385,6 @@ class ReportAnalytics:
                         "\n\nUSA Y CITA EN FORMATO APA ÚNICAMENTE ESTAS REFERENCIAS "
                         f"(no inventes otras):\n{refs}"
                     )
-        except Exception:
-            pass
+        except Exception:                                  # noqa: BLE001, S110
+            pass                                           # sin base de conocimiento: el informe sale sin citas
         return generate_analysis(prompt)

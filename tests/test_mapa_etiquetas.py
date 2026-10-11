@@ -1,9 +1,7 @@
 """Las etiquetas del mapa no se superponen: ni entre sí ni con los círculos."""
 import itertools
 
-from src.geo import colegios_geo, etiquetas as et
-from src.geo import mapa_datos as md
-from src.geo import mapa_figura as mf
+from src.geo import etiquetas as et
 
 
 def _item(codigo, x, y, nombre="Colegio", radio=8):

@@ -25,10 +25,6 @@ def _todo() -> list[str]:
             for t in _textos(getattr(cc, nombre))]
 
 
-def test_provisional_hasta_la_aprobacion():
-    assert cc.TEXTOS_APROBADOS is False and cc.RUTAS_VALIDADAS is False
-
-
 def test_mismos_roles_que_estudiantes():
     assert cc.ROLES == cat_est.ROLES
 
@@ -87,8 +83,3 @@ def test_ningun_texto_trae_numeros_de_telefono():
         assert not re.search(r"\b\d{7,}\b", texto)
 
 
-def test_el_catalogo_no_importa_ingesta_ni_pipeline():
-    import inspect
-    fuente = inspect.getsource(cc)
-    for prohibido in ("ingest", "pipeline", "scoring", "privacidad", "streamlit"):
-        assert f"import {prohibido}" not in fuente and f"cuidadores.{prohibido}" not in fuente

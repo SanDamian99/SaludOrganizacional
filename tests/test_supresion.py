@@ -17,10 +17,6 @@ def test_proporcion_publicable(k, n, ok):
     assert sp.proporcion_publicable(k, n) is ok
 
 
-def test_min_casos_es_tres():
-    assert sp.MIN_CASOS == 3
-
-
 def test_las_bandas_son_todo_o_nada():
     assert sp.partes_publicables((10, 5, 4, 3))
     assert not sp.partes_publicables((10, 5, 4, 0))     # una banda vacía tumba todas

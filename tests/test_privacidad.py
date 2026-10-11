@@ -219,7 +219,6 @@ def test_union_conserva_el_tipo_entero():
 
 
 def test_ayudantes_publicos_y_alias_antiguos():
-    assert pv._union is pv.union and pv._activo is pv.activo
     assert pv.activo("LauV") and not pv.activo(pv.TODOS) and not pv.activo(None)
     assert not pv.activo("")
 

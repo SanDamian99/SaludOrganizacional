@@ -1,0 +1,16 @@
+# Análisis estático del Observatorio 360: `ruff check .` (ver requirements-dev.txt).
+# Reglas: pyflakes (F), errores de sintaxis (E9), bugbear (B) y seguridad (S).
+target-version = "py313"
+line-length = 100
+extend-exclude = [".venv", "venv", "video_assets", ".chroma"]
+
+[lint]
+select = ["F", "E9", "B", "S"]
+ignore = [
+    "B905",  # zip(strict=...) es ruido en pandas y en listas que ya se saben iguales
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S311", "S603", "S607", "F811"]   # assert, random y fixtures importadas son legítimos en pruebas
+"scripts/**" = ["S311", "S101"]              # scripts de análisis local, no código de la app
+"recodificar_sdq_cuidadores.py" = ["S101"]
