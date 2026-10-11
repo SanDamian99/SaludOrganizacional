@@ -192,3 +192,30 @@ def test_un_conteo_ya_enmascarado_se_muestra_igual():
     assert en.conteo_legible("<10") == "<10"
     assert en.conteo_legible(12) == "12" and en.conteo_legible(3) == "<10"
     assert en.conteo_legible("x") == "—"
+
+
+def test_municipal_e_informante_hacen_ida_y_vuelta(leida):
+    local = datos.analisis()
+    _igual(local.capa1.municipal, leida.capa1.municipal, "municipal")
+    _igual(local.diadas.informante, leida.diadas.informante, "informante")
+    assert not leida.capa1.municipal.empty and not leida.diadas.informante.empty
+    assert set(leida.capa1.municipal["bloque"]) == set(local.capa1.municipal["bloque"])
+    from src.triangulacion import hallazgos as hz
+    assert hz.tabla(hz.evaluar(leida)).equals(hz.tabla(hz.evaluar(local)))
+
+
+def test_una_corrida_sin_las_tablas_nuevas_se_lee_con_ellas_vacias(base):
+    nuevas = ("capa1_municipal", "diadas_informante")
+    filas = [dict(f) for f in base.tablas["resultados"]
+             if f["tipo"] not in tuple(pub.PREFIJO + n for n in nuevas)]
+    for f in filas:                                        # una meta de antes del 10 oct 2026
+        if f["tipo"] == pub.TIPO_META:
+            det = dict(f["detalle"])
+            det["columnas"] = {k: v for k, v in det["columnas"].items() if k not in nuevas}
+            det["sin_cifra"] = [x for x in det["sin_cifra"] if x["tabla"] not in nuevas]
+            f["detalle"] = det
+    t = lectura.reconstruir(filas, {})
+    assert t is not None
+    assert t.capa1.municipal.empty and t.diadas.informante.empty
+    from src.triangulacion import hallazgos as hz
+    assert {v.hallazgo.numero for v in hz.evaluar(t)} <= {1, 6, 7}

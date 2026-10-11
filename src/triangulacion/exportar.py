@@ -29,14 +29,15 @@ TABLAS = ("capa1_diferencias.csv", "capa1_clasificacion.csv", "capa1_por_grado.c
           "capa1_clasificacion_grado.csv", "enlace_calidad.csv", "diadas_acuerdo_sdq.csv",
           "diadas_bland_altman_agrupado.csv", "diadas_malestar_no_visto.csv",
           "diadas_apoyo_familiar.csv", "diadas_asociaciones.csv",
-          "diadas_acuerdo_sdq_concordantes.csv")
+          "diadas_acuerdo_sdq_concordantes.csv", "capa1_municipal.csv",
+          "diadas_informante.csv", "resumen_hallazgos.csv")
 COLORES = {"Estudiantes": "#3b6ea8", "Cuidadores": "#b5651d", "Docentes": "#4d8b55"}
 # Columnas que nunca salen, aunque una tabla las trajera.
 PROHIBIDAS = ("familia", "ID_cuidador", "ID_nino", "N_hmac", "ID", "casos")
 
 
 def _limpia(df: pd.DataFrame | None) -> pd.DataFrame:
-    if df is None or df.empty:
+    if df is None:
         return pd.DataFrame()
     return df.drop(columns=[c for c in PROHIBIDAS if c in df.columns])
 
@@ -70,7 +71,16 @@ def tablas(t) -> dict[str, pd.DataFrame]:
         "diadas_malestar_no_visto.csv": d.no_visto, "diadas_apoyo_familiar.csv": d.apoyo,
         "diadas_asociaciones.csv": d.asociaciones,
         "diadas_acuerdo_sdq_concordantes.csv": d.acuerdo_concordantes,
+        "capa1_municipal.csv": getattr(c, "municipal", None),
+        "diadas_informante.csv": getattr(d, "informante", None),
+        "resumen_hallazgos.csv": resumen_hallazgos(t),
     }
+
+
+def resumen_hallazgos(t) -> pd.DataFrame:
+    """Los hallazgos fijos que esta corrida sustenta (número, bloque, texto y cifra)."""
+    from src.triangulacion import hallazgos as hz
+    return hz.tabla(hz.evaluar(t))
 
 
 # ── figuras ────────────────────────────────────────────────────────────────
@@ -167,7 +177,14 @@ def metodologia_md(t) -> str:
         "9 unidades con dato, o con menos de 3 casos o no casos, sale: toda suma o resta de "
         "cifras mostradas aquí o publicadas por los módulos es unión de átomos que cumplen "
         "la regla.", "",
+        cat.AVISO_AJUSTE_GRADO, "",
         cat.AVISO_CLASIFICACION, "", cat.AVISO_COOCURRENCIA, "", cat.AVISO_GRADO, "",
+        "Pares del mismo objeto (decisión del 10 oct 2026): dificultades, síntomas "
+        "emocionales, problemas de conducta e hiperactividad del niño según él y según su "
+        "cuidador; pertenencia y adulto de confianza frente al apoyo del líder y de los "
+        "compañeros; y el apoyo de la familia que siente el niño y el que siente el cuidador "
+        "(la misma familia). La PSS y los demás pares siguen siendo co-ocurrencia.", "",
+        "### Cifras municipales", "", cat.AVISO_MUNICIPAL, "",
         "Docentes: archivo codificado por scripts/preparar_docentes.py; colegio unido con "
         "core.colegios.codigo_desde_nombre. Clima laboral = apoyo del líder (7 ítems, 0–5); "
         "apoyo percibido = apoyo de compañeros (3 ítems, 0–5); PSS-10 (0–40, prorrateo con 9 "
@@ -191,7 +208,15 @@ def metodologia_md(t) -> str:
         "- " + cat.AVISO_ASOCIACIONES + " Resultados estandarizados (z); predictores "
         "continuos en z y castigo físico como 0/1; un predictor binario exige 10 o más "
         "díadas y familias en cada nivel. q de Benjamini–Hochberg por muestra.",
-        "- " + cat.AVISO_SENSIBILIDAD_CONCORDANCIA, "",
+        "- " + cat.AVISO_SENSIBILIDAD_CONCORDANCIA,
+        "- " + cat.AVISO_INFORMANTE, "",
+        "## Resumen · hallazgos fijos", "",
+        "El Resumen muestra hallazgos de un catálogo de textos fijos (pendientes de "
+        "aprobación del equipo; nunca los redacta la IA). Cada hallazgo se muestra solo si "
+        "las tablas de esta corrida lo sustentan con la regla que fija el catálogo, y se "
+        "oculta sin aviso si falta su fila. Las hipótesis que acompañan a los hallazgos son "
+        "hipótesis de trabajo, no conclusiones. `resumen_hallazgos.csv` lista los que esta "
+        "corrida sustenta.", "",
         "## Límites", "",
         "- Enlace exacto: un nombre escrito distinto en los dos formularios no enlaza; las "
         "díadas no son una muestra aleatoria de los niños.",
@@ -202,8 +227,11 @@ def metodologia_md(t) -> str:
         "así que esos IC pueden ser algo estrechos.",
         "- Capa 1: los constructos de estudiantes juntan primaria y secundaria (la DE del "
         "actor y las medias son de los dos niveles); los átomos y la protección contra "
-        "restas sí se arman por nivel. Un colegio con más primaria que otro puede diferir "
-        "en parte por la mezcla de niveles.",
+        "restas sí se arman por nivel. El ajuste por grado quita la mezcla de grados (y, "
+        "con ella, la de niveles) de d, no de las medias brutas.",
+        "- Cifras municipales: el modelo del desgaste docente es transversal y de método "
+        "común (el mismo docente responde todo); el cruce de señales y los terciles son "
+        "descriptivos.",
         "- Modelos: un predictor que no varía en la muestra se omite y se anota; si no "
         "queda ninguno, la fila dice el motivo.",
         "- La protección contra restas cubre la triangulación junto con lo que publican los "
@@ -235,6 +263,8 @@ def archivos(t) -> dict[str, object]:
     ba = t.diadas.bland_altman
     for s in (ba["subescala"].unique() if not ba.empty else []):
         salida[f"figuras/bland_altman_{s}.png"] = _png(figura_bland_altman(t, s))
+    # Siempre con cabecera, aunque la corrida no sustente ningún hallazgo.
+    salida["resumen_hallazgos.csv"] = _limpia(resumen_hallazgos(t)).to_csv(index=False)
     salida["metodologia.md"] = metodologia_md(t)
     salida["version_analisis.txt"] = version_txt(t)
     return salida

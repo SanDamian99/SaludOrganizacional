@@ -54,7 +54,8 @@ def test_el_zip_trae_tablas_figuras_y_metodologia(tri):
     z = zipfile.ZipFile(io.BytesIO(ex.paquete_zip(tri)))
     nombres = set(z.namelist())
     assert {"metodologia.md", "version_analisis.txt", "capa1_diferencias.csv",
-            "enlace_calidad.csv", "diadas_acuerdo_sdq.csv"} <= nombres
+            "enlace_calidad.csv", "diadas_acuerdo_sdq.csv", "capa1_municipal.csv",
+            "diadas_informante.csv", "resumen_hallazgos.csv"} <= nombres
     for colegio in tri.capa1.colegios:
         assert z.read(f"figuras/capa1_{colegio}.png").startswith(b"\x89PNG")
     assert any(n.startswith("figuras/bland_altman_") for n in nombres)
@@ -67,6 +68,8 @@ def test_la_metodologia_es_la_plantilla_fija(tri):
         assert titulo in md
     assert cat.AVISO_ENLACE in md and cat.AVISO_COOCURRENCIA in md
     assert cat.AVISO_ECOLOGICO.format(n=tri.n_colegios) in md
+    assert cat.AVISO_AJUSTE_GRADO in md and cat.AVISO_MUNICIPAL in md
+    assert cat.AVISO_INFORMANTE in md and "## Resumen · hallazgos fijos" in md
 
 
 def test_bland_altman_no_dibuja_diadas(tri):

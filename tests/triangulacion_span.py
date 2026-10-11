@@ -92,3 +92,28 @@ def auditar_capa1(tablas: dict, capa) -> dict:
                      + conjuntos_modulo(d, c.marco, c.columna))
         salida[c.clave] = piezas_deducibles(d, conjuntos, cat.UNIDAD[c.marco])
     return salida
+
+
+def auditar_municipal(tablas: dict, por_marco: dict, marco: str) -> int:
+    """Piezas deducibles de las cifras municipales de un marco junto a lo que
+    publican el módulo y la capa 1 por colegio (señales en estudiantes;
+    terciles de apoyo en cuidadores)."""
+    d = tablas[marco]
+    lista = por_marco[marco]
+    if marco == cat.ESTUDIANTE:
+        conjuntos = c1.conjuntos_senales(d, lista)
+        columnas, claves = ("ALERTA_malestar", cat.ITEM_18), ("est_malestar",)
+    else:
+        conjuntos = c1.conjuntos_terciles(d, lista)
+        columnas, claves = ("MSPSS_Fam", cat.EPDS_PROBABLE), ("cui_mspss_fam", "cui_epds")
+    if not conjuntos:
+        return 0
+    grupos = {"Colegio": sorted(c1._grupos(lista, "Colegio")), "Grado": sorted(c1._grupos(lista, "Grado"))}
+    for col in columnas:
+        if col in d.columns:
+            conjuntos += conjuntos_modulo(d, marco, col)
+    for clave in claves:
+        c = cat.POR_CLAVE[clave]
+        if c.columna in d.columns:
+            conjuntos += conjuntos_capa1(d, lista, c, grupos)
+    return piezas_deducibles(d, conjuntos, cat.UNIDAD[marco])

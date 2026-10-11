@@ -214,3 +214,28 @@ def test_sin_ningun_predictor_da_una_fila_con_motivo():
     sub = t[t["muestra"] == dy.MUESTRA_TODAS]
     assert len(sub) == len(cat.RESULTADOS)
     assert (sub["motivo"] == dy.MOTIVO_SIN_PREDICTORES).all()
+
+
+# ── el informante: el malestar del cuidador y lo que cada uno reporta (hallazgo 2) ──
+def test_informante_distingue_el_reporte_del_cuidador_del_reporte_del_nino():
+    rng = np.random.default_rng(4)
+    n = 80
+    epds = rng.normal(size=n)
+    c_total = 10 + 3 * epds + rng.normal(scale=1, size=n)       # el cuidador «ve» su ánimo
+    e_total = 12 + rng.normal(scale=3, size=n)                   # el niño no
+    d = _diadas(e_total, c_total)
+    d["a_EPDS_Total"] = 10 + 5 * epds
+    t = dy.informante(d, n_boot=40)
+    assert list(t.columns) == dy.COLUMNAS_INFORMANTE
+    f = t[t["predictor"] == "EPDS_Total"].iloc[0]
+    assert f["n"] == 80 and f["familias"] == 80 and f["motivo"] == ""
+    assert f["rho_cuidador_ic_inf"] > 0.5
+    assert f["rho_nino_ic_inf"] < 0 < f["rho_nino_ic_sup"]
+    assert set(t["predictor"]) == {p for p, _ in cat.PREDICTORES_INFORMANTE}
+
+
+def test_informante_exige_10_familias():
+    d = _diadas([12.0] * 12, [9.0] * 12, familias=["F"] * 12)
+    t = dy.informante(d, n_boot=10)
+    assert (t["motivo"] == dy.MOTIVO_POCAS).all()
+    assert "familia" not in t.columns

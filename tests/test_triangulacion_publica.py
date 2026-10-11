@@ -210,6 +210,11 @@ def test_la_pagina_publica_muestra_todas_las_pestanas(monkeypatch):
     assert not at.toggle                                   # sin vista previa
     texto = _texto(at)
     assert cat.AVISO_TEXTOS in texto
+    from src.triangulacion import hallazgos_catalogo as hc
+    subs = [s.value for s in at.subheader]
+    assert [hc.TITULO_PERFIL, hc.TITULO_PATRONES, hc.TITULO_TENSION, hc.TITULO_HIPOTESIS] == \
+        [s for s in subs if s in (hc.TITULO_PERFIL, hc.TITULO_PATRONES, hc.TITULO_TENSION,
+                                  hc.TITULO_HIPOTESIS)]
     assert cat.TITULO_PUBLICO in " ".join(t.value for t in at.title)
     assert "solo investigadores" not in " ".join(t.value for t in at.title)
     assert f"corrida {resumen['corrida_id']}" in texto
