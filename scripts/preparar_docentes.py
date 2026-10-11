@@ -303,6 +303,7 @@ def preparar(bruto: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     # ── marca de codificación y totales por dimensión del catálogo
     from src.docentes import catalogo as cat
     from src.docentes import scoring as puntuacion
+    d = d.copy()                      # desfragmenta tras tantas columnas nuevas
     d[cat.COLUMNA_CODIFICACION] = cat.CODIFICACION_ACTUAL
     puntajes = puntuacion.puntuar(d)
     totales = {f"{clave}_T": puntajes[clave] for clave in puntajes.columns

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from src.data import loader
-from src.data.processor import ExcelProcessor
+from src.data.processor import DataCleaner, ExcelProcessor
 
 
 def _csv(data) -> io.BytesIO:
@@ -54,3 +54,16 @@ def test_load_dataset_pasa_por_el_posprocesado(tmp_path):
     col = next(c for c in df.columns if "hijos" in c.lower())
     assert df[col].isna().sum() == 2 and df["BLG_Psicoso1"].isna().sum() == 6
     assert report["n_cells_imputed"] == 0
+
+
+def test_la_subida_manual_tambien_aplica_los_codigos():
+    """`upload._procesar` usa DataCleaner.process_file: el posprocesado va dentro."""
+    base = {f"PSS{i}": [1.0] * 12 for i in range(1, 11)}
+    base.update({f"BTA{i}": [1.0] * 12 for i in range(1, 13)})
+    base["Número de hijos"] = [10.0, 1, 2, 10, 0, 1, 2, 3, 1, 1, 2, 0]
+    buffer = _csv(base)
+    buffer.name = "docentes.csv"
+    df, report = DataCleaner().process_file(buffer)
+    assert report["success"]
+    col = next(c for c in df.columns if "hijos" in c.lower())
+    assert df[col].isna().sum() == 2 and report["codigos_faltantes"] == {col: 2}

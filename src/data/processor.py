@@ -388,6 +388,10 @@ class DataCleaner:
             # Merge inner report into our standard format
             report.update(inner_report)
             report["unmapped_columns"] = inner_report.get("extra_variables", [])
+            # Lo mismo que hace el cargador con el archivo de docentes (códigos de
+            # faltante): una subida manual no debe entrar con «hijos = 10».
+            from src.docentes.limpieza import posprocesar
+            df, report = posprocesar(df, report)
             report["success"] = True
             return df, report
         except ValueError as e:

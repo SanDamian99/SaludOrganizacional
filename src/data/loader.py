@@ -56,13 +56,11 @@ def _posprocesar(df, report):
     """Lo que solo aplica al archivo de docentes: los códigos de faltante.
 
     «Número de hijos» = 10 se convierte en NaN al cargar (ver
-    `src/docentes/limpieza.py`); el archivo no se modifica.
+    `src/docentes/limpieza.py`); el archivo no se modifica. Se ejecuta dentro
+    de las funciones cacheadas, una sola vez por archivo.
     """
-    from src.docentes import limpieza, scoring
-    if scoring.es_archivo_docentes(df):
-        df, informe = limpieza.codigos_faltantes(df)
-        report["codigos_faltantes"] = informe
-    return df, report
+    from src.docentes.limpieza import posprocesar
+    return posprocesar(df, report)
 
 
 @st.cache_data(show_spinner=False)

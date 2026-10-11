@@ -31,3 +31,17 @@ def codigos_faltantes(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             out.loc[mascara, c] = np.nan
             informe[c] = n
     return out, informe
+
+
+def posprocesar(df: pd.DataFrame, report: dict) -> tuple[pd.DataFrame, dict]:
+    """Aplica los códigos de faltante si el archivo es el de docentes; si no, nada.
+
+    Lo llaman el cargador (disco y Storage) y la subida manual, siempre dentro
+    de la función que produce el DataFrame, antes de cachearlo: nunca sobre un
+    objeto ya compartido.
+    """
+    from src.docentes.scoring import es_archivo_docentes
+    if es_archivo_docentes(df):
+        df, informe = codigos_faltantes(df)
+        report["codigos_faltantes"] = informe
+    return df, report
