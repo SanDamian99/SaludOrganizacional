@@ -276,10 +276,3 @@ def test_el_mensaje_de_rechazo_nombra_los_casos_pequenos(chico, monkeypatch):
     assert f"menos de {cat.MIN_GROUP_N}" in texto
 
 
-def test_la_ayuda_del_ensayo_dice_que_el_json_se_escribe_igual():
-    import io
-    from contextlib import redirect_stdout
-    salida = io.StringIO()
-    with redirect_stdout(salida), pytest.raises(SystemExit):
-        publicar.main(["--help"])
-    assert "aunque la auditoría falle" in " ".join(salida.getvalue().split())

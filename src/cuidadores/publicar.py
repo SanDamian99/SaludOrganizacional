@@ -360,8 +360,8 @@ def publicar(ac, notas: str = "", publicar_ya: bool = False, cliente=None) -> di
         try:
             tabla(TABLA_RESULTADOS).delete().eq("corrida_id", corrida_id).execute()
             tabla(TABLA_CORRIDAS).delete().eq("id", corrida_id).execute()
-        except Exception:                                  # noqa: BLE001
-            pass
+        except Exception:                                  # noqa: BLE001, S110
+            pass                                           # limpieza al mejor esfuerzo; se relanza el error original
         raise
     publicada, otras_despublicadas = False, False
     if publicar_ya:
@@ -372,7 +372,7 @@ def publicar(ac, notas: str = "", publicar_ya: bool = False, cliente=None) -> di
              .eq("modulo", MODULO).neq("id", corrida_id).execute())
             otras_despublicadas = True
         except Exception as exc:                           # noqa: BLE001
-            print(f"AVISO: la corrida {corrida_id} quedó publicada, pero no se pudieron "
+            print(f"AVISO: la corrida {corrida_id} quedó publicada, pero no se pudieron "  # noqa: S608 (SQL de ayuda para pegar a mano, no se ejecuta)
                   f"despublicar las demás corridas de «{MODULO}» ({exc}). Despublique a mano: "
                   f"UPDATE obs360.corridas SET publicada = false WHERE modulo = '{MODULO}' "
                   f"AND id <> {corrida_id};", file=sys.stderr)

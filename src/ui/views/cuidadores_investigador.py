@@ -287,7 +287,7 @@ def metodologia_md(ac) -> str:
 def _hash_estructura(ac) -> str:
     firma = "|".join(f"{m}:{','.join(map(str, a.datos.columns))}:{a.datos.shape}"
                      for m, a in ac.marcos.items() if getattr(a, "datos", None) is not None)
-    return hashlib.sha1(firma.encode("utf-8")).hexdigest()
+    return hashlib.sha1(firma.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def version_analisis_txt(ac) -> str:

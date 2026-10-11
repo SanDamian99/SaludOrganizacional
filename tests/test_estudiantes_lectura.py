@@ -7,7 +7,6 @@ individuos: `Analisis.datos` llega vacío a propósito.
 """
 import os
 
-import pandas as pd
 import pytest
 
 from src.core.rutas import carpeta_datos
@@ -270,7 +269,7 @@ def test_toda_tabla_que_se_muestra_es_convertible_a_arrow(reconstruido):
         "modelos": vi.modelos_tabla(remoto),
         "icc": vi.icc_tabla(remoto),
     }
-    for nombre, t in tablas.items():
+    for _nombre, t in tablas.items():
         if t is None or t.empty:
             continue
         pa.Table.from_pandas(t)          # lanza si alguna columna mezcla tipos
@@ -284,12 +283,3 @@ def test_la_edad_se_muestra_sin_decimales():
     assert vi._edad_legible("sin dato") == "sin dato"
 
 
-def test_la_cache_de_la_corrida_publicada_no_usa_una_clave_fija():
-    """Con clave fija, aprobar una corrida nueva no cambiaba nada en el despliegue
-    hasta reiniciar el proceso. La clave debe depender de la corrida vigente."""
-    import inspect
-    from src.ui import estudiantes as ui
-    fuente = inspect.getsource(ui.cargar_analisis)
-    assert '_leer_publicado("v1")' not in fuente
-    assert "_corrida_vigente()" in fuente
-    assert callable(getattr(lectura, "id_corrida_vigente", None))

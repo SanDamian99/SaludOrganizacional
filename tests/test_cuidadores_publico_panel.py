@@ -5,7 +5,6 @@ Si la corrida publicada no trae las filas de las señales del adulto (se
 publicó con `--publicar-ya` antes de aprobar textos y ruta), la página dice
 que aún no está publicada en vez de mostrarse sin el panel.
 """
-import pytest
 from streamlit.testing.v1 import AppTest
 
 from src.cuidadores import comunidad_catalogo as cc

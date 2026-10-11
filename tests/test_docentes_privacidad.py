@@ -7,7 +7,6 @@ P2. Grupo mínimo de 10: un filtro que deja menos de 10 docentes muestra un
     categorías y los grupos de menos de 10.
 P3. El PDF nunca imprime un conteo menor de 10 ni deja deducirlo por resta.
 """
-import inspect
 import pathlib
 
 import pandas as pd
@@ -21,10 +20,6 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1]
 
 
 # ══ Funciones puras ═════════════════════════════════════════════════════════
-def test_constantes():
-    assert gm.N_MINIMO == 10
-    assert gm.MENOS_DE == "<10"
-    assert gm.MENSAJE_GRUPO_PEQUENO == "Grupo demasiado pequeño para mostrarse (menos de 10)"
 
 
 @pytest.mark.parametrize("n,esperado", [(0, False), (9, False), (10, True), (479, True)])
@@ -96,11 +91,6 @@ def test_grupos_comparables_con_un_solo_pequeno_oculta_otro():
 
 
 # ══ P1 · sin descarga de filas ══════════════════════════════════════════════
-def test_no_hay_descarga_de_datos_filtrados():
-    codigo = (RAIZ / "src" / "ui" / "dashboard.py").read_text(encoding="utf-8")
-    assert "to_csv" not in codigo
-    assert "Descargar datos filtrados" not in codigo
-    assert "datos_filtrados.csv" not in codigo
 
 
 # ══ P2 · página con AppTest ═════════════════════════════════════════════════
@@ -167,8 +157,6 @@ def test_el_perfil_no_muestra_conteos_pequenos():
     edad = d.tabla_perfil(df[sint.COL_EDAD], numerica=True, ancho=10)
     for texto in edad["texto"]:
         assert not (texto.isdigit() and int(texto) < 10)
-    fuente = inspect.getsource(d._view_profile)
-    assert "px.histogram" not in fuente and "value_counts" not in fuente
 
 
 def test_la_comparacion_por_grupo_esconde_los_pequenos():

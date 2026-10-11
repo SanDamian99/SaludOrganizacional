@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.docentes import catalogo as cat
 from src.docentes import estadistica as est
 from src.docentes import universo
 

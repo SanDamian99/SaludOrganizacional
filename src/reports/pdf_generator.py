@@ -12,7 +12,7 @@ from reportlab.platypus import (
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import cm, mm
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY, TA_RIGHT
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.lib.colors import HexColor
 from reportlab.platypus.doctemplate import LayoutError
 from PIL import Image as PILImage
@@ -501,8 +501,8 @@ def clean_text(text: str) -> str:
     except Exception:
         try:
             text = text.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
-        except Exception:
-            pass
+        except Exception:                                  # noqa: BLE001, S110
+            pass                                           # texto no decodificable: se deja como está
     return text
 
 

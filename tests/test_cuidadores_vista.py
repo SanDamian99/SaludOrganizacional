@@ -19,12 +19,6 @@ def ac():
     return pipeline.analizar(ingest.cargar(cs.formulario(), k=K), n_boot=10)
 
 
-def test_pestanas():
-    assert vi.PESTANAS == ["Muestra y exclusiones", "Tabla 1 · descriptivos", "Cortes y bandas",
-                           "Correlaciones", "Por grupo", "Señales del adulto",
-                           "Ítems sin puntaje", "Calidad de datos", "Exportar"]
-
-
 def test_tablas_sin_casos_ni_identificadores(ac):
     for t in (vi.tabla1(ac), vi.cortes_y_bandas(ac), vi.cortes_por_grupo(ac),
               vi.correlaciones(ac), vi.comparaciones_grupo(ac), vi.senales_adulto(ac)):

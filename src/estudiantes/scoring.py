@@ -78,7 +78,7 @@ def puntuar(df: pd.DataFrame) -> pd.DataFrame:
     for key in list(cat.BANDS_SELF):
         if key in d.columns:
             d[f"banda_{key}"] = d[key].map(
-                lambda v: cat.banda_de(v, key, "self") if pd.notna(v) else np.nan)
+                lambda v, key=key: cat.banda_de(v, key, "self") if pd.notna(v) else np.nan)
     return d
 
 
@@ -170,7 +170,7 @@ def distribucion_bandas(d: pd.DataFrame, version: str = "self") -> pd.DataFrame:
         v = d[key].dropna()
         if v.empty:
             continue
-        b = v.map(lambda x: cat.banda_de(x, key, version))
+        b = v.map(lambda x, key=key: cat.banda_de(x, key, version))
         cnt = b.value_counts().reindex(range(4), fill_value=0)
         fila = dict(clave=key, escala=cat.meta(key)["label"], n=len(v))
         for i in range(4):
@@ -196,12 +196,11 @@ def sobre_cortes(d: pd.DataFrame) -> pd.DataFrame:
         filas.append(dict(clave=clave, indicador=etiqueta, n=base_n, casos=k,
                           pct=p, ic_inf=lo, ic_sup=hi, fuente=fuente))
 
-    base = pd.Series(True, index=d.index)
     if "SDQ_Total" in d.columns:
         for key in cat.BANDS_SELF:
             if key not in d.columns:
                 continue
-            b = d[key].map(lambda x: cat.banda_de(x, key, "self") if pd.notna(x) else np.nan)
+            b = d[key].map(lambda x, key=key: cat.banda_de(x, key, "self") if pd.notna(x) else np.nan)
             etiqueta = ("Prosocial bajo o muy bajo" if key == "SDQ_Pro"
                         else f"{cat.meta(key)['label']}: alto o muy alto")
             agrega(key, etiqueta, b >= 2, d[key].notna(), cat.FUENTE_BANDS_SELF)

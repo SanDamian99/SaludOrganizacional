@@ -1,10 +1,8 @@
 import pandas as pd
 import numpy as np
-import io
 import unicodedata
 import re
 import difflib
-from collections import Counter
 from src.core.config import (
     DATA_DICTIONARY, 
     RESPONSE_SETS, 
@@ -124,7 +122,7 @@ def try_column_override(colname: str, series: pd.Series):
         levels = COLUMN_ORDERED_OPTIONS_EXACT[ncol]
         codes, _ = fuzzy_map_to_allowed(series, levels)
         cov = float(codes.notna().mean())
-        return codes.astype('float'), cov, f'override_exact', levels
+        return codes.astype('float'), cov, 'override_exact', levels
 
     # Keyword match
     key = extract_bracket_keyword(colname)
@@ -141,7 +139,7 @@ def try_column_override(colname: str, series: pd.Series):
         levels = COLUMN_ORDERED_OPTIONS_EXACT[best[0]]
         codes, _ = fuzzy_map_to_allowed(series, levels)
         cov = float(codes.notna().mean())
-        return codes.astype('float'), cov, f'override_fuzzy_exact', levels
+        return codes.astype('float'), cov, 'override_fuzzy_exact', levels
 
     # Contains keyword
     for kw, levels in COLUMN_ORDERED_OPTIONS_KEYWORD.items():
@@ -217,7 +215,7 @@ class ExcelProcessor:
         known_keys = ['ID']
         for cat, vars_dict in DATA_DICTIONARY.items():
             if cat == "Dimensiones de Bienestar y Salud Mental":
-                 for dim, details in vars_dict.items():
+                 for _dim, details in vars_dict.items():
                      if isinstance(details, dict):
                          known_keys.extend(details.get("Preguntas", []))
             else:
@@ -349,7 +347,7 @@ class ExcelProcessor:
             return df, self.report
 
         except Exception as e:
-            raise ValueError(f"Error procesando los datos: {str(e)}")
+            raise ValueError(f"Error procesando los datos: {str(e)}") from e
 
 
 class DataCleaner:
@@ -426,5 +424,5 @@ class DataCleaner:
 
         except Exception as e:
             if "vacío" in str(e).lower() or "empty" in str(e).lower() or "no columns" in str(e).lower():
-                 raise ValueError("El archivo proporcionado está vacío.")
-            raise Exception(f"Error procesando data: {str(e)}")
+                raise ValueError("El archivo proporcionado está vacío.") from e
+            raise RuntimeError(f"Error procesando data: {str(e)}") from e

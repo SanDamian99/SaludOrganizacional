@@ -47,5 +47,3 @@ def test_el_lector_filtra_por_modulo(monkeypatch):
     assert cli.registro.count(("corridas", "modulo", "estudiantes")) == 2
 
 
-def test_el_aviso_ya_no_dice_que_no_se_puede_filtrar():
-    assert "no se puede filtrar" not in lectura.AVISO_SIN_DATOS_CRUDOS

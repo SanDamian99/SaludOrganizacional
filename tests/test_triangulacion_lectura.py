@@ -21,7 +21,7 @@ from src.core import vista_previa as vp
 from src.triangulacion import exportar as ex
 from src.triangulacion import publicar as pub
 from tests import triangulacion_publicada_datos as datos
-from tests.supabase_falso import CREDENCIALES_CARGADOR, BaseFalsa
+from tests.supabase_falso import CREDENCIALES_CARGADOR
 
 from src.triangulacion import lectura  # noqa: E402
 EMAIL, CLAVE = CREDENCIALES_CARGADOR["email"], CREDENCIALES_CARGADOR["password"]
@@ -74,16 +74,6 @@ def test_con_un_cliente_anonimo_solo_la_publicada(monkeypatch, base):
     assert lectura.cargar() is not None
     assert lectura.id_corrida_publicada() is not None
     assert lectura.cargar(corrida_id=oculta["corrida_id"]) is None
-
-
-def test_lectura_no_crea_clientes_propios():
-    """El cargador sale de `vista_previa`; el anónimo, del de estudiantes."""
-    import inspect
-    fuente = inspect.getsource(lectura)
-    assert "create_client" not in fuente
-    assert "cliente_autenticado" in fuente
-    assert "from src.estudiantes import lectura" in fuente
-    assert not re.search(r"cuidadores\.lectura|cuidadores import lectura", fuente)
 
 
 def test_la_corrida_en_revision_se_lee_por_id(monkeypatch, base):

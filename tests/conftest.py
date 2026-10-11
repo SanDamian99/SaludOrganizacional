@@ -21,6 +21,12 @@ def _vista_previa_sin_red(monkeypatch):
         raise RuntimeError("las pruebas no se conectan a Supabase")
 
     monkeypatch.setattr(vista_previa, "_crear_cliente", _sin_red)
+    # El cliente anónimo de lectura (estudiantes, cuidadores, triangulación)
+    # pasa por `core.supabase_cliente`: tampoco se conecta. Las páginas sin
+    # base muestran su aviso de «sin corrida publicada», que es lo que se prueba.
+    from src.core import supabase_cliente
+    supabase_cliente.olvidar()
+    monkeypatch.setattr(supabase_cliente, "cliente_lectura", _sin_red)
     vista_previa._RESPALDO.clear()
     yield
     vista_previa._RESPALDO.clear()

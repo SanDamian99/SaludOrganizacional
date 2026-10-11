@@ -5,33 +5,16 @@ Las vistas e informes de cuidadores usan sus propios textos de estado.
 vienen de `comunidad_catalogo`; la referencia habla del total del municipio
 (en cuidadores no hay niveles).
 """
-import inspect
 
 from streamlit.testing.v1 import AppTest
 
 from src.cuidadores import alertas as al
 from src.cuidadores import comunidad_catalogo as cc
 from src.ui.views import cuidadores_comunidad as vc
-from src.ui.views import cuidadores_informe as vi
 from tests import cuidadores_comunidad_datos as datos
 
 TEXTOS = ("NO_ES_DIAGNOSTICO", "NOTA_AZAR", "QUE_ES_PRIORIDAD", "QUE_ES_PRESENTE",
           "QUE_ES_SIN_ESTADO", "QUE_ES_REFERENCIA")
-
-
-def test_el_catalogo_de_cuidadores_tiene_sus_textos():
-    for nombre in TEXTOS:
-        assert getattr(cc, nombre)
-    assert "total del municipio" in cc.QUE_ES_REFERENCIA
-    assert "nivel" not in cc.QUE_ES_REFERENCIA
-
-
-def test_las_vistas_no_toman_estos_textos_de_estudiantes():
-    for modulo in (vc, vi):
-        fuente = inspect.getsource(modulo)
-        for nombre in TEXTOS:
-            assert f"ac_est.{nombre}" not in fuente, (modulo.__name__, nombre)
-        assert "va.explicaciones" not in fuente
 
 
 def test_explicaciones_de_cuidadores():

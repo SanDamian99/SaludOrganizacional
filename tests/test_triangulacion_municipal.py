@@ -200,7 +200,7 @@ def test_desgaste_docente_excluye_colegio_no_reconocido_y_sin_dato():
 
 def test_puntuar_docentes_suma_las_dimensiones_opcionales():
     filas = []
-    for i in range(12):
+    for _ in range(12):
         f = {"Colegio": "Colegio Laura Vicuña"}
         f.update({f"PSS{j}": 2 for j in range(1, 11)})
         f.update({f"CL{j}": 3 for j in range(1, 8)})

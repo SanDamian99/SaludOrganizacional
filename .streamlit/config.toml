@@ -7,8 +7,8 @@ font = "sans serif"
 
 [server]
 headless = true
-enableCORS = false
-enableXsrfProtection = false
+# Protección XSRF y CORS en sus valores por defecto (activadas): la app no se
+# incrusta en otros sitios y los formularios de carga llevan el token.
 
 [browser]
 # Sin telemetría de uso hacia Streamlit: una petición de red menos por sesión.

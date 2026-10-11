@@ -142,7 +142,7 @@ def acuerdo_sdq(D: pd.DataFrame, n_boot: int = cat.N_BOOT) -> pd.DataFrame:
         rho = correlacion_boot(sub, e, c, "spearman", n_boot)
         r = correlacion_boot(sub, e, c, "pearson", n_boot)
         icc = est.icc_a1(sub[[e, c]].to_numpy())
-        icc_ic = est.bootstrap_ic(sub, lambda x: est.icc_a1(x[[e, c]].to_numpy()), FAMILIA,
+        icc_ic = est.bootstrap_ic(sub, lambda x, e=e, c=c: est.icc_a1(x[[e, c]].to_numpy()), FAMILIA,
                                   n_boot)
         be, bc = bandas(sub[e], s, "self"), bandas(sub[c], s, "parent")
         kw = est.kappa_ponderado(be, bc)
@@ -348,7 +348,7 @@ def asociaciones(D: pd.DataFrame) -> pd.DataFrame:
     t = pd.DataFrame(filas)
     if not t.empty and "p" in t.columns:
         t["q_bh"] = np.nan
-        for muestra, sub in t[t["p"].notna()].groupby("muestra"):
+        for _muestra, sub in t[t["p"].notna()].groupby("muestra"):
             t.loc[sub.index, "q_bh"] = np.round(benjamini_hochberg(sub["p"].to_numpy()), 4)
     return t
 

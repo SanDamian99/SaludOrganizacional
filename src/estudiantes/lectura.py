@@ -74,8 +74,8 @@ def credenciales() -> tuple[str | None, str | None]:
             import streamlit as st
             url = url or st.secrets.get("SUPABASE_URL")
             key = key or st.secrets.get("SUPABASE_KEY")
-        except Exception:                                  # noqa: BLE001
-            pass
+        except Exception:                                  # noqa: BLE001, S110
+            pass                                           # sin secrets.toml: solo el entorno
     return url, key
 
 

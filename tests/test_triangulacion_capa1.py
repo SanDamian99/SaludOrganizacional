@@ -247,7 +247,7 @@ def _estudiantes_dos_niveles() -> pd.DataFrame:
             (cat_est.NIVEL_SECUNDARIA, "A", "Séptimo", 12),
             (cat_est.NIVEL_SECUNDARIA, "C", "Sexto", 6), (cat_est.NIVEL_SECUNDARIA, "D", "Sexto", 6))
     for nivel, colegio, grado, n in plan:
-        for i in range(n):
+        for _ in range(n):
             filas.append(dict(nivel=nivel, Colegio=colegio, Grado=grado,
                               SDQ_Total=float((7 * len(filas)) % 23)))
     return pd.DataFrame(filas)
@@ -277,7 +277,7 @@ def _cuidadores_con_grado_fuera() -> pd.DataFrame:
     filas = []
     for colegio, grado, n in (("A", "Sexto", 12), ("A", None, 3), ("B", "Sexto", 11),
                               ("E", "Sexto", 5), ("E", "Quinto", 4), ("E", None, 3)):
-        for i in range(n):
+        for _ in range(n):
             filas.append(dict(Colegio=colegio, Grado=grado, ID_cuidador=f"c{len(filas)}",
                               PSS_Total=float((5 * len(filas)) % 17)))
     return pd.DataFrame(filas)

@@ -3,13 +3,11 @@ Report Builder — Estructura narrativa del informe PDF.
 Orquesta ReportAnalytics + PDFReport para generar un documento coherente
 con contexto texto → gráfica → interpretación.
 """
-import io
 import os
 import tempfile
-from datetime import datetime
 from src.analysis import grupo_minimo as gm
 from src.reports.analytics import ReportAnalytics
-from src.reports.pdf_generator import PDFReport, clean_text
+from src.reports.pdf_generator import PDFReport
 
 
 class ReportBuilder:

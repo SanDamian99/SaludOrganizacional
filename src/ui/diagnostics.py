@@ -5,8 +5,6 @@ Visible con: ?debug=1 o ?debug=true
 import streamlit as st
 import pandas as pd
 import sys
-import os
-from pathlib import Path
 from src.ai.gemini_client import get_gemini_api_key
 
 

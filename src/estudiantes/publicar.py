@@ -511,7 +511,7 @@ def version_analisis(analisis: dict) -> str:
         if a is None:
             continue
         partes.append(f"{nivel}:{a.n}:{','.join(sorted(a.escalas))}")
-    huella = hashlib.sha1("|".join(partes).encode()).hexdigest()[:12]
+    huella = hashlib.sha1("|".join(partes).encode(), usedforsecurity=False).hexdigest()[:12]
     return f"{date.today().isoformat()}-{huella}"
 
 
@@ -600,8 +600,8 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
         try:
             tabla(TABLA_RESULTADOS).delete().eq("corrida_id", corrida_id).execute()
             tabla(TABLA_CORRIDAS).delete().eq("id", corrida_id).execute()
-        except Exception:
-            pass
+        except Exception:                                  # noqa: BLE001, S110
+            pass                                           # limpieza al mejor esfuerzo; se relanza el error original
         raise
 
     publicada = False
@@ -620,7 +620,7 @@ def publicar(analisis: dict, notas: str = "", publicar_ya: bool = False,
             # La corrida nueva ya está abierta y completa: no se deshace. Con la
             # migración 2026-10-07 el público solo lee la última publicada del
             # módulo; sin ella, las viejas siguen legibles hasta cerrarlas a mano.
-            print(f"AVISO: la corrida {corrida_id} quedó publicada, pero no se pudieron "
+            print(f"AVISO: la corrida {corrida_id} quedó publicada, pero no se pudieron "  # noqa: S608 (SQL de ayuda para pegar a mano, no se ejecuta)
                   f"despublicar las demás corridas de «{MODULO}» ({exc}). Compruebe que "
                   "corrió la migración supabase/migraciones/2026-10-07-modulo-y-ultima-"
                   "corrida.sql y despublique a mano: UPDATE obs360.corridas SET "
@@ -711,7 +711,7 @@ def main(argv=None) -> int:
     print(f"✓ Corrida {resumen['corrida_id']} con {resumen['filas']} filas. "
           f"Publicada: {resumen['publicada']}")
     if not resumen["publicada"]:
-        print("  Queda oculta al público. Para abrirla, en Supabase: "
+        print("  Queda oculta al público. Para abrirla, en Supabase: "  # noqa: S608 (SQL de ayuda para pegar a mano, no se ejecuta)
               "UPDATE obs360.corridas SET publicada = true WHERE id = "
               f"{resumen['corrida_id']};")
     return 0
