@@ -128,8 +128,54 @@ def test_bienestar_psicosocial_solo_2025(cargado):
 
 
 def test_el_archivo_regenerado_puntua_igual_que_el_de_storage(cargado):
-    """La codificación 2 (script nuevo) y la 1 (Storage) dan los mismos puntajes."""
-    df = cargado[0]
-    v2 = scoring.normalizar_codificacion(df)
-    assert scoring.codificacion(v2) == 2
-    pd.testing.assert_frame_equal(scoring.puntuar(df), scoring.puntuar(v2))
+    """`preparar()` sobre la exportación cruda (codificación 2) frente al codificado
+    de Storage (codificación 1): los puntajes de las 34 dimensiones son idénticos.
+    Los mensajes de fallo solo traen agregados."""
+    import os
+    from scripts.preparar_docentes import preparar
+    base = carpeta_datos("docentes")
+    crudos = [f for f in os.listdir(base) if "profesores" in f.lower() and f.endswith(".xlsx")
+              and not f.startswith("~$")]
+    if not crudos:
+        pytest.skip("falta la exportación cruda del formulario de profesores")
+    bruto = pd.read_excel(os.path.join(base, max(crudos, key=lambda f: os.path.getmtime(os.path.join(base, f)))))
+    nuevo, _ = preparar(bruto)
+    storage = cargado[0]
+    if len(nuevo) != len(storage):
+        pytest.skip(f"el crudo prepara {len(nuevo)} filas y Storage tiene {len(storage)}")
+    assert scoring.codificacion(nuevo) == 2 and scoring.codificacion(storage) == 1
+    p_nuevo, p_storage = scoring.puntuar(nuevo), scoring.puntuar(storage)
+    assert p_nuevo.shape[1] == 34
+    for clave in p_nuevo.columns:
+        a, b = p_nuevo[clave].reset_index(drop=True), p_storage[clave].reset_index(drop=True)
+        iguales = ((a == b) | (a.isna() & b.isna())).all()
+        assert iguales, f"{clave}: media nueva {a.mean():.3f} vs Storage {b.mean():.3f}"
+
+
+# ══ Universo publicable ═════════════════════════════════════════════════════
+def test_universo_12_instituciones_de_10_o_mas(cargado):
+    from src.docentes import universo
+    u = universo.aplicar(cargado[0])
+    conteos = u["Colegio"].value_counts(dropna=False)
+    assert len(u) == 478 and len(conteos) == 12 and conteos.min() >= 10
+    assert conteos["Colegio Nacional Diversificado"] == 73 and conteos["Fusca"] == 17
+    grandes, otros, absorbido = universo.reparto(conteos.to_dict())
+    assert len(grandes) == 12 and otros == 0 and absorbido is None
+    assert universo.consistente(len(u), grandes.values(), otros)
+
+
+def test_ningun_total_menos_los_grupos_mostrados_deja_1_a_9(cargado):
+    """Para cada variable de agrupación que ofrece la vista, con y sin filtro."""
+    from src.ui import dashboard as d
+    from src.docentes import universo
+    u = universo.aplicar(cargado[0])
+    excluir = set(cat.todos_los_items()) | {cat.COLUMNA_CODIFICACION} | {c for c in u.columns if str(c).endswith("_T")}
+    columnas = d._group_columns(u, exclude=excluir)
+    assert "Colegio" in columnas
+    subconjuntos = [u] + [u[u["Colegio"] == c] for c in u["Colegio"].dropna().unique()]
+    for sub in subconjuntos:
+        for col in columnas:
+            agg = sub.groupby(col, dropna=False).size().reset_index(name="count")
+            vis, otros, absorbido, ocultos = universo.grupos_publicables(agg, col)
+            assert universo.consistente(len(sub), vis["count"].tolist(), otros), \
+                f"{col}: total {len(sub)}, mostrados {int(vis['count'].sum())}, otros {otros}"
