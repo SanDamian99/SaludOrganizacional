@@ -16,7 +16,9 @@ from src.core.state import get_processed_data
 from src.analysis import scoring, indicators
 from src.analysis import grupo_minimo as gm
 from src.docentes import catalogo as cat_doc
+from src.docentes import estadistica as doc_est
 from src.docentes import scoring as doc_scoring
+from src.docentes import universo
 from src.ui.components.filtering import render_filtering_sidebar
 
 SEM_COLORS = {"green": "#1A7F4B", "yellow": "#B07D0D", "red": "#C0392B", "grey": "#5F6368"}
@@ -348,6 +350,11 @@ def _enriched(df, cols):
 
 
 @st.cache_data(show_spinner=False)
+def _universo(df):
+    return universo.aplicar(df)
+
+
+@st.cache_data(show_spinner=False)
 def _resumen_docentes(df):
     """Resumen anclado del archivo de docentes (src/docentes/scoring) y puntajes por docente.
 
@@ -418,6 +425,23 @@ def _pie_grupos(agg, columna, ocultos) -> str:
 
 def _label(c):
     return str(c).split(")")[-1].strip()
+
+
+def _tabla_grupo_vs_resto(comp, sel, gcol, grupos):
+    """Media [IC95] de cada grupo publicado y su diferencia con el resto [IC95, Welch]."""
+    filas = []
+    for g in grupos:
+        es = comp[gcol].astype(str) == str(g)
+        a, b = comp.loc[es, sel], comp.loc[~es, sel]
+        media, inf, sup = doc_est.ic_media(a)
+        dif, dinf, dsup = doc_est.ic_welch(a, b)
+        filas.append({
+            "Grupo": g, "n": int(a.notna().sum()),
+            "Media [IC 95 %]": f"{media:.2f} [{inf:.2f}–{sup:.2f}]" if inf is not None else f"{media:.2f}",
+            "Diferencia con el resto [IC 95 %]":
+                f"{dif:+.2f} [{dinf:+.2f}; {dsup:+.2f}]" if dinf is not None else (f"{dif:+.2f}" if dif is not None else "—"),
+        })
+    return pd.DataFrame(filas)
 
 
 def _theme_bar(items, anclado=False):
@@ -547,7 +571,12 @@ def _view_indicators(df, enr, puntajes=None):
                                 key="doc_comparar_por")
             comp = pd.DataFrame({sel: serie.values, gcol: df[gcol].values})
             agg = comp.groupby(gcol)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
-            agg, ocultos = gm.grupos_comparables(agg, gcol)
+            if anclado:
+                # Universo publicable: los grupos de menos de 10 van en «otros» y el
+                # total menos los mostrados nunca deja de 1 a 9 (src/docentes/universo).
+                agg, otros, absorbido, ocultos = universo.grupos_publicables(agg, gcol)
+            else:
+                agg, ocultos = gm.grupos_comparables(agg, gcol)
             if not agg.empty:
                 fig2 = px.bar(agg, x=gcol, y="mean", text=agg["mean"].round(2),
                               color="mean", color_continuous_scale="Blues",
@@ -556,7 +585,14 @@ def _view_indicators(df, enr, puntajes=None):
                                    coloraxis_showscale=False,
                                    xaxis=dict(tickangle=-30, automargin=True))
                 st.plotly_chart(fig2, width="stretch")
-            st.caption(_pie_grupos(agg, gcol, ocultos))
+            if anclado:
+                st.caption(universo.pie(agg, gcol, otros, absorbido, ocultos))
+                if not agg.empty:
+                    st.dataframe(_tabla_grupo_vs_resto(comp, sel, gcol, agg[gcol].tolist()),
+                                 width="stretch", hide_index=True)
+                    st.caption("Diferencia grupo − resto del universo con IC 95 % (t de Welch).")
+            else:
+                st.caption(_pie_grupos(agg, gcol, ocultos))
 
 
 # ── Sidebar (reporte + filtros) ──────────────────────
@@ -628,6 +664,10 @@ def render_dashboard():
         )
 
     wellbeing = indicators.is_wellbeing_dataset(df)
+    if doc_scoring.es_archivo_docentes(df):
+        # Universo publicable: sedes fundidas con su institución y Secretaría fuera.
+        # El KPI «Docentes», los filtros y las comparaciones parten de aquí.
+        df = _universo(df)
     df_view = _sidebar(df, wellbeing)
     if not gm.grupo_suficiente(len(df_view)):
         # Grupo mínimo de 10: ni figuras ni cifras, solo el mensaje fijo.

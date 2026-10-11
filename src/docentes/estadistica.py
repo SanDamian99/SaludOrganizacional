@@ -51,3 +51,26 @@ def proporcion_protegida(k: int, n: int) -> dict:
         return {"n": n, "pct": None, "ic_inf": None, "ic_sup": None}
     pct, inf, sup = wilson(k, n)
     return {"n": n, "k": k, "pct": pct, "ic_inf": inf, "ic_sup": sup}
+
+
+def ic_welch(a: pd.Series, b: pd.Series, z: float = 0.95
+             ) -> tuple[float | None, float | None, float | None]:
+    """(media(a) − media(b), IC inferior, IC superior) con la t de Welch.
+
+    Para «colegio − resto». Sin IC si alguno de los grupos tiene menos de 2 casos
+    o varianza nula en ambos.
+    """
+    a = pd.to_numeric(a, errors="coerce").dropna()
+    b = pd.to_numeric(b, errors="coerce").dropna()
+    if a.empty or b.empty:
+        return None, None, None
+    diff = float(a.mean() - b.mean())
+    if len(a) < 2 or len(b) < 2:
+        return diff, None, None
+    va, vb = float(a.var(ddof=1)) / len(a), float(b.var(ddof=1)) / len(b)
+    if va + vb == 0:
+        return diff, None, None
+    gl = (va + vb) ** 2 / (va ** 2 / (len(a) - 1) + vb ** 2 / (len(b) - 1))
+    t = float(sps.t.ppf(0.5 + z / 2, gl))
+    se = math.sqrt(va + vb)
+    return diff, diff - t * se, diff + t * se

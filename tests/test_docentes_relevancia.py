@@ -96,12 +96,46 @@ def test_explorar_usa_la_puntuacion_nueva(app):
     assert "Zona" in app.dataframe[0].value.columns
 
 
-def test_la_zona_no_cambia_al_filtrar(app):
-    """Misma media, misma zona, se mire el municipio o un colegio (semáforo anclado)."""
+def test_la_zona_no_cambia_al_filtrar():
+    """Misma media, misma zona, se mire el municipio o un colegio (semáforo anclado).
+
+    Con el índice relativo, el subconjunto con más estrés salía «Favorable».
+    """
     from src.ui import dashboard as d
     df = sint.docentes()
+    pss = [f"PSS{i}" for i in range(1, 11)]
+    # Municipio: PSS medio 10 (bajo), salvo «Grande A», donde todos tienen 30 (alto).
+    df[pss] = 1.0
+    df.loc[df[sint.COL_COLEGIO] == "Grande A", pss] = 3.0
     todo, _ = d._resumen_docentes.__wrapped__(df)
     parte, _ = d._resumen_docentes.__wrapped__(df[df[sint.COL_COLEGIO] == "Grande A"])
-    for clave in parte:
-        assert parte[clave]["min"] == todo[clave]["min"] and parte[clave]["max"] == todo[clave]["max"]
-    assert todo["PSS"]["n"] == len(df) and parte["PSS"]["n"] == 30
+    assert parte["PSS"]["mean"] == 30 and parte["PSS"]["level"] == "Zona a vigilar"
+    assert parte["PSS"]["color"] == "#D9822B"
+    assert todo["PSS"]["mean"] < 30 and todo["PSS"]["level"] != "Zona a vigilar"
+    # Y un subconjunto con la misma media que el total tiene su misma zona.
+    mismo, _ = d._resumen_docentes.__wrapped__(df[df[sint.COL_COLEGIO] == "Grande B"])
+    assert mismo["PSS"]["mean"] == 10 and mismo["PSS"]["level"] == "Zona favorable"
+    assert parte["PSS"]["n"] == 30 and todo["PSS"]["n"] == len(df)
+
+
+def test_universo_sedes_fundidas_y_secretaria_fuera():
+    """El KPI «Docentes» y el filtro de colegio parten del universo publicable."""
+    df = sint.docentes().rename(columns={sint.COL_COLEGIO: "Colegio"})
+    df.loc[df.index[:4], "Colegio"] = "Fusca · sede El Cerro"
+    df.loc[df.index[4:9], "Colegio"] = "Fusca"
+    df.loc[df.index[9], "Colegio"] = "Secretaría de Educación"
+    at = AppTest.from_function(_pagina, default_timeout=60)
+    at.session_state["df"] = df
+    at.run()
+    assert not at.exception
+    assert [m.value for m in at.metric if m.label == "👥 Docentes"] == [str(len(df) - 1)]
+    opciones = at.multiselect(key="filtro_Colegio").options
+    assert "Fusca" in opciones and "Fusca · sede El Cerro" not in opciones
+    assert "Secretaría de Educación" not in opciones
+    at.selectbox(key="doc_comparar_por").set_value("Colegio").run()
+    assert not at.exception
+    pies = " ".join(c.value for c in at.caption)
+    # Fusca queda con 9 (fundida con su sede, 4 + 5): va en «otros» (9 + 5 = 14), sin cifra propia.
+    assert "Fusca=" not in pies and "sin cifra: Fusca" in pies and "menos de 10): 14" in pies
+    assert "Welch" in " ".join(c.value for c in at.caption)
+    assert any("Diferencia con el resto [IC 95 %]" in d.value.columns for d in at.dataframe)
