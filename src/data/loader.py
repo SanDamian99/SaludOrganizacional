@@ -56,14 +56,22 @@ def _posprocesar(df, report):
     """Lo que solo aplica al archivo de docentes: los códigos de faltante.
 
     «Número de hijos» = 10 se convierte en NaN al cargar (ver
-    `src/docentes/limpieza.py`); el archivo no se modifica. Se ejecuta dentro
-    de las funciones cacheadas, una sola vez por archivo.
+    `src/docentes/limpieza.py`); el archivo no se modifica. Se ejecuta DENTRO
+    de las funciones cacheadas con `cache_resource`, una sola vez por archivo
+    y antes de que el objeto se comparta entre sesiones; nunca sobre el objeto
+    devuelto.
     """
     from src.docentes.limpieza import posprocesar
     return posprocesar(df, report)
 
 
-@st.cache_data(show_spinner=False)
+# Los DataFrames van en `cache_resource`, no en `cache_data`: `cache_data`
+# serializa el resultado y entrega una COPIA en cada acceso, así que cada sesión
+# (cada visitante) guardaba su propio dataset de docentes en memoria. Con
+# `cache_resource` hay un único objeto por proceso. Nadie lo muta: las vistas
+# filtran con máscaras (que devuelven copias) y `save_new_dataset` guarda uno
+# nuevo en vez de modificar el cargado.
+@st.cache_resource(show_spinner=False)
 def load_dataset(resolved_path: str):
     """Lee y procesa un dataset. Retorna (df, ingestion_report)."""
     proc = ExcelProcessor()
@@ -102,7 +110,7 @@ def version_activa_storage(conjunto: str = "docentes"):
     return almacen.Almacen().version_activa(conjunto)
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_resource(ttl=600, show_spinner=False)
 def _procesar_desde_storage(ruta: str):
     """Descarga el CSV y lo pasa por el mismo pipeline que un archivo local."""
     from src.data import almacen
@@ -112,6 +120,19 @@ def _procesar_desde_storage(ruta: str):
     report["success"] = True
     report["fuente"] = f"storage:{ruta}"
     return df, report
+
+
+def invalidar() -> None:
+    """Olvida la versión activa y los datasets procesados.
+
+    Se llama al subir o activar una versión: así la próxima lectura ve la nueva
+    sin esperar al TTL ni vaciar las cachés de las demás páginas.
+    """
+    for fn in (version_activa_storage, _procesar_desde_storage, load_dataset):
+        try:
+            fn.clear()
+        except Exception:                                  # noqa: BLE001
+            pass
 
 
 def dataset_activo_en_storage(conjunto: str = "docentes"):

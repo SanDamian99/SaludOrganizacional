@@ -214,35 +214,38 @@ REVOKE ALL ON FUNCTION obs360_interno.es_publica(bigint) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION obs360_interno.es_publica(bigint)
     TO anon, authenticated, service_role;
 
--- Anónimo: solo lectura, y solo de la ÚLTIMA corrida publicada de cada módulo
--- (triangulación incluida desde la 2026-10-10e). Una corrida vieja que siga
--- marcada como publicada no se lee.
-DROP POLICY IF EXISTS "lectura publica de corridas publicadas" ON obs360.corridas;
-CREATE POLICY "lectura publica de corridas publicadas" ON obs360.corridas
-    FOR SELECT TO anon, authenticated USING (obs360_interno.es_publica(id));
-
-DROP POLICY IF EXISTS "lectura publica de resultados publicados" ON obs360.resultados;
-CREATE POLICY "lectura publica de resultados publicados" ON obs360.resultados
-    FOR SELECT TO anon, authenticated
-    USING (obs360_interno.es_publica(corrida_id));
-
 -- Usuario de carga (app_metadata.obs360_rol = 'cargador', solo en los secretos
 -- del despliegue privado): lee CUALQUIER corrida y sus resultados, publicada o
--- no, para la vista previa del equipo (migración 2026-10-10). Solo SELECT; se
--- suma con OR a la política pública, que no cambia. La función es la misma de
--- supabase/almacen_schema.sql; se define aquí para no depender del orden.
+-- no, para la vista previa del equipo (migración 2026-10-10). La función es la
+-- misma de supabase/almacen_schema.sql; se define aquí para no depender del orden.
 CREATE OR REPLACE FUNCTION obs360.es_cargador() RETURNS boolean
 LANGUAGE sql STABLE SET search_path = obs360, pg_temp AS $$
     SELECT coalesce((auth.jwt() -> 'app_metadata' ->> 'obs360_rol') = 'cargador', false)
 $$;
 
+-- Una sola política SELECT por rol (migración 2026-10-10f: el linter avisaba de
+-- políticas permisivas duplicadas, que Postgres evalúa todas en cada consulta).
+--   · anon: solo la ÚLTIMA corrida publicada de cada módulo (triangulación
+--     incluida desde la 2026-10-10e). Una corrida vieja que siga marcada como
+--     publicada no se lee.
+--   · authenticated: lo mismo, o todo si es el usuario de carga.
 DROP POLICY IF EXISTS "cargador lee todas las corridas" ON obs360.corridas;
-CREATE POLICY "cargador lee todas las corridas" ON obs360.corridas
-    FOR SELECT TO authenticated USING (obs360.es_cargador());
+DROP POLICY IF EXISTS "lectura publica de corridas publicadas" ON obs360.corridas;
+CREATE POLICY "lectura publica de corridas publicadas" ON obs360.corridas
+    FOR SELECT TO anon USING (obs360_interno.es_publica(id));
+DROP POLICY IF EXISTS "lectura autenticada de corridas" ON obs360.corridas;
+CREATE POLICY "lectura autenticada de corridas" ON obs360.corridas
+    FOR SELECT TO authenticated
+    USING (obs360_interno.es_publica(id) OR obs360.es_cargador());
 
 DROP POLICY IF EXISTS "cargador lee todos los resultados" ON obs360.resultados;
-CREATE POLICY "cargador lee todos los resultados" ON obs360.resultados
-    FOR SELECT TO authenticated USING (obs360.es_cargador());
+DROP POLICY IF EXISTS "lectura publica de resultados publicados" ON obs360.resultados;
+CREATE POLICY "lectura publica de resultados publicados" ON obs360.resultados
+    FOR SELECT TO anon USING (obs360_interno.es_publica(corrida_id));
+DROP POLICY IF EXISTS "lectura autenticada de resultados" ON obs360.resultados;
+CREATE POLICY "lectura autenticada de resultados" ON obs360.resultados
+    FOR SELECT TO authenticated
+    USING (obs360_interno.es_publica(corrida_id) OR obs360.es_cargador());
 
 DROP POLICY IF EXISTS "lectura publica de mensajes vigentes" ON obs360.mensajes;
 CREATE POLICY "lectura publica de mensajes vigentes" ON obs360.mensajes

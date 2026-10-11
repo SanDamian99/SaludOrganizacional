@@ -9,3 +9,12 @@ font = "sans serif"
 headless = true
 enableCORS = false
 enableXsrfProtection = false
+
+[browser]
+# Sin telemetría de uso hacia Streamlit: una petición de red menos por sesión.
+gatherUsageStats = false
+
+[runner]
+# Un rerun nuevo cancela el anterior en vez de esperarlo (clics seguidos en
+# filtros): menos trabajo encolado por visitante.
+fastReruns = true

@@ -42,18 +42,52 @@ def test_la_migracion_da_lectura_al_cargador_y_nada_mas():
         assert prohibido not in codigo, prohibido
 
 
+# Desde la 2026-10-10f hay UNA política SELECT por rol: anon solo lo publicado;
+# authenticated lo publicado o todo si es el cargador (mismo alcance que antes).
+POLITICAS_UNICAS = (
+    'CREATE POLICY "lectura publica de corridas publicadas" ON obs360.corridas\n'
+    "    FOR SELECT TO anon USING (obs360_interno.es_publica(id));",
+    'CREATE POLICY "lectura autenticada de corridas" ON obs360.corridas\n'
+    "    FOR SELECT TO authenticated\n"
+    "    USING (obs360_interno.es_publica(id) OR obs360.es_cargador());",
+    'CREATE POLICY "lectura publica de resultados publicados" ON obs360.resultados\n'
+    "    FOR SELECT TO anon USING (obs360_interno.es_publica(corrida_id));",
+    'CREATE POLICY "lectura autenticada de resultados" ON obs360.resultados\n'
+    "    FOR SELECT TO authenticated\n"
+    "    USING (obs360_interno.es_publica(corrida_id) OR obs360.es_cargador());",
+)
+
+
+def test_la_migracion_10f_no_ensancha_a_anon_ni_da_escritura():
+    sql = _sql("migraciones", "2026-10-10f-politicas-select-unicas.sql")
+    for politica in POLITICAS_UNICAS:
+        assert politica in sql
+    # las dos políticas que sustituye se retiran explícitamente
+    for vieja in ("cargador lee todas las corridas", "cargador lee todos los resultados"):
+        assert f'DROP POLICY IF EXISTS "{vieja}"' in sql
+    codigo = "\n".join(l for l in sql.splitlines() if not l.lstrip().startswith("--"))
+    for prohibido in ("FOR INSERT", "FOR UPDATE", "FOR DELETE", "FOR ALL", "GRANT",
+                      "CREATE OR REPLACE FUNCTION", "SECURITY DEFINER"):
+        assert prohibido not in codigo, prohibido
+    # anon nunca lleva es_cargador: cada política de anon usa solo es_publica
+    for linea in codigo.splitlines():
+        if "TO anon" in linea:
+            assert "es_cargador" not in linea and "authenticated" not in linea
+
+
 def test_el_esquema_incluye_la_migracion_sin_tocar_la_politica_publica():
     sql = _sql("estudiantes_schema.sql")
-    for politica in POLITICAS:
+    for politica in POLITICAS_UNICAS:
         assert politica in sql
+    # las políticas antiguas del cargador ya no se crean (sí se retiran)
+    for politica in POLITICAS:
+        assert politica not in sql
+    assert 'DROP POLICY IF EXISTS "cargador lee todas las corridas"' in sql
     # La política pública: la última publicada de cada módulo, triangulación
     # incluida desde la 2026-10-10e (es_publica = es_ultima_publicada).
-    assert ("FOR SELECT TO anon, authenticated USING "
-            "(obs360_interno.es_publica(id));") in sql
-    assert "USING (obs360_interno.es_publica(corrida_id));" in sql
     assert "SELECT coalesce(obs360_interno.es_ultima_publicada(p_id), false);" in sql
     # la función se define antes de las políticas que la usan
-    assert sql.index("FUNCTION obs360.es_cargador()") < sql.index(POLITICAS[0])
+    assert sql.index("FUNCTION obs360.es_cargador()") < sql.index(POLITICAS_UNICAS[1])
 
 
 # ══ La base: anónimo solo lo publicado, cargador todo ═════════════════════
