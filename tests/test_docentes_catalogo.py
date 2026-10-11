@@ -56,21 +56,22 @@ def test_direccion_y_escala_en_todas():
 def test_cortes_solo_en_pss_bat_e_istas_y_marcados():
     con_cortes = {d.clave for d in cat.DIMENSIONES if d.cortes}
     assert con_cortes == {"PSS", "BTA", "ISTAS_Exig", "ISTAS_TA"}
-    # Cada banda tiene zona y las bandas cubren la escala entera, sin huecos.
+    # Bandas continuas [inferior, superior): el superior de una es el inferior de la
+    # siguiente y cubren la escala entera.
     for clave in con_cortes:
         d = _dim(clave)
         bandas = sorted(d.cortes, key=lambda b: b.inferior)
         assert bandas[0].inferior == d.escala[0] and bandas[-1].superior == d.escala[1]
         for a, b in zip(bandas, bandas[1:]):
-            assert b.inferior > a.superior
+            assert b.inferior == a.superior
         assert {b.zona for b in bandas} <= {cat.ZONA_FAVORABLE, cat.ZONA_INTERMEDIA, cat.ZONA_VIGILAR}
     assert _dim("PSS").cortes_tipo == "convencional" and not _dim("PSS").comprobar_en_manual
     assert _dim("BTA").comprobar_en_manual and _dim("ISTAS_Exig").comprobar_en_manual
     assert _dim("ISTAS_TA").comprobar_en_manual
-    assert [b.inferior for b in _dim("PSS").cortes] == [0, 14, 27]
+    assert [b.inferior for b in _dim("PSS").cortes] == [0, 13.5, 26.5]
     assert [b.inferior for b in _dim("BTA").cortes] == [1, 2.59, 3.02]
-    assert [b.inferior for b in _dim("ISTAS_Exig").cortes] == [0, 8, 11]
-    assert [b.inferior for b in _dim("ISTAS_TA").cortes] == [0, 21, 26]
+    assert [b.inferior for b in _dim("ISTAS_Exig").cortes] == [0, 7.5, 10.5]
+    assert [b.inferior for b in _dim("ISTAS_TA").cortes] == [0, 20.5, 25.5]
 
 
 def test_aviso_de_version_y_solo_2025():

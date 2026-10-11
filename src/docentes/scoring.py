@@ -103,11 +103,18 @@ def pct_escala(valor: float, dim: cat.Dimension) -> float | None:
 
 
 def banda_de(valor: float, dim: cat.Dimension) -> cat.Banda | None:
-    """La banda de corte donde cae `valor` (la más alta cuyo límite inferior no lo supera)."""
+    """La banda [inferior, superior) donde cae `valor`; la última incluye su superior.
+
+    Bandas continuas: una media de 13,6 en el PSS cae en «moderado» (14–26),
+    no en «bajo» (0–13). Por debajo del mínimo se asigna la primera banda.
+    """
     if not dim.cortes or valor is None or pd.isna(valor):
         return None
-    candidatas = [b for b in sorted(dim.cortes, key=lambda b: b.inferior) if b.inferior <= valor]
-    return candidatas[-1] if candidatas else sorted(dim.cortes, key=lambda b: b.inferior)[0]
+    bandas = sorted(dim.cortes, key=lambda b: b.inferior)
+    for b in bandas[:-1]:
+        if b.inferior <= valor < b.superior:
+            return b
+    return bandas[-1] if valor >= bandas[-1].inferior else bandas[0]
 
 
 def zona_de(valor: float, dim: cat.Dimension) -> str:

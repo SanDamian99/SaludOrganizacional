@@ -32,6 +32,20 @@ convencionales (Cohen no publicó cortes). Los del BAT-12 son los del BAT-23 del
 manual de Schaufeli, De Witte y Desart y los de ISTAS21 son las tablas de
 referencia de población asalariada española: ambos llevan
 `comprobar_en_manual=True` hasta que el equipo los confirme.
+
+Las bandas son **continuas y semiabiertas**: [inferior, superior), y el
+superior de una banda es el inferior de la siguiente; la última incluye su
+superior. En las escalas de suma entera (PSS, ISTAS21) el límite va en el
+medio punto: la banda publicada «0–13» es [0, 13,5) y «14–26» es [13,5, 26,5).
+Así un puntaje entero cae donde dice la tabla y una media de 13,6 cae en
+«moderado», no en «bajo». En el BAT (medias de 1 a 5) los límites son los
+cortes mismos: 2,59 y 3,02.
+
+Universo
+--------
+Las sedes se funden con su institución (`SEDES`) y la Secretaría de Educación
+queda fuera del universo comparable (`FUERA_DEL_UNIVERSO`): 12 instituciones,
+todas con 10 o más docentes (propuesta §2.4). Ver `src/docentes/universo.py`.
 """
 from __future__ import annotations
 
@@ -74,6 +88,17 @@ RECODIFICAR_V1 = {
     "IR1": 5,
 }
 
+# Sede → institución a la que pertenece (nombres tal como los escribe
+# scripts/preparar_docentes.COLEGIOS). Una sede nunca se compara sola.
+SEDES = {
+    "Diversificado · sede Santa Lucía": "Colegio Nacional Diversificado",
+    "Diversificado · sede Campincito": "Colegio Nacional Diversificado",
+    "Fusca · sede El Cerro": "Fusca",
+}
+# Fuera del universo comparable (no es un colegio).
+FUERA_DEL_UNIVERSO = ("Secretaría de Educación",)
+COLUMNA_COLEGIO = "Colegio"
+
 # «Número de hijos» = 10 en 69 docentes de 2025: casi seguro un código del
 # formulario («no responde»). Se trata como faltante al cargar, hasta que el
 # equipo lo confirme (§6, punto 8).
@@ -105,7 +130,11 @@ FUENTE_IRI = "Índice de Reactividad Interpersonal, IRI (Davis, 1983)."
 
 @dataclass(frozen=True)
 class Banda:
-    """Una banda de corte: [inferior, superior] en la escala de presentación."""
+    """Una banda de corte: [inferior, superior) en la escala de presentación.
+
+    El superior coincide con el inferior de la banda siguiente; la última
+    banda incluye su superior (el máximo de la escala).
+    """
     etiqueta: str
     inferior: float
     superior: float
@@ -159,9 +188,9 @@ DIMENSIONES: tuple[Dimension, ...] = (
         "Escala de Estrés Percibido, PSS-10 (Cohen, Kamarck y Mermelstein, 1983). "
         "Cortes convencionales: Cohen no publicó cortes.",
         "Cuánto estrés sintió la persona en el último mes. Un valor alto es más estrés.",
-        cortes=(Banda("Estrés bajo", 0, 13, ZONA_FAVORABLE),
-                Banda("Estrés moderado", 14, 26, ZONA_INTERMEDIA),
-                Banda("Estrés alto", 27, 40, ZONA_VIGILAR)),
+        cortes=(Banda("Estrés bajo", 0, 13.5, ZONA_FAVORABLE),
+                Banda("Estrés moderado", 13.5, 26.5, ZONA_INTERMEDIA),
+                Banda("Estrés alto", 26.5, 40, ZONA_VIGILAR)),
         cortes_tipo="convencional"),
     Dimension(
         "BTA", "Burnout (BAT-12)", TEMA_SALUD_MENTAL, _rango("BTA", 1, 12),
@@ -171,8 +200,8 @@ DIMENSIONES: tuple[Dimension, ...] = (
         "Agotamiento, distancia mental y deterioro cognitivo y emocional por el trabajo. "
         "Un valor alto es más burnout.",
         desplazamiento=1,
-        cortes=(Banda("Sin riesgo", 1, 2.58, ZONA_FAVORABLE),
-                Banda("En riesgo", 2.59, 3.01, ZONA_INTERMEDIA),
+        cortes=(Banda("Sin riesgo", 1, 2.59, ZONA_FAVORABLE),
+                Banda("En riesgo", 2.59, 3.02, ZONA_INTERMEDIA),
                 Banda("Riesgo muy alto", 3.02, 5, ZONA_VIGILAR)),
         cortes_tipo="publicado", comprobar_en_manual=True,
         nota="Cortes 2,59 / 3,02 del BAT-23: confirmar los del BAT-12 en el manual."),
@@ -269,18 +298,18 @@ DIMENSIONES: tuple[Dimension, ...] = (
         "ISTAS_Exig", "Exigencias psicológicas (ISTAS21)", TEMA_RECURSOS,
         _rango("PRPS_CE", 1, 6), "suma", (0, 24), MAYOR_PEOR, FUENTE_ISTAS,
         "Ritmo, cantidad y carga emocional del trabajo. Un valor alto es más exigencia.",
-        cortes=(Banda("Favorable", 0, 7, ZONA_FAVORABLE),
-                Banda("Intermedio", 8, 10, ZONA_INTERMEDIA),
-                Banda("Desfavorable", 11, 24, ZONA_VIGILAR)),
+        cortes=(Banda("Favorable", 0, 7.5, ZONA_FAVORABLE),
+                Banda("Intermedio", 7.5, 10.5, ZONA_INTERMEDIA),
+                Banda("Desfavorable", 10.5, 24, ZONA_VIGILAR)),
         cortes_tipo="publicado", comprobar_en_manual=True,
         nota="Tablas de referencia de población asalariada española: verificar en el manual."),
     Dimension(
         "ISTAS_TA", "Trabajo activo y desarrollo (ISTAS21)", TEMA_RECURSOS,
         _rango("PRPS_CE", 7, 16), "suma", (0, 40), MAYOR_MEJOR, FUENTE_ISTAS,
         "Influencia, desarrollo de habilidades y sentido del trabajo. Un valor alto es mejor.",
-        cortes=(Banda("Desfavorable", 0, 20, ZONA_VIGILAR),
-                Banda("Intermedio", 21, 25, ZONA_INTERMEDIA),
-                Banda("Favorable", 26, 40, ZONA_FAVORABLE)),
+        cortes=(Banda("Desfavorable", 0, 20.5, ZONA_VIGILAR),
+                Banda("Intermedio", 20.5, 25.5, ZONA_INTERMEDIA),
+                Banda("Favorable", 25.5, 40, ZONA_FAVORABLE)),
         cortes_tipo="publicado", comprobar_en_manual=True,
         nota="Tablas de referencia de población asalariada española: verificar en el manual."),
 

@@ -135,8 +135,10 @@ def _con_media(clave, valor, n=30):
 
 @pytest.mark.parametrize("clave,valor,zona", [
     ("PSS", 10, cat.ZONA_FAVORABLE), ("PSS", 14.3, cat.ZONA_INTERMEDIA), ("PSS", 30, cat.ZONA_VIGILAR),
+    ("PSS", 13.6, cat.ZONA_INTERMEDIA), ("PSS", 13.0, cat.ZONA_FAVORABLE), ("PSS", 40, cat.ZONA_VIGILAR),
+    ("BTA", 2.59, cat.ZONA_INTERMEDIA), ("BTA", 3.019, cat.ZONA_INTERMEDIA), ("BTA", 5, cat.ZONA_VIGILAR),
     ("BTA", 1.89, cat.ZONA_FAVORABLE), ("BTA", 2.7, cat.ZONA_INTERMEDIA), ("BTA", 3.5, cat.ZONA_VIGILAR),
-    ("ISTAS_Exig", 11.5, cat.ZONA_VIGILAR), ("ISTAS_TA", 26, cat.ZONA_FAVORABLE),
+    ("ISTAS_Exig", 11.5, cat.ZONA_VIGILAR), ("ISTAS_TA", 26, cat.ZONA_FAVORABLE), ("ISTAS_TA", 25.6, cat.ZONA_FAVORABLE), ("ISTAS_Exig", 10.6, cat.ZONA_VIGILAR),
     ("ISTAS_TA", 23.5, cat.ZONA_INTERMEDIA),
 ])
 def test_zona_con_corte_publicado(clave, valor, zona):
@@ -225,3 +227,14 @@ def test_sin_columna_de_hijos_no_pasa_nada():
     d = pd.DataFrame({"PSS1": [1, 2]})
     out, informe = limpieza.codigos_faltantes(d)
     assert out.equals(d) and informe == {}
+
+
+def test_banda_de_es_continua_y_semiabierta():
+    pss = cat.por_clave("PSS")
+    assert scoring.banda_de(13.6, pss).etiqueta == "Estrés moderado"
+    assert scoring.banda_de(13.0, pss).etiqueta == "Estrés bajo"
+    assert scoring.banda_de(26.4, pss).etiqueta == "Estrés moderado"
+    assert scoring.banda_de(26.5, pss).etiqueta == "Estrés alto"
+    assert scoring.banda_de(26, pss).etiqueta == "Estrés moderado" and scoring.banda_de(27, pss).etiqueta == "Estrés alto"
+    assert scoring.banda_de(40, pss).etiqueta == "Estrés alto"
+    assert scoring.banda_de(-1, pss).etiqueta == "Estrés bajo"
