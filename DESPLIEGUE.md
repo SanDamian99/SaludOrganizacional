@@ -361,6 +361,32 @@ espera.
 Si la instalación en el despliegue tarda demasiado o falla, se puede quitar: en
 los modos `comunidad` e `investigador` la aplicación nunca importa el chat.
 
+### Qué se cachea y cómo (limpieza de 10-oct-2026)
+
+- **Un objeto por proceso, compartido entre visitantes** (`st.cache_resource`):
+  los análisis de estudiantes, cuidadores y triangulación, el dataset de
+  docentes procesado (`src/data/loader.py`) y la conexión anónima a Supabase
+  (`src/core/supabase_cliente.py`). Nadie modifica esos objetos: las vistas
+  filtran con máscaras, que devuelven copias.
+- **Una copia por acceso** (`st.cache_data`): solo cosas pequeñas o que
+  caducan, como el id de la corrida vigente (5 min), la fila de la versión
+  activa del almacén (10 min) y los PDF de una página (16 entradas, 1 h).
+- **El dataset de docentes solo se carga en las páginas que lo usan**
+  (Docentes, Chat, Carga, Reportes). El despliegue público nunca lo toca.
+- **Las librerías pesadas se importan al usarse**: `scipy.stats` y
+  `matplotlib` entran por `src/core/perezoso.py` y no cargan hasta que una
+  prueba estadística o un PDF las necesita. Una página pública arranca con
+  ~130 MB en vez de ~190 MB.
+
+Para medir después de un cambio:
+
+```bash
+OBS360_MODO=comunidad python -c "
+import resource, sys, src.ui.estudiantes, src.ui.views.estudiantes_comunidad, src.ui.views.cuidadores_comunidad
+print(round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024/1024), 'MB;',
+      'scipy' , 'scipy.stats' in sys.modules, '| matplotlib', 'matplotlib.pyplot' in sys.modules)"
+```
+
 ## Todo lo que usa la plataforma está en Supabase
 
 | Conjunto | Qué es | Dónde |

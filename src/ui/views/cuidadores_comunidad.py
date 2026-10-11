@@ -672,7 +672,7 @@ def render_comunidad(ac) -> None:
         _seccion_informes(ac, rol, colegio)
 
 
-@st.cache_data(show_spinner="Preparando el PDF…", max_entries=64)
+@st.cache_data(show_spinner="Preparando el PDF…", max_entries=16, ttl=3600)
 def _pdf_de(html: str) -> bytes | None:
     from src.ui.views.cuidadores_informe import a_pdf
     return a_pdf(html)

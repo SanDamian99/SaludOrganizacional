@@ -18,14 +18,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize State
+# Initialize State (solo claves vacías: ningún dato se carga aquí)
 init_session_state()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Despliegue público: solo las vistas de comunidad.
 # Se corta aquí, antes de importar el cargador de archivos, el chat, los
 # informes o la vista de investigación. En esta ejecución esos módulos no
-# existen, así que no hay URL ni clic que lleve a ellos.
+# existen, así que no hay URL ni clic que lleve a ellos. Tampoco se toca el
+# dataset de docentes: en el público nadie lo ve.
 # ─────────────────────────────────────────────────────────────────────────────
 if _PUBLICO:
     _publicas = nav.menu(_MODO)
@@ -55,9 +56,6 @@ if _PUBLICO:
             st.info("Esta página se está actualizando. Vuelva en unos minutos.")
     st.stop()
 
-from src.ai.gemini_client import get_gemini_api_key
-from src.ui.reports import render_reports_page
-
 # --- Debug Mode (query param: ?debug=1 OR ?debug=true) ---
 debug_param = st.query_params.get("debug", "").lower()
 if debug_param in ("1", "true"):
@@ -65,54 +63,8 @@ if debug_param in ("1", "true"):
     render_diagnostics_panel()
     st.stop()
 
-# --- Banner de API Key ausente ---
-if not get_gemini_api_key():
-    st.sidebar.warning(
-        "⚠️ **Funcionalidades de IA no disponibles**\n\n"
-        "Para habilitar el chat y el análisis automático, "
-        "configura tu API key en `.streamlit/secrets.toml`:\n\n"
-        "```toml\nYOUR_API_KEY = 'tu-api-key-aqui'\n```"
-    )
-
-# --- Selector de dataset precargado ---
-from src.data import loader as _loader
-from src.data.loader import available_datasets, load_dataset
-
-_datasets = available_datasets()
-
-# La versión activa en Supabase Storage va de primera: en el despliegue es la
-# única fuente real. Se pide con getattr por la misma razón que la página
-# inicial: un módulo rancio en memoria no debe tumbar el arranque.
-_version_activa = getattr(_loader, "version_activa_storage", None)
-_etiqueta_storage = getattr(_loader, "etiqueta_storage", None)
-if callable(_version_activa) and callable(_etiqueta_storage):
-    try:
-        _v = _version_activa("docentes")
-        if _v:
-            _datasets = [{"label": _etiqueta_storage(_v, "docentes"), "storage": "docentes",
-                          "demo": False}] + _datasets
-    except Exception as e:
-        st.sidebar.caption(f"Sin acceso al almacén de versiones: {e}")
-
-if _datasets:
-    with st.sidebar:
-        _labels = [d["label"] for d in _datasets]
-        _sel = st.selectbox("📁 Dataset precargado", _labels, key="dataset_selector")
-    # Recargar solo cuando el usuario cambia la selección (preserva archivos subidos)
-    if st.session_state.get("_loaded_selector") != _sel:
-        _chosen = next(d for d in _datasets if d["label"] == _sel)
-        try:
-            if _chosen.get("storage"):
-                _df, _report, _ = _loader.dataset_activo_en_storage(_chosen["storage"])
-            else:
-                _df, _report = load_dataset(_chosen["resolved"])
-            st.session_state.df = _df
-            st.session_state.last_ingestion_report = _report
-            st.session_state.current_dataset = _sel
-            st.session_state["_loaded_selector"] = _sel
-            st.session_state.messages = []  # chat fresco para el nuevo dataset
-        except Exception as e:
-            st.sidebar.error(f"No se pudo cargar «{_sel}»: {e}")
+# --- Sidebar: hueco del selector de dataset (se rellena solo si la página lo usa)
+_hueco_dataset = st.sidebar.container()
 
 # --- Sidebar Navigation ---
 with st.sidebar:
@@ -124,6 +76,40 @@ with st.sidebar:
     _inicial = nav.pagina_inicial(_MODO)
     _indice = _opciones.index(_inicial) if _inicial in _opciones else 0
     page = st.radio("Ir a:", _opciones, index=_indice, key="nav_pagina")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset de docentes: solo en las páginas que lo usan. Estudiantes, Cuidadores
+# y Triangulación leen sus propias fuentes y no deben pagar la descarga ni el
+# procesamiento de docentes (antes ocurría en cada sesión, en todas las páginas).
+# ─────────────────────────────────────────────────────────────────────────────
+_USAN_DOCENTES = {nav.PAGINA_DOCENTES, nav.PAGINA_CHAT, nav.PAGINA_CARGA, nav.PAGINA_REPORTES}
+
+if page in _USAN_DOCENTES:
+    from src.core import state as _state
+
+    # Banner de API Key ausente (chat e interpretación con IA)
+    from src.ai.gemini_client import get_gemini_api_key
+    if not get_gemini_api_key():
+        st.sidebar.warning(
+            "⚠️ **Funcionalidades de IA no disponibles**\n\n"
+            "Para habilitar el chat y el análisis automático, "
+            "configura tu API key en `.streamlit/secrets.toml`:\n\n"
+            "```toml\nYOUR_API_KEY = 'tu-api-key-aqui'\n```"
+        )
+
+    _datasets = _state.opciones_docentes()
+    if _datasets:
+        with _hueco_dataset:
+            _labels = [d["label"] for d in _datasets]
+            _sel = st.selectbox("📁 Dataset precargado", _labels, key="dataset_selector")
+        # Recargar solo cuando cambia la selección (preserva archivos subidos)
+        if st.session_state.get("_loaded_selector") != _sel:
+            try:
+                _state.cargar_docentes(next(d for d in _datasets if d["label"] == _sel))
+            except Exception as e:
+                st.sidebar.error(f"No se pudo cargar «{_sel}»: {e}")
+    else:
+        _state.cargar_docentes_si_falta()
 
 # --- Main Routing ---
 if page == nav.PAGINA_DOCENTES:
@@ -156,6 +142,7 @@ elif page == nav.PAGINA_CARGA:
     render_upload()
 
 elif page == nav.PAGINA_REPORTES:
+    from src.ui.reports import render_reports_page
     render_reports_page()
 
 # --- Footer Debug (sidebar) ---

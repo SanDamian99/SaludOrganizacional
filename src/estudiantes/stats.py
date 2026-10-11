@@ -12,9 +12,13 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from scipy import stats as sps
 
+from src.core import perezoso
 from src.estudiantes import catalog as cat
+
+# scipy.stats tarda ~0,4 s en importarse y solo lo usan las pruebas de
+# hipótesis; las vistas que leen cifras publicadas no deben pagarlo.
+sps = perezoso.modulo("scipy.stats")
 
 
 # ── proporciones ────────────────────────────────────────────────────────────
