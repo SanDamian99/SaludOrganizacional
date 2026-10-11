@@ -570,7 +570,9 @@ def _view_indicators(df, enr, puntajes=None):
             gcol = st.selectbox("Comparar por grupo:", groups, format_func=_label,
                                 key="doc_comparar_por")
             comp = pd.DataFrame({sel: serie.values, gcol: df[gcol].values})
-            agg = comp.groupby(gcol)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
+            # dropna=False: quienes no tienen dato en la variable de grupo cuentan en
+            # «otros», para que el total menos lo mostrado sea exactamente «otros».
+            agg = comp.groupby(gcol, dropna=not anclado)[sel].agg(["mean", "count"]).reset_index().sort_values("mean", ascending=False)
             if anclado:
                 # Universo publicable: los grupos de menos de 10 van en «otros» y el
                 # total menos los mostrados nunca deja de 1 a 9 (src/docentes/universo).
