@@ -44,11 +44,21 @@ def test_con_un_modulo_viejo_pide_reiniciar(monkeypatch, tmp_path):
     assert any("Reinicie" in w.value for w in at.warning)
 
 
+def _bloques(at) -> list:
+    return [s.value for s in at.subheader]
+
+
 def test_con_datos_muestra_las_pestanas_sin_nada_individual(monkeypatch, tmp_path):
+    from src.triangulacion import hallazgos_catalogo as hc
     ts.escribir(tmp_path)
     at = _pagina(monkeypatch, str(tmp_path), ts.CLAVE_PRUEBA).run()
     assert not at.exception
     assert [t.label for t in at.tabs] == vi.PESTANAS
+    bloques = _bloques(at)
+    for titulo in (hc.TITULO_PERFIL, hc.TITULO_PATRONES, hc.TITULO_TENSION, hc.TITULO_HIPOTESIS):
+        assert titulo in bloques
+    assert "Dónde coinciden" not in bloques
+    assert any(hc.ESTADO_TEXTOS in w.value for w in at.warning)
     at.selectbox(key="tri_ba").set_value("SDQ_Emo").run()
     assert not at.exception
     pantalla = " ".join(str(e.value) for e in at.markdown) + \

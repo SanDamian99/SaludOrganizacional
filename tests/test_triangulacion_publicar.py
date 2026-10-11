@@ -137,7 +137,8 @@ def test_el_lote_es_de_triangulacion_y_pasa_las_guardas(filas):
 def test_el_lote_trae_cada_tabla(filas):
     tipos = {f["tipo"] for f in filas}
     assert {pub.TIPO_META, "tri_capa1_diferencias", "tri_capa1_por_grado",
-            "tri_diadas_acuerdo", "tri_diadas_bland_altman"} <= tipos
+            "tri_diadas_acuerdo", "tri_diadas_bland_altman", "tri_capa1_municipal",
+            "tri_diadas_informante"} <= tipos
     assert sum(f["tipo"] == pub.TIPO_META for f in filas) == 1
 
 
@@ -179,10 +180,12 @@ def test_bland_altman_solo_grupos(filas):
 
 
 def test_el_lote_no_sube_diadas_ni_filas_de_personas(filas):
+    """Cada fila del lote es una fila de una tabla agregada (más la meta): nada por persona."""
     t = datos.analisis()
-    assert len(filas) < 300
-    personas = sum(v for v in t.actores.values() if isinstance(v, int))
-    assert len(filas) < personas / 2
+    tablas = pub._tablas(t)
+    assert {f["tipo"] for f in filas} <= {pub.TIPO_META} | {pub.PREFIJO + n for n in pub.TABLAS}
+    agregadas = sum(len(df) for df in tablas.values() if df is not None)
+    assert len(filas) <= 1 + agregadas
 
 
 @pytest.mark.parametrize("dano", [
@@ -283,3 +286,14 @@ def test_cli_sin_clave_sale_con_1(monkeypatch, capsys):
         raise ClaveAusente("falta la clave")
     monkeypatch.setattr(pipeline, "cargar_y_analizar", sin_clave)
     assert pub.main(["--ensayo"]) == 1
+
+
+def test_las_tablas_nuevas_viajan_con_su_n_y_sin_conteos_de_casos(filas):
+    nuevas = [f for f in filas if f["tipo"] in ("tri_capa1_municipal", "tri_diadas_informante")]
+    assert nuevas
+    for f in nuevas:
+        assert f["n"] >= cat.MIN_GROUP_N
+        fila = f["detalle"]["fila"]
+        assert not {"casos", "k_bajo", "k_alto", "familia"} & set(fila)
+        if f["tipo"] == "tri_capa1_municipal":
+            assert f["agrupacion"] == "municipio" and f["escala"] == fila["bloque"]

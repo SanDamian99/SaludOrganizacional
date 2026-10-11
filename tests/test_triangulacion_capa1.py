@@ -58,10 +58,82 @@ def test_coocurrencia_nunca_es_acuerdo():
 
 
 def test_pares_de_mismo_objeto_son_los_de_la_spec():
+    """Spec §5.6 más los ajustes del 10 oct 2026: apoyo familiar niño–cuidador es
+    el mismo objeto (la misma familia) y entran conducta e hiperactividad."""
     mismos = {(p.a, p.b) for p in cat.PARES if p.tipo == cat.MISMO_OBJETO}
     assert mismos == {("est_sdq_total", "nin_sdq_total"), ("est_sdq_emo", "nin_sdq_emo"),
+                      ("est_sdq_con", "nin_sdq_con"), ("est_sdq_hip", "nin_sdq_hip"),
                       ("est_pssm", "doc_lider"), ("est_pssm", "doc_grupo"),
-                      ("est_sin_adulto", "doc_lider"), ("est_sin_adulto", "doc_grupo")}
+                      ("est_sin_adulto", "doc_lider"), ("est_sin_adulto", "doc_grupo"),
+                      ("est_mspss_fam", "cui_mspss_fam")}
+
+
+def test_todo_constructo_tiene_etiqueta_corta_y_columna_conocida():
+    for c in cat.CONSTRUCTOS:
+        assert c.corta and len(c.corta) <= 40, c.clave
+        assert c.objeto and c.direccion in (1, -1)
+    assert len({c.clave for c in cat.CONSTRUCTOS}) == len(cat.CONSTRUCTOS)
+
+
+def _estudiantes_por_grado(plan) -> pd.DataFrame:
+    """plan: (colegio, grado, n, media). Valor = media + ruido determinista pequeño."""
+    filas = []
+    for colegio, grado, n, media in plan:
+        for i in range(n):
+            filas.append(dict(nivel="secundaria", Colegio=colegio, Grado=grado,
+                              PSSM_Total=media + ((i * 7) % 5 - 2) * 0.05))
+    return pd.DataFrame(filas)
+
+
+def test_ajuste_por_grado_quita_la_composicion_de_grados():
+    """A solo tiene Noveno (pertenencia baja en todo el municipio por ser Noveno)
+    y B solo Sexto. Sin ajuste A sale «peor»; ajustado por grado no difiere."""
+    d = _estudiantes_por_grado((("A", "Noveno", 15, 2.5), ("B", "Sexto", 15, 3.5),
+                                ("C", "Noveno", 15, 2.5), ("C", "Sexto", 15, 3.5)))
+    c = cat.POR_CLAVE["est_pssm"]
+    lista = c1.atomos(d, cat.ESTUDIANTE)
+    bruto = c1.diferencias_constructo(d, lista, c, ["A"], "Colegio", ajuste_grado=False)[0]
+    ajustado = c1.diferencias_constructo(d, lista, c, ["A"], "Colegio")[0]
+    assert bruto["ic_sup"] < 0 and bruto["ajuste"] == ""
+    assert ajustado["ajuste"] == c1.AJUSTE_GRADO
+    assert ajustado["ic_inf"] < 0 < ajustado["ic_sup"]
+    assert ajustado["media_grupo"] == bruto["media_grupo"]      # las medias siguen brutas
+    assert ajustado["de_actor"] == bruto["de_actor"]
+    assert ajustado["n_grupo"] == 15 and ajustado["n_resto"] == 45
+
+
+def test_el_ajuste_por_grado_solo_aplica_a_estudiantes_por_colegio(capa):
+    dif, grado = capa.diferencias, capa.por_grado
+    est = dif["actor"] == "Estudiantes"
+    assert (dif.loc[est & dif["d"].notna(), "ajuste"] == c1.AJUSTE_GRADO).all()
+    assert (dif.loc[~est, "ajuste"] == "").all()
+    assert (grado["ajuste"] == "").all()
+
+
+def test_con_ajuste_apagado_d_es_el_bruto_y_ajuste_vacio():
+    d = _estudiantes_por_grado((("A", "Noveno", 15, 2.5), ("B", "Sexto", 15, 3.5)))
+    c = cat.POR_CLAVE["est_pssm"]
+    f = c1.diferencias_constructo(d, c1.atomos(d, cat.ESTUDIANTE), c, ["A"], "Colegio",
+                                  ajuste_grado=False)[0]
+    x, y = d.loc[d.Colegio == "A", "PSSM_Total"], d.loc[d.Colegio == "B", "PSSM_Total"]
+    assert f["ajuste"] == "" and f["motivo"] == ""
+    assert f["d"] == pytest.approx(round((x.mean() - y.mean()) / d["PSSM_Total"].std(ddof=1), 3))
+
+
+def test_grados_vacios_en_el_universo_no_se_ajusta_en_silencio():
+    d = _estudiantes_por_grado((("A", "Noveno", 15, 2.5), ("B", "Sexto", 15, 3.5),
+                                ("C", "Noveno", 15, 2.5), ("C", "Sexto", 15, 3.5)))
+    d.loc[d.index[:3], "Grado"] = None            # 3 sin grado (siguen en el colegio A)
+    d["Grado"] = d["Grado"].fillna("Noveno")      # átomos como antes…
+    d2 = d.copy()
+    c = cat.POR_CLAVE["est_pssm"]
+    lista = c1.atomos(d2, cat.ESTUDIANTE)
+    d2.loc[d2.index[:3], "Grado"] = None          # …pero el grado falta al ajustar
+    f = c1.diferencias_constructo(d2, lista, c, ["A"], "Colegio")[0]
+    bruto = c1.diferencias_constructo(d2, lista, c, ["A"], "Colegio", ajuste_grado=False)[0]
+    assert f["ajuste"] == "" and f["d"] == bruto["d"]
+    assert f["motivo"] == c1.MOTIVO_SIN_GRADO.format(n="<10")
+    assert "3" not in f["motivo"]                 # el conteo pequeño no se muestra
 
 
 def _docentes(conteos: dict, valor=lambda i: float(i % 5)) -> pd.DataFrame:
