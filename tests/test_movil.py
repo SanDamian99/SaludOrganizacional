@@ -28,7 +28,8 @@ def _fuera_de_media(css: str) -> str:
 def test_toda_regla_visible_va_dentro_de_media_query():
     fuera = re.sub(r"/\*.*?\*/", "", _fuera_de_media(movil.CSS), flags=re.S).strip()
     # Lo único que vale para todos los anchos es esconder la tabla alternativa.
-    assert fuera.replace(" ", "") == ".st-key-doc_items_movil{display:none;}"
+    assert fuera.replace(" ", "") == (".st-key-doc_items_movil,.st-key-inv_corr_movil"
+                                       "{display:none;}")
     assert f"max-width: {movil.ANCHO_MAXIMO}px" in movil.CSS
 
 
@@ -57,3 +58,16 @@ def test_tabla_movil_deja_la_pregunta_fija_y_pinta_cada_celda():
     assert "A &lt;b&gt;" in html and "<b>" not in html                # el nombre del grupo se escapa
     assert "n=12" in html
     assert html.count("<tr>") == len(dim.items) + 1
+
+
+def test_la_matriz_de_celular_va_con_siglas_y_sin_barra_de_color():
+    import numpy as np
+
+    from src.ui.views.estudiantes_investigador import figura_correlaciones_movil
+    claves = ["SDQ_Total", "SDQ_Emo", "ARI_Total"]
+    matriz = pd.DataFrame(np.eye(3), index=claves, columns=claves)
+    fig = figura_correlaciones_movil(matriz)
+    assert list(fig.data[0].x) == claves
+    assert fig.layout.coloraxis.showscale is False
+    dentro = movil.CSS.split("@media", 1)[1]
+    assert ".st-key-inv_corr_calor { display: none !important; }" in dentro

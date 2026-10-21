@@ -21,7 +21,7 @@ ANCHO_MAXIMO = 768
 
 CSS = f"""
 /* Fuera de celular, la tabla alternativa no existe (va antes del bloque de celular: mismo peso) */
-.st-key-doc_items_movil {{ display: none; }}
+.st-key-doc_items_movil, .st-key-inv_corr_movil {{ display: none; }}
 @media (max-width: {ANCHO_MAXIMO}px) {{
   /* Gráficos: sin la barra de herramientas y con títulos de eje que caben */
   .stPlotlyChart .modebar-container {{ display: none !important; }}
@@ -51,6 +51,10 @@ CSS = f"""
   /* Resultado de cada ítem por grupo: tabla con color en vez del mapa de calor */
   .st-key-doc_items_calor, .st-key-doc_items_tabla {{ display: none !important; }}
   .st-key-doc_items_movil {{ display: block !important; }}
+
+  /* Matriz de correlaciones del investigador: la versión con siglas en vez de la completa */
+  .st-key-inv_corr_calor {{ display: none !important; }}
+  .st-key-inv_corr_movil {{ display: block !important; }}
 }}
 """
 

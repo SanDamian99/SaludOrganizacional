@@ -26,6 +26,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.estudiantes import catalog as cat
+from src.ui import ayuda_escalas
 
 # ── Constantes de presentación ──────────────────────────────────────────────
 ALPHA_MINIMO = 0.70
@@ -858,6 +859,18 @@ def _tab_cortes(a) -> None:
     st.info(cat.AVISO_NORMAS)
 
 
+def figura_correlaciones_movil(matriz: pd.DataFrame):
+    """La matriz de Spearman para pantalla angosta: siglas, sin cifras y sin barra de color."""
+    claves = [str(c) for c in matriz.columns]
+    fig = px.imshow(matriz.values, x=claves, y=claves, zmin=-1, zmax=1,
+                    color_continuous_scale=ESCALA_DIVERGENTE, aspect="auto")
+    fig.update_layout(height=60 + 22 * len(claves), margin={"l": 10, "r": 10, "t": 10, "b": 10},
+                      coloraxis_showscale=False)
+    fig.update_xaxes(tickangle=-90, tickfont={"size": 9}, side="top")
+    fig.update_yaxes(tickfont={"size": 9})
+    return fig
+
+
 def _tab_correlaciones(a) -> None:
     st.subheader("Matriz de correlaciones de Spearman")
     matriz = getattr(a, "matriz", pd.DataFrame())
@@ -870,7 +883,13 @@ def _tab_correlaciones(a) -> None:
                           margin=dict(l=10, r=10, t=30, b=10),
                           coloraxis_colorbar=dict(title="ρ"))
         fig.update_xaxes(tickangle=-45)
-        st.plotly_chart(fig, width="stretch")
+        # Escritorio: la matriz con etiquetas y cifras. Celular (src/ui/movil.py): una
+        # versión sin colorbar ni cifras y con siglas, que sí cabe en la pantalla.
+        with st.container(key="inv_corr_calor"):
+            st.plotly_chart(fig, width="stretch")
+        with st.container(key="inv_corr_movil"):
+            st.plotly_chart(figura_correlaciones_movil(matriz), width="stretch",
+                            key="inv_corr_fig_movil")
         st.caption("Escala divergente centrada en cero: el rojo marca asociación positiva y "
                    "el azul negativa. Todo es autorreporte del mismo informante, así que "
                    "estas correlaciones comparten varianza de método.")
@@ -1176,6 +1195,9 @@ def render_investigador(analisis: dict, informes: list | None = None) -> None:
     if nivel == cat.NIVEL_PRIMARIA:
         st.warning(cat.AVISO_PRIMARIA)
 
+    claves = [*cat.ORDEN_TABLA1, "SDQ_Int", "SDQ_Ext", "SIN_ADULTO", "ALERTA_malestar"]
+    ayuda_escalas.mostrar("estudiantes", [k for k in claves if not (
+        nivel == cat.NIVEL_PRIMARIA and k.startswith("RCADS"))])
     tabs = st.tabs(PESTANAS)
     with tabs[0]:
         _tab_muestra(a, informe, nivel)
