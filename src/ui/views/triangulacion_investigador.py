@@ -25,6 +25,7 @@ from src.triangulacion import enlace as en
 from src.triangulacion import exportar as ex
 from src.triangulacion import hallazgos as hz
 from src.triangulacion import hallazgos_catalogo as hc
+from src.ui import ayuda_escalas
 
 PESTANAS = ["Resumen", "Por colegio", "Por grado", "Enlace de díadas", "Acuerdo SDQ",
             "Malestar no visto", "Apoyo familiar", "Asociaciones", "Metodología", "Exportar"]
@@ -193,6 +194,11 @@ def _tab_acuerdo(t) -> None:
     ba = t.diadas.bland_altman
     if not ba.empty:
         sub = st.selectbox("Subescala", list(ba["subescala"].unique()), key="tri_ba")
+        with st.expander("Qué mide esta subescala"):
+            for pob, rotulo in (("estudiantes", "Según el niño (autoinforme)"),
+                                ("cuidadores", "Según su cuidador (versión para padres)")):
+                st.markdown(f"*{rotulo}*")
+                st.markdown(ayuda_escalas.texto_escala(pob, sub) or "Sin descripción.")
         st.pyplot(ex.figura_bland_altman(t, sub))
         _df(ba[ba["subescala"] == sub])
     st.markdown("**Sensibilidad: solo díadas concordantes en sexo, edad y grado**")
@@ -238,6 +244,10 @@ def render_investigador(t, titulo: str | None = None) -> None:
     """Las pestañas de la triangulación. La página pública pasa su propio título
     (las mismas pestañas: decisión del usuario del 10 oct 2026)."""
     st.title(f"🔺 {titulo or cat.TITULO}")
+    glosario = ayuda_escalas.glosario_constructos(cat.CONSTRUCTOS)
+    if glosario:
+        with st.expander("📖 Qué mide cada indicador"):
+            st.markdown(glosario)
     tabs = st.tabs(PESTANAS)
     for tab, fn in zip(tabs, (_tab_resumen, _tab_colegio, _tab_grado, _tab_enlace,
                               _tab_acuerdo, _tab_no_visto, _tab_apoyo, _tab_asociaciones,

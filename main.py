@@ -21,6 +21,10 @@ st.set_page_config(
 # Initialize State (solo claves vacías: ningún dato se carga aquí)
 init_session_state()
 
+# Ajustes solo para pantalla angosta (celular); el escritorio no cambia.
+from src.ui import movil  # noqa: E402
+movil.inyectar()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Despliegue público: solo las vistas de comunidad.
 # Se corta aquí, antes de importar el cargador de archivos, el chat, los

@@ -24,6 +24,7 @@ import pandas as pd
 import streamlit as st
 
 from src.cuidadores import catalog as cat
+from src.ui import ayuda_escalas
 
 PESTANAS = ["Muestra y exclusiones", "Tabla 1 · descriptivos", "Cortes y bandas",
             "Correlaciones", "Por grupo", "Señales del adulto", "Ítems sin puntaje",
@@ -486,6 +487,9 @@ def render_investigador(ac) -> None:
     a = ac.marcos[marco]
     if ac.ola:
         st.caption(f"Ola {ac.ola}. {cat.AVISO_OLA} {SOLO_TOTAL_OLA}")
+    claves = ([*cat.CLAVES_CUIDADOR, "APQ_Fisico", "APQ_Grito"] if marco == cat.MARCO_CUIDADOR
+              else cat.CLAVES_NINO)
+    ayuda_escalas.mostrar("cuidadores", claves)
     tabs = st.tabs(PESTANAS)
     with tabs[0]:
         _tab_muestra(ac, a, marco)
