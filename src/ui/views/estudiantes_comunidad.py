@@ -33,11 +33,16 @@ import streamlit as st
 
 from src.estudiantes import catalog as cat
 from src.estudiantes import privacidad, scoring, stats, supresion
-from src.ui import estado
+from src.ui import ayuda_indicador, estado
 
 # Colores del semáforo para las cuatro bandas del SDQ (verde → rojo).
 COLORES_BANDAS = ["#1A7F4B", "#8FBF3F", "#B07D0D", "#C0392B"]
 COLOR_BARRA = "#2E5FAC"
+
+AYUDA_BANDAS = ("Estudiantes del grupo según sus dificultades emocionales y de conducta "
+                "(cuestionario SDQ de 25 preguntas). Cada color es un nivel, de «Cercano al "
+                "promedio» (verde) a «Muy alto» (rojo), y suman 100 %. Es una foto del grupo, "
+                "no un diagnóstico.")
 
 TODOS = "Todos"
 NIVELES_LABEL = {cat.NIVEL_SECUNDARIA: "Secundaria · 6.º a 10.º",
@@ -1102,7 +1107,7 @@ def figura_bandas(b: dict) -> go.Figure:
             hovertemplate=f"<b>{etiqueta}</b><br>%{{x:.0f}} %<extra></extra>"))
     fig.update_layout(
         barmode="stack", height=150, showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.6, x=0),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.6, x=0, traceorder="normal"),
         margin=dict(l=10, r=10, t=10, b=10),
         xaxis=dict(range=[0, 100], visible=False), yaxis=dict(visible=False))
     return fig
@@ -1233,6 +1238,7 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     if b:
         st.plotly_chart(figura_bandas(b), width="stretch",
                         key="est_com_bandas")
+        st.caption(AYUDA_BANDAS)
         if hay_filtro(filtros) and nota_base(a):
             st.caption(nota_base(a))
     elif bandas_suprimidas(a, filtros):
@@ -1278,6 +1284,7 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
             "Indicador", opciones,
             format_func=lambda k: INDICADORES[k]["etiqueta"].capitalize(),
             key="est_com_indicador")
+    ayuda_indicador.mostrar("estudiantes", indicador)
     tabla = prevalencia_por(a, indicador, dimension, filtros)
     if tabla.empty:
         st.info("No hay grupos con suficientes estudiantes para comparar.", icon="ℹ️")

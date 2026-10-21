@@ -42,7 +42,7 @@ from src.cuidadores import catalog as cat
 from src.cuidadores import comunidad_catalogo as cc
 from src.estudiantes import alertas_catalogo as ac_est
 from src.estudiantes import privacidad
-from src.ui import estado
+from src.ui import ayuda_indicador, estado
 from src.ui.views import estudiantes_alertas as va
 from src.ui.views.estudiantes_comunidad import figura_comparativa, uno_de_cada
 
@@ -643,6 +643,7 @@ def render_comunidad(ac) -> None:
         indicador = st.selectbox("Indicador", comparables(rol),
                                  format_func=lambda k: INDICADORES[k]["etiqueta"].capitalize(),
                                  key="cuid_com_indicador")
+    ayuda_indicador.mostrar("cuidadores", indicador)
     tabla = prevalencia_por(ac, indicador, dimension, filtros)
     if tabla.empty:
         st.info("No hay grupos con suficientes cuidadores para comparar.", icon="ℹ️")

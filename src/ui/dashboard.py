@@ -19,6 +19,7 @@ from src.docentes import catalogo as cat_doc
 from src.docentes import estadistica as doc_est
 from src.docentes import scoring as doc_scoring
 from src.docentes import universo
+from src.ui import ayuda_indicador, docentes_items
 from src.ui.components.filtering import render_filtering_sidebar
 
 SEM_COLORS = {"green": "#1A7F4B", "yellow": "#B07D0D", "red": "#C0392B", "grey": "#5F6368"}
@@ -259,6 +260,7 @@ def _view_profile(df):
     for tab, cat in specs:
         with tab:
             variables = DATA_DICTIONARY.get(cat, {})
+            st.caption(AYUDA_PERFIL)
             cols = st.columns(2)
             i = 0
             for var_name in variables.keys():
@@ -485,10 +487,20 @@ TEMA_OTROS = "📊 Otros indicadores"
 TEMAS_VISIBLES = [t for t in indicators.THEMES_ORDER if t != TEMA_OTROS]
 
 
-AVISO_ANCLADO = ("Cada barra muestra la media del grupo en la escala original del cuestionario. "
-                 "El color indica en qué zona de la escala cae: verde (favorable), ámbar "
-                 "(intermedia) o naranja (a vigilar). En el estrés, el burnout y las exigencias "
-                 "se usan cortes publicados. No es un diagnóstico individual.")
+AVISO_ANCLADO = ("Cada barra va de 0 a 100: mientras más a la derecha, mejor. En los indicadores "
+                 "donde un valor alto es malo, como burnout o estrés, la escala está invertida. "
+                 "El color indica la zona: verde favorable, ámbar intermedia, naranja a vigilar. "
+                 "Al pasar el cursor ves la media real. En estrés, burnout y exigencias la zona "
+                 "usa cortes publicados. No es un diagnóstico individual.")
+
+AYUDA_HISTOGRAMA = ("Cada barra cuenta cuántos docentes tienen ese puntaje. Si las barras se "
+                    "juntan a la derecha, la mayoría puntúa alto.")
+AYUDA_FRANJAS = (" Las franjas de color son las zonas: verde favorable, ámbar intermedia, "
+                 "naranja a vigilar.")
+AYUDA_TABLA = ("IC 95 %: rango donde probablemente está la media real. DE: qué tan distintas son "
+               "las respuestas entre sí. α: qué tan consistentes son los ítems entre sí (por "
+               "encima de 0,70 es aceptable).")
+AYUDA_PERFIL = ("Cuántos docentes hay en cada grupo. Los grupos de menos de 10 no se muestran.")
 
 
 def _por_tema(enr, orden):
@@ -510,6 +522,7 @@ def _view_indicators(df, enr, puntajes=None):
 
     if anclado:
         st.info(AVISO_ANCLADO)
+        st.markdown(docentes_items.leyenda_zonas_html(), unsafe_allow_html=True)
     else:
         st.info("Las barras muestran la **posición relativa dentro de esta muestra** (0-100), "
                 "orientada a *mayor = mejor* cuando se conoce la dirección del instrumento. "
@@ -538,6 +551,8 @@ def _view_indicators(df, enr, puntajes=None):
                 for _, i in enr.items()
             ])
         st.dataframe(table, width="stretch", hide_index=True)
+        if anclado:
+            st.caption(AYUDA_TABLA)
 
     st.markdown("#### Explorar un indicador")
     keys = list(enr.keys())
@@ -545,6 +560,8 @@ def _view_indicators(df, enr, puntajes=None):
     if sel:
         info = enr[sel]
         serie = puntajes[sel] if anclado else df[sel]
+        if anclado:
+            ayuda_indicador.mostrar("docentes", sel)
         g, h = st.columns([1, 1.4])
         with g:
             st.metric(info["label"], f"{info['mean']:.2f}")
@@ -559,7 +576,14 @@ def _view_indicators(df, enr, puntajes=None):
                                color_discrete_sequence=["#2E5FAC"])
             fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40),
                               xaxis_title=info["label"], yaxis_title="Frecuencia")
+            if anclado:
+                dim_sel = cat_doc.por_clave(sel)
+                for x0, x1, zona in docentes_items.fondo_zonas(dim_sel):
+                    fig.add_vrect(x0=x0, x1=x1, fillcolor=cat_doc.COLOR_ZONA[zona],
+                                  opacity=0.22, layer="below", line_width=0)
+                fig.update_xaxes(range=list(dim_sel.escala))
             st.plotly_chart(fig, width="stretch")
+            st.caption(AYUDA_HISTOGRAMA + (AYUDA_FRANJAS if anclado else ""))
 
         excluir = set(enr.keys())
         if anclado:
@@ -593,6 +617,9 @@ def _view_indicators(df, enr, puntajes=None):
                     st.caption("Diferencia grupo − resto del universo con IC 95 % (t de Welch).")
             else:
                 st.caption(_pie_grupos(agg, gcol, ocultos))
+
+        if anclado:
+            docentes_items.render(df, cat_doc.por_clave(sel), groups, _label)
 
 
 # ── Sidebar (reporte + filtros) ──────────────────────
