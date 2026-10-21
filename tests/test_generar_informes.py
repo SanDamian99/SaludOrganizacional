@@ -1,6 +1,5 @@
 """El generador de informes HTML audita antes de escribir nada."""
 from scripts import generar_informes_estudiantes as gen
-from src.estudiantes import catalog as cat
 from tests.test_supresion_pipeline import CELDAS, NIVEL, _datos
 from src.estudiantes import pipeline
 

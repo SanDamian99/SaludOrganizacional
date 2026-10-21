@@ -69,7 +69,7 @@ df['Colegio']=[x[0] for x in sc]; df['Colegio_nombre']=[x[1] for x in sc]; df['S
 R['colegios_raw_a_codigo']=df.groupby(['colegio_raw','Colegio']).size().reset_index().values.tolist()
 
 # ---- exclusiones
-df['nombre_n']=df['nombre'].map(norm); df['ID']=df['nombre_n'].map(lambda s: 'E'+hashlib.sha1(s.encode()).hexdigest()[:8])
+df['nombre_n']=df['nombre'].map(norm); df['ID']=df['nombre_n'].map(lambda s: 'E'+hashlib.sha1(s.encode(), usedforsecurity=False).hexdigest()[:8])
 df['fecha']=df.ts.dt.date
 # (b) misma persona reportada en colegios distintos el mismo día = fila de prueba
 g=df.groupby(['nombre_n','fecha'])['Colegio'].nunique()
@@ -192,7 +192,7 @@ def band(v,bands):
 def band_table(sub,bands):
     out={}
     for k,b in bands.items():
-        v=sub[k].dropna(); bi=v.map(lambda x: band(x,b))
+        v=sub[k].dropna(); bi=v.map(lambda x, b=b: band(x,b))
         cnt=bi.value_counts().reindex(range(4),fill_value=0)
         out[k]={'n':int(len(v)),'pct':[round(100*c/len(v),1) for c in cnt],'n_bandas':[int(c) for c in cnt]}
     return out
@@ -330,7 +330,7 @@ cgs={'SDQ_Emo':cg_sub(SUB['SDQ_Emo'],[]),'SDQ_Con':cg_sub(SUB['SDQ_Con'],[7]),'S
 cgs['SDQ_Total']=cgs['SDQ_Emo']+cgs['SDQ_Con']+cgs['SDQ_Hip']+cgs['SDQ_Pares']
 R['cuidadores_sdq_11_17']={'n':int(cgs['SDQ_Total'].notna().sum())}
 for k in cgs:
-    v=cgs[k].dropna(); bi=v.map(lambda x: band(x,BANDS_PAR[k])); cnt=bi.value_counts().reindex(range(4),fill_value=0)
+    v=cgs[k].dropna(); bi=v.map(lambda x, k=k: band(x,BANDS_PAR[k])); cnt=bi.value_counts().reindex(range(4),fill_value=0)
     R['cuidadores_sdq_11_17'][k]={'M':round(v.mean(),2),'DE':round(v.std(),2),'pct_bandas_padres':[round(100*c/len(v),1) for c in cnt]}
 R['autoinforme_vs_padres_M']={k:{'estudiante_11_17':round(sub.loc[sub.Edad<=17,k].mean(),2),'cuidador':R['cuidadores_sdq_11_17'][k]['M']} for k in cgs}
 # MSPSS cuidador (5 puntos) vs estudiante

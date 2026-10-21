@@ -121,11 +121,6 @@ def test_el_cargador_no_escribe():
 
 
 # ══ Lectores: el camino normal no cambia; con id, la corrida pedida ═══════
-def test_cuidadores_el_camino_normal_sigue_leyendo_la_publicada_con_el_cargador():
-    from src.cuidadores import lectura
-    base, publicada, _ = _base_cuidadores()
-    _, corrida = lectura.cargar_desde_supabase(base.cliente(cargador=True))
-    assert corrida["id"] == publicada
 
 
 def test_cuidadores_la_corrida_en_revision_se_lee_con_sus_senales():

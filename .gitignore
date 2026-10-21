@@ -41,3 +41,6 @@ logs/
 
 # Artefactos de video (no versionar)
 video_assets/
+
+# Documentos de trabajo del equipo (viven en Drive, no en git)
+*.docx

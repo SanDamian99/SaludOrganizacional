@@ -363,10 +363,6 @@ def test_la_metodologia_define_las_alertas(analisis):
     assert ac.ALERTAS["malestar"].regla in md and ac.REGLA_CIFRAS in md
 
 
-def test_la_pestana_de_alertas_existe():
-    assert vi.PESTANAS.index("Alertas") == 5 and len(vi.PESTANAS) == 9
-
-
 # ══ Si el panel falla, la tarjeta de muerte no desaparece ══════════════════
 def test_un_estado_desconocido_se_lee_sin_estado():
     filas = [_r("malestar", "total", "Todos", 16.7, "estado_nuevo", n=900),

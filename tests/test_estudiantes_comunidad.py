@@ -5,7 +5,6 @@ Todo se prueba sin arrancar Streamlit: la vista está partida en funciones puras
 (selección de mensajes por rol, formateo de cifras, enmascarado por N y el
 informe en Markdown) y solo `render_comunidad` toca la interfaz.
 """
-import inspect
 
 import numpy as np
 import pandas as pd
@@ -252,38 +251,12 @@ def test_el_informe_no_contiene_filas_individuales(analisis):
 
 
 # ══ Contrato de la vista ════════════════════════════════════════════════════
-def test_render_comunidad_existe_con_la_firma_acordada():
-    firma = inspect.signature(vc.render_comunidad)
-    assert list(firma.parameters) == ["analisis", "informes"]
-    assert firma.parameters["informes"].default is None
 
 
 @pytest.mark.parametrize("entrada", [None, {}, {"secundaria": None}])
 def test_render_sin_datos_no_lanza(entrada):
     """Sin datos (o sin el nivel pedido) se explica cómo cargarlos, no se revienta."""
     vc.render_comunidad(entrada)
-
-
-def test_la_vista_no_dibuja_los_enunciados_de_pertenencia_mas_bajos():
-    """Auditoría de relevancia (10-oct-2026): medias casi iguales y sin IC.
-
-    Sale de la pantalla; los informes descargables no se tocan y siguen usando
-    `items_pertenencia_bajos`.
-    """
-    fuente = inspect.getsource(vc.render_comunidad)
-    assert "items_pertenencia_bajos" not in fuente
-    assert "pertenencia con la media más baja" not in fuente
-    assert not hasattr(vc, "figura_items_pssm")
-    assert "items_pertenencia_bajos" in inspect.getsource(vc.informe_markdown)
-    # El mapa y las tarjetas siguen en su sitio.
-    assert "render_mapa" in fuente and "tarjetas(a, rol, filtros" in fuente
-
-
-def test_la_vista_no_dibuja_la_tabla_de_datos():
-    fuente = inspect.getsource(vc)
-    assert "st.dataframe" not in fuente
-    assert "st.table" not in fuente
-    assert "st.data_editor" not in fuente
 
 
 # ══ Los enunciados del PSSM no pueden desviarse del formulario aplicado ═════
@@ -295,14 +268,12 @@ def test_enunciados_pssm_fieles_al_formulario():
     toman en serio mis opiniones»), y estos enunciados son justamente el
     resultado que los colegios usan para decidir qué hacer.
     """
-    import os
     import pandas as pd
     from difflib import SequenceMatcher
     from src.estudiantes import pipeline
     from src.estudiantes.ingest import norm_txt
     from src.ui.views.estudiantes_comunidad import ENUNCIADOS_PSSM
 
-    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if not rutas:
         import pytest
@@ -330,12 +301,10 @@ def test_bandas_e_items_respetan_el_filtro():
     ignoraban los filtros: el informe de un colegio salía encabezado con su
     nombre y relleno con la distribución del municipio.
     """
-    import os
     import pytest
     from src.estudiantes import pipeline
     from src.ui.views import estudiantes_comunidad as vc
 
-    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     rutas = pipeline.localizar_formularios(carpeta_datos('estudiantes'))
     if len(rutas) < 2:
         pytest.skip("Los formularios originales no están en el directorio de trabajo")

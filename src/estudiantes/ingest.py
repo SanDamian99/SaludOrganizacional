@@ -32,7 +32,9 @@ from src.estudiantes.privacidad import clave_celda
 
 # ── Normalización de texto ──────────────────────────────────────────────────
 def _hash_id(nombre_normalizado: str) -> str:
-    return "E" + hashlib.sha1(nombre_normalizado.encode()).hexdigest()[:8]
+    # Clave local de deduplicación y enlace: nunca sale de la máquina que procesa
+    # (los CHECK de obs360.resultados rechazan cualquier identificador E/C/N).
+    return "E" + hashlib.sha1(nombre_normalizado.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 # Seudónimo del niño con clave local (core.seudonimo, letra «N»), el mismo que

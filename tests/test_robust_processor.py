@@ -1,9 +1,5 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pandas as pd
-import numpy as np
 import io
 from src.data.processor import ExcelProcessor
 
@@ -99,11 +95,3 @@ def test_robust_processor():
     assert df_result[flex_col].iloc[3] == 2.5
     print("✅ Flexible numeric conversion worked")
 
-if __name__ == "__main__":
-    try:
-        test_robust_processor()
-        print("\n🎉 ALL TESTS PASSED!")
-    except Exception as e:
-        print(f"\n❌ TEST FAILED: {str(e)}")
-        import traceback
-        traceback.print_exc()

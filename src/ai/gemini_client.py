@@ -56,7 +56,7 @@ class GeminiClient:
         return len(self._call_timestamps) < self.CALLS_PER_MINUTE
 
     def _cache_key(self, prompt: str) -> str:
-        return hashlib.md5(prompt.encode()).hexdigest()
+        return hashlib.md5(prompt.encode(), usedforsecurity=False).hexdigest()  # clave de caché
 
     def _get_cached(self, prompt: str) -> Optional[str]:
         key = self._cache_key(prompt)

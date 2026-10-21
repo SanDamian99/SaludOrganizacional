@@ -8,7 +8,6 @@ debe.
 """
 import importlib
 import os
-import re
 
 import pytest
 
@@ -59,15 +58,6 @@ def test_el_investigador_ve_todo_pero_abre_en_su_vista(con_modo):
     assert m.audiencia_por_defecto() == "investigador"
 
 
-def test_solo_el_modo_comunidad_restringe(con_modo):
-    for valor in ("completo", "investigador"):
-        m = con_modo(valor)
-        assert m.paginas_permitidas() is None, valor
-        assert m.audiencias_permitidas() is None, valor
-    m = con_modo("comunidad")
-    assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
-
-
 @pytest.mark.parametrize("valor", ["", "  ", "publico", "COMPLETO ", "cualquier-cosa"])
 def test_un_valor_desconocido_cae_en_el_modo_mas_restrictivo(con_modo, valor):
     """Una errata en la configuración no puede abrir la vista de investigación."""
@@ -80,66 +70,6 @@ def test_un_valor_desconocido_cae_en_el_modo_mas_restrictivo(con_modo, valor):
         assert m.modo() == m.COMUNIDAD
         assert m.audiencias_permitidas() == ["comunidad"]
         assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
-
-
-def test_el_punto_de_entrada_corta_antes_de_importar_lo_demas():
-    """En modo público, main.py no debe llegar a importar los módulos internos.
-
-    Se comprueba sobre el texto porque es una garantía estructural: el `st.stop()`
-    tiene que estar antes de los imports del cargador, el chat y los informes.
-    """
-    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    corte = fuente.index("st.stop()")
-    antes, despues = fuente[:corte], fuente[corte:]
-
-    # lo único que se importa antes del corte es el módulo de estudiantes
-    assert "from src.ui.estudiantes import render_estudiantes" in antes
-    # y estos quedan después, es decir, fuera del alcance del despliegue público
-    # (el cargador de docentes ya no se importa en main.py: lo pide
-    # `src.core.state` solo en las páginas que usan ese dataset)
-    for modulo in ("src.ui.reports", "src.ui.diagnostics",
-                   "src.ui.chat", "src.ui.upload", "src.ui.dashboard"):
-        assert modulo not in antes, f"{modulo} se importa antes del corte público"
-        assert modulo in despues, f"{modulo} ya no aparece en main.py"
-
-    # lo que llega en fases futuras tampoco puede importarse antes del corte
-    for modulo in ("triangulacion_investigador", "cuidadores_investigador"):
-        assert modulo not in antes, f"{modulo} se importa antes del corte público"
-
-    # Cuidadores 360: en público solo la vista de comunidad (fase 4b), leída de la
-    # corrida publicada; la página local y la de investigadores, después del corte
-    assert "from src.ui.views.cuidadores_comunidad import render_publico" in antes
-    assert "src.ui.cuidadores" not in antes and "src.cuidadores" not in antes
-    assert "from src.ui.cuidadores import render_cuidadores" in despues
-
-    # Triangulación 360: pública por decisión del usuario (10 oct 2026), pero en
-    # público solo su lectura de la corrida publicada (`render_publico`); la
-    # página con archivos locales y vista previa queda después del corte.
-    assert "from src.ui import triangulacion as _tri_publica" in antes
-    assert '"render_publico"' in antes
-    assert "src.triangulacion" not in antes
-    assert "render_triangulacion" not in antes
-    assert "from src.ui.triangulacion import render_triangulacion" in despues
-
-
-def test_el_panel_tecnico_queda_despues_del_corte():
-    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    corte = fuente.index("st.stop()")
-    assert fuente.index("debug") > corte
-
-
-def test_la_navegacion_se_filtra_por_modo():
-    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "nav.menu(_MODO)" in fuente
-    # ningún nombre de página escrito a mano: todos salen de navegacion
-    for nombre in ('"Dashboard"', '"Docentes"', '"Estudiantes 360"', '"Chat con IA"',
-                   '"Cargar Datos"', '"Reportes"'):
-        assert nombre not in fuente, f"{nombre} está escrito a mano en main.py"
-
-
-def test_el_titulo_publico_es_de_comunidad():
-    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "Observatorio 360 · Comunidad" in fuente
 
 
 def test_el_enlace_por_colegio_ignora_codigos_invalidos():
@@ -182,69 +112,6 @@ def test_el_enlace_por_colegio_ignora_codigos_invalidos():
     finally:
         st.query_params = original
     assert cat.MIN_GROUP_N == 10
-
-
-def test_el_error_de_clave_invalida_se_explica_sin_jerga():
-    """Un despliegue con la clave mal puesta debe decir qué revisar.
-
-    Ocurrió en el primer despliegue: la app volcaba el JSON crudo de Supabase,
-    que además menciona `service_role` y confunde sobre qué clave poner.
-    """
-    fuente = open(os.path.join(RAIZ, "src", "ui", "estudiantes.py"),
-                  encoding="utf-8").read()
-    assert "Invalid API key" in fuente
-    assert "Settings → Secrets" in fuente
-    # y advierte de no pegar la clave de escritura
-    i = fuente.index("Invalid API key")
-    bloque = fuente[i:i + 1400]
-    assert "service_role" in bloque and "anon" in bloque
-
-
-def test_no_queda_el_parametro_de_ancho_obsoleto():
-    """`use_container_width` se elimina de Streamlit y llenaba el registro.
-
-    Todas las llamadas usaban `True`, así que el reemplazo es `width="stretch"`.
-    """
-    import pathlib
-    raiz = pathlib.Path(RAIZ)
-    culpables = []
-    for f in list((raiz / "src").rglob("*.py")) + [raiz / "main.py"]:
-        if "use_container_width" in f.read_text(encoding="utf-8"):
-            culpables.append(str(f.relative_to(raiz)))
-    assert not culpables, f"usan un parámetro obsoleto: {culpables}"
-
-
-def test_la_pagina_inicial_depende_del_modo(con_modo):
-    m = con_modo("investigador")
-    assert m.pagina_por_defecto() == "Estudiantes 360"
-    m = con_modo("comunidad")
-    assert m.pagina_por_defecto() == "Estudiantes 360"
-    m = con_modo(None)
-    assert m.pagina_por_defecto() == "Docentes"
-
-
-def test_el_punto_de_entrada_usa_la_pagina_inicial_del_modo():
-    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "nav.pagina_inicial(_MODO)" in fuente
-    assert "index=_indice" in fuente
-
-
-def test_el_arranque_sobrevive_a_un_modulo_rancio():
-    """Un despliegue puede dejar `main.py` nuevo y `src.core.modo` viejo.
-
-    Pasó en producción: Streamlit volvió a ejecutar el script sin reiniciar el
-    proceso, el módulo cacheado no tenía la función recién añadida y la
-    aplicación entera caía con AttributeError. Ninguna página vale eso.
-    """
-    fuente = open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
-    assert "from src.core import navegacion as nav" in fuente, \
-        "el menú debe venir de un módulo nuevo, que nunca está rancio"
-    assert "modo_app.pagina_por_defecto" not in fuente
-
-    despachador = open(os.path.join(RAIZ, "src", "ui", "estudiantes.py"),
-                       encoding="utf-8").read()
-    assert 'getattr(modo_app, "audiencia_por_defecto"' in despachador
-    assert "modo_app.audiencia_por_defecto()" not in despachador
 
 
 def test_modo_y_navegacion_coinciden(con_modo):

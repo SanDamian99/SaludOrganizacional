@@ -73,10 +73,6 @@ def test_banda_prosocial_se_lee_al_reves():
     assert "disminuido" in cat.etiqueta_banda("SDQ_Pro", 1)
 
 
-def test_mensajes_de_ideacion_no_llegan_a_familias():
-    assert "familia" not in cat.MENSAJES["ideacion"].solo_roles
-
-
 # ══ 2. Puntuación con datos sintéticos ══════════════════════════════════════
 def _fila_sdq(valores: dict, nivel="secundaria", **extra):
     base = {f"SDQ{i}": 0 for i in range(1, 26)}

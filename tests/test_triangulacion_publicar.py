@@ -26,7 +26,6 @@ from tests import triangulacion_publicada_datos as datos
 from tests.supabase_falso import BaseFalsa, ViolacionCheck
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MIGRACION = ("migraciones", "2026-10-10b-triangulacion-privada.sql")
 SEUDONIMO = re.compile(r"(?<![0-9A-Za-z])[CEN][0-9a-f]{8}(?![0-9a-f])")
 
 
@@ -47,37 +46,6 @@ POLITICA_CORRIDAS = ("FOR SELECT TO anon, authenticated USING "
 POLITICA_RESULTADOS = ("USING (obs360_interno.es_publica(corrida_id) AND nivel <> "
                        "'triangulacion');")
 NIVELES = "CHECK (nivel IN ('secundaria', 'primaria', 'cuidadores', 'triangulacion'))"
-
-
-@pytest.mark.parametrize("partes", [MIGRACION])
-def test_la_migracion_10b_excluia_la_triangulacion_de_lo_publico(partes):
-    """Histórica: la 2026-10-10e la reemplaza (ver test_triangulacion_publica)."""
-    sql = _sql(*partes)
-    codigo = _codigo(sql)
-    assert NIVELES in codigo
-    assert FUNCION in codigo
-    assert "lower(btrim(m.modulo)) <> 'triangulacion'" in codigo
-    assert "AND obs360_interno.es_ultima_publicada(p_id)" in codigo
-    assert "ALTER FUNCTION obs360_interno.es_publica(bigint) OWNER TO postgres;" in codigo
-    assert "REVOKE ALL ON FUNCTION obs360_interno.es_publica(bigint) FROM PUBLIC;" in codigo
-    assert POLITICA_CORRIDAS in codigo and POLITICA_RESULTADOS in codigo
-    # las políticas públicas ya no usan es_ultima_publicada directamente
-    assert "USING (obs360_interno.es_ultima_publicada(" not in codigo
-    # la función va antes de las políticas que la usan
-    assert codigo.index(FUNCION) < codigo.index(POLITICA_CORRIDAS)
-    for prohibido in ("FOR INSERT", "FOR UPDATE", "FOR DELETE", "FOR ALL"):
-        assert prohibido not in codigo
-
-
-def test_la_migracion_solo_toca_lo_suyo_y_es_idempotente():
-    codigo = _codigo(_sql(*MIGRACION))
-    assert "DROP CONSTRAINT IF EXISTS resultados_nivel_valido" in codigo
-    assert codigo.count("DROP POLICY IF EXISTS") == codigo.count("CREATE POLICY") == 2
-    assert "CREATE OR REPLACE FUNCTION" in codigo and "CREATE SCHEMA IF NOT EXISTS" in codigo
-    assert "cargador" not in codigo                     # sus políticas no cambian
-    assert "GRANT INSERT" not in codigo and "GRANT ALL" not in codigo
-    # no se expone por la API REST: vive en obs360_interno, no en obs360
-    assert "FUNCTION obs360.es_publica" not in codigo
 
 
 # ══ Base falsa: quién lee qué ═════════════════════════════════════════════

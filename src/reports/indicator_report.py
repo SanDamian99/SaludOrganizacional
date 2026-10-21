@@ -5,7 +5,6 @@ Pensado para datasets que NO usan el esquema (BM) del Observatorio: agrupa los
 indicadores por tema (salud mental primero), los explica en lenguaje sencillo y añade
 recomendaciones con IA. Complementa a ReportBuilder (esquema de bienestar).
 """
-import io
 import os
 import re
 import tempfile
@@ -221,8 +220,8 @@ class IndicatorReportBuilder:
                 refs = kb.query_knowledge("salud mental docente estrés burnout intervención", 4) if kb.enabled else ""
                 if refs:
                     prompt += f"\n\nCita SOLO estas referencias si aplican:\n{refs}"
-            except Exception:
-                pass
+            except Exception:                              # noqa: BLE001, S110
+                pass                                       # sin base de conocimiento: el informe sale sin citas
             ai_text = generate_analysis(prompt)
             if ai_text and "Error" not in ai_text[:10]:
                 pdf.add_markdown(ai_text)

@@ -1,9 +1,5 @@
 """Tests del núcleo de puntuación psicométrica (src/analysis/scoring.py)."""
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import math
 import pandas as pd
 import pytest
 

@@ -5,7 +5,6 @@ Lo que se protege: que ningún nombre ni contacto salga hacia Storage, que las
 columnas no se muevan (la ingesta lee por posición) y que procesar la copia dé
 los mismos identificadores que procesar el original.
 """
-import numpy as np
 import pandas as pd
 import pytest
 

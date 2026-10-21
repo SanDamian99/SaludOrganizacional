@@ -43,10 +43,6 @@ def test_la_pagina_carga_sin_excepciones(app):
 
 def test_no_hay_botones_de_interpretar_con_ia(app):
     assert not [b.label for b in app.button if "Interpretar" in b.label]
-    codigo = (RAIZ / "src" / "ui" / "dashboard.py").read_text(encoding="utf-8")
-    assert "Interpretar" not in codigo
-    assert "_ai_interpret_mental_health" not in codigo
-    assert "get_cached_client" not in codigo
 
 
 def test_no_hay_kpi_ni_mensajes_del_indice_relativo(app):

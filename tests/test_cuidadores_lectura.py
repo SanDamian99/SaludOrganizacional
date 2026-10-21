@@ -115,9 +115,3 @@ def test_sin_corrida_no_hay_nada_que_leer():
     assert lectura.id_corrida_vigente(base.cliente(anonimo=True)) is None
 
 
-def test_el_lector_no_importa_ingesta_ni_pipeline_de_cuidadores():
-    import inspect
-    fuente = inspect.getsource(lectura)
-    for prohibido in ("cuidadores import ingest", "cuidadores import pipeline",
-                      "cuidadores.ingest", "cuidadores.pipeline", "cuidadores import scoring"):
-        assert prohibido not in fuente

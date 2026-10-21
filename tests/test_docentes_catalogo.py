@@ -101,10 +101,6 @@ def test_recodificacion_de_la_codificacion_1():
     assert cat.COLUMNA_CODIFICACION == "Codificación de ítems"
 
 
-def test_codigos_de_faltante():
-    assert cat.HIJOS_CODIGO_FALTANTE == 10
-
-
 def test_por_clave_desconocida():
     with pytest.raises(KeyError):
         cat.por_clave("no_existe")

@@ -44,6 +44,16 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt -r requirements-dev.txt
 ```
 
+## Calidad y seguridad del código
+
+```bash
+python -m pytest -q            # pruebas de conducta (sin red: las fixtures cortan Supabase y Gemini)
+ruff check .                   # pyflakes, bugbear y reglas de seguridad (configuración en ruff.toml)
+bandit -q -r src main.py scripts -ll -s B610   # auditoría de seguridad (B610 es un falso positivo de Django)
+```
+
+Las tres deben salir limpias antes de abrir un PR.
+
 ## Configuración
 
 Crea `.streamlit/secrets.toml`:

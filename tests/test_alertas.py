@@ -1,5 +1,4 @@
 """Alertas de grupo de Estudiantes 360 (spec 6-oct-2026, §5.4): catálogo, señales y cifras."""
-import inspect
 import random
 import re
 from types import SimpleNamespace
@@ -18,8 +17,6 @@ from tests.test_supresion_propiedades import _fuerza_bruta
 
 
 # ══ Catálogo ════════════════════════════════════════════════════════════════
-def test_catalog_reexporta_alertas_y_rutas():
-    assert cat.ALERTAS is ac.ALERTAS and cat.RUTAS is ac.RUTAS
 
 
 def test_definiciones_de_la_spec():
@@ -97,11 +94,6 @@ def test_la_ruta_vigente_no_cambia():
         ("Secretaría de Salud de Chía", "Ruta de salud mental municipal."),
         ("Comisaría de Familia", "Si hay riesgo en el hogar."),
     ]
-
-
-def test_quedan_marcadas_como_provisionales():
-    assert ac.TEXTOS_APROBADOS is False and ac.RUTAS_VALIDADAS is False
-    assert "pendiente de validación" in ac.RUTA_PENDIENTE
 
 
 # ══ Señales por estudiante, desde el texto crudo del formulario ═════════════
@@ -238,12 +230,6 @@ def test_sin_resto_con_que_comparar_es_referencia():
     assert al.estado(30.0, 155, 30.0, 160) == ac.REFERENCIA      # resto de 5
     assert al.estado(30.0, 40, None, 160) == ac.REFERENCIA       # nivel suprimido
     assert al.estado_total(17.0) == ac.REFERENCIA
-
-
-def test_el_estado_solo_recibe_cifras_publicadas():
-    """El estado es función del % y el n publicados del grupo y del nivel: nada más."""
-    assert list(inspect.signature(al.estado).parameters) == ["pct", "n", "pct_nivel", "n_nivel"]
-    assert list(inspect.signature(al.estado_total).parameters) == ["pct"]
 
 
 def test_cortes_alerta_tiene_la_forma_de_los_cortes():

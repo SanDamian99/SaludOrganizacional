@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.docentes import catalogo as cat
 from src.docentes import estadistica as est
 from src.docentes import universo
 
@@ -62,3 +61,15 @@ def test_ic_welch():
     assert est.ic_welch(pd.Series([], dtype=float), b) == (None, None, None)
     # Welch: con varianzas desiguales el IC es más ancho que con la de a sola
     assert sup - inf == pytest.approx(2 * 2.3 * np.sqrt(a.var() / 5 + b.var() / 6), abs=0.3)
+
+
+def test_los_sin_dato_cuentan_en_otros():
+    agg = pd.DataFrame({"g": ["A", "B", np.nan], "mean": [1.0, 2.0, 3.0], "count": [30, 12, 69]})
+    vis, otros, absorbido, ocultos = universo.grupos_publicables(agg, "g")
+    assert list(vis["g"]) == ["A", "B"] and otros == 69 and absorbido is None and ocultos == []
+    assert universo.consistente(111, vis["count"].tolist(), otros)
+    # sin dato pequeño (4) + ningún grupo pequeño: también se absorbe para no dejar 1–9
+    agg = pd.DataFrame({"g": ["A", "B", np.nan], "mean": [1.0, 2.0, 3.0], "count": [30, 12, 4]})
+    vis, otros, absorbido, ocultos = universo.grupos_publicables(agg, "g")
+    assert list(vis["g"]) == ["A"] and otros == 16 and absorbido == "B"
+    assert universo.consistente(46, vis["count"].tolist(), otros)

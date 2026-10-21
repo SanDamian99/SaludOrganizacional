@@ -101,7 +101,7 @@ def puntuar_ninos(d: pd.DataFrame) -> pd.DataFrame:
     out = pd.concat([out, pd.DataFrame(nuevas, index=out.index)], axis=1)
     for key in cat_est.BANDS_PARENT:
         out[f"banda_{key}"] = out[key].map(
-            lambda v: cat_est.banda_de(v, key, "parent") if pd.notna(v) else np.nan)
+            lambda v, key=key: cat_est.banda_de(v, key, "parent") if pd.notna(v) else np.nan)
     return out
 
 
@@ -210,7 +210,7 @@ def sobre_cortes_nino(d: pd.DataFrame) -> pd.DataFrame:
     for key in cat_est.BANDS_PARENT:
         if key not in d.columns:
             continue
-        b = d[key].map(lambda x: cat_est.banda_de(x, key, "parent") if pd.notna(x) else np.nan)
+        b = d[key].map(lambda x, key=key: cat_est.banda_de(x, key, "parent") if pd.notna(x) else np.nan)
         etiqueta = ("Prosocial bajo o muy bajo" if key == "SDQ_Pro"
                     else f"{cat.label(key)}: alto o muy alto")
         _agrega(filas, key, etiqueta, b >= 2, d[key].notna(),

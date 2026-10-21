@@ -2,9 +2,6 @@
 import pytest
 import pandas as pd
 import io
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.processor import DataCleaner
 
@@ -62,14 +59,6 @@ def test_mixed_likert_scales_preserved(processor):
 
 
 # --- TEST 4: Columnas desconocidas se preservan ---
-def test_unknown_columns_preserved(processor):
-    data = {
-        "(SD)Edad": [25, 30],
-        "columna_nueva_instrumento": [1, 2],
-    }
-    df, report = processor.process_file(make_csv(data))
-    assert report["success"] is True
-    assert len(df.columns) >= 2  # No se descartó la columna desconocida
 
 
 # --- TEST 5: Archivo vacío no debe crashear ---

@@ -52,9 +52,17 @@ def grupos_publicables(agg: pd.DataFrame, columna: str, conteo: str = "count"
 
     Los NaN de la columna de grupo cuentan en «otros».
     """
-    conteos = {str(r[columna]): int(r[conteo]) for _, r in agg.iterrows()}
+    sin_dato = agg[columna].isna()
+    con_dato = agg[~sin_dato]
+    conteos = {str(r[columna]): int(r[conteo]) for _, r in con_dato.iterrows()}
     grandes, otros, absorbido = reparto(conteos)
-    visibles = agg[agg[columna].astype(str).isin(grandes.keys())]
+    n_sin_dato = int(agg.loc[sin_dato, conteo].sum())
+    if n_sin_dato and 0 < otros + n_sin_dato < N_MINIMO and grandes:
+        # «otros» (grupos pequeños + sin dato) quedaría entre 1 y 9: absorbe uno más.
+        absorbido = min(grandes, key=lambda k: (grandes[k], k))
+        otros += grandes.pop(absorbido)
+    otros += n_sin_dato
+    visibles = con_dato[con_dato[columna].astype(str).isin(grandes.keys())]
     ocultos = [k for k in conteos if k not in grandes and k != absorbido]
     return visibles, otros, absorbido, ocultos
 

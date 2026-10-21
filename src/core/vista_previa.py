@@ -82,8 +82,8 @@ def _sesion():
         if ctx is not None:
             import streamlit as st
             return st.session_state
-    except Exception:                                      # noqa: BLE001
-        pass
+    except Exception:                                      # noqa: BLE001, S110
+        pass                                               # sin runtime de Streamlit: respaldo
     return _RESPALDO
 
 
