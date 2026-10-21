@@ -15,6 +15,7 @@ no se muestra nada.
 from __future__ import annotations
 
 import textwrap
+from html import escape
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -106,6 +107,51 @@ def leyenda_zonas_html() -> str:
     return '<div style="margin:2px 0 10px 0;font-size:0.9em">' + "".join(piezas) + "</div>"
 
 
+def color_celda(pct: float | None) -> str:
+    """Color de fondo (hex) de una posición 0-100: la misma escala del mapa de calor."""
+    if pct is None or pd.isna(pct):
+        return ""
+    p = min(100.0, max(0.0, float(pct))) / 100
+    (a, ca), (b, cb) = ((0.0, ESCALA_COLOR[0][1]), (0.5, ESCALA_COLOR[1][1])) if p <= 0.5 \
+        else ((0.5, ESCALA_COLOR[1][1]), (1.0, ESCALA_COLOR[2][1]))
+    t = (p - a) / (b - a)
+    rgb = [round(int(ca[i:i + 2], 16) + (int(cb[i:i + 2], 16) - int(ca[i:i + 2], 16)) * t)
+           for i in (1, 3, 5)]
+    return "#{:02X}{:02X}{:02X}".format(*rgb)
+
+
+def tabla_html_movil(medias: pd.DataFrame, ns: pd.DataFrame, dim: cat.Dimension) -> str:
+    """Tabla con color para celular: pregunta fija a la izquierda y grupos que se desplazan.
+
+    La columna de la pregunta se queda quieta (`position: sticky`) y el texto se
+    ajusta; el resto de columnas mide lo justo y la tabla se desliza con el dedo.
+    """
+    celda = "padding:6px 3px;text-align:center;color:#1F2937;min-width:56px;border-radius:3px"
+    pregunta = ("position:sticky;left:0;z-index:1;background:#FFFFFF;min-width:150px;"
+                "max-width:150px;text-align:left;padding:4px 8px 4px 0;font-size:12px;"
+                "line-height:1.25;color:#4B5563")
+    cabeza = "".join(
+        f'<th style="min-width:56px;padding:2px;font-size:11px;font-weight:600;'
+        f'line-height:1.2;vertical-align:bottom">{escape(str(c))}<br>'
+        f'<span style="font-weight:400;color:#6B7280">n={int(ns[c].max())}</span></th>'
+        for c in medias.columns)
+    filas = []
+    for item in medias.index:
+        celdas = []
+        for col in medias.columns:
+            v = medias.loc[item, col]
+            fondo = color_celda(orientado(v, dim))
+            texto = "—" if pd.isna(v) else f"{v:.2f}"
+            estilo = celda + (f";background:{fondo}" if fondo else "")
+            celdas.append(f'<td style="{estilo}">{texto}</td>')
+        filas.append(f'<tr><td style="{pregunta}">{escape(etiqueta_item(item))}</td>'
+                     + "".join(celdas) + "</tr>")
+    return ('<div style="overflow-x:auto;max-width:100%">'
+            '<table style="border-collapse:separate;border-spacing:2px;font-size:13px">'
+            f'<thead><tr><th style="{pregunta}"></th>{cabeza}</tr></thead>'
+            f'<tbody>{"".join(filas)}</tbody></table></div>')
+
+
 def _envolver(texto: str, ancho: int = 52) -> str:
     return "<br>".join(textwrap.wrap(texto, ancho)) or texto
 
@@ -195,12 +241,16 @@ def render(df: pd.DataFrame, dim: cat.Dimension, grupos: list[str], etiqueta=str
     columnas = visibles.sort_values("count", ascending=False)["grupo"].tolist()
     normal = doc_scoring.normalizar_codificacion(base)
     medias, ns = tabla_items(normal, dim, grupo, columnas)
-    st.plotly_chart(figura_items(medias, ns, dim), width="stretch",
-                    key=f"doc_items_fig_{dim.clave}")
+    tabla = medias.copy()
+    tabla.index = [etiqueta_item(c) for c in tabla.index]
+    # Mapa de calor en escritorio; en celular (src/ui/movil.py) lo reemplaza la tabla con color.
+    with st.container(key="doc_items_calor"):
+        st.plotly_chart(figura_items(medias, ns, dim), width="stretch",
+                        key=f"doc_items_fig_{dim.clave}")
+    with st.container(key="doc_items_movil"):
+        st.markdown(tabla_html_movil(medias, ns, dim), unsafe_allow_html=True)
     st.markdown(leyenda_zonas_html(), unsafe_allow_html=True)
     st.caption(universo.pie(visibles, "grupo", otros, absorbido, ocultos)
                + " Una celda en blanco tiene menos de 10 respuestas.")
-    with st.expander("Ver como tabla (más cómoda en pantallas pequeñas)"):
-        tabla = medias.copy()
-        tabla.index = [etiqueta_item(c) for c in tabla.index]
+    with st.container(key="doc_items_tabla"), st.expander("Ver como tabla"):
         st.dataframe(tabla.round(2), width="stretch")
