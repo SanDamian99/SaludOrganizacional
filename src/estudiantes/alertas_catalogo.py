@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 TEXTOS_APROBADOS = False
-RUTAS_VALIDADAS = False
+RUTAS_VALIDADAS = True   # líneas confirmadas por el equipo (29-oct-2026)
 
 MALESTAR = "malestar"
 DESESPERANZA = "desesperanza"
