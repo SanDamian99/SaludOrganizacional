@@ -446,6 +446,15 @@ def _tabla_grupo_vs_resto(comp, sel, gcol, grupos):
     return pd.DataFrame(filas)
 
 
+# Texto del cursor sobre la barra: la barra siempre va de peor a mejor, así que se dice
+# eso y no «↑ riesgo» (que parecía decir que más barra es más riesgo).
+_LECTURA_BARRA = {
+    True: "Más a la derecha = mejor",
+    False: "Escala invertida: más a la derecha = mejor (un valor alto en el instrumento es peor)",
+    None: "Dirección no definida",
+}
+
+
 def _theme_bar(items, anclado=False):
     """Barra horizontal por indicador (0-100, orientada a mejor).
 
@@ -465,8 +474,7 @@ def _theme_bar(items, anclado=False):
         raw = [f"{i['mean']:.1f}  (rango {i['min']:.0f}–{i['max']:.0f}, N={i['n']})" for _, i in items]
         titulo = "Posición relativa en la muestra (0-100, orientada a mejor)"
         hover = "<b>%{y}</b><br>Posición: %{x:.0f}/100<br>Media: %{customdata[0]}<br>%{customdata[1]}<extra></extra>"
-    dirn = ["↑ mejor" if i["higher_is_better"] else "↑ riesgo" if i["higher_is_better"] is False
-            else "dirección no definida" for _, i in items]
+    dirn = [_LECTURA_BARRA[i["higher_is_better"]] for _, i in items]
     fig = go.Figure(go.Bar(
         x=vals, y=labels, orientation="h", marker_color=colors,
         text=[f"{v:.0f}" for v in vals], textposition="outside",
@@ -503,6 +511,17 @@ AYUDA_TABLA = ("IC 95 %: rango donde probablemente está la media real. DE: qué
 AYUDA_PERFIL = ("Cuántos docentes hay en cada grupo. Los grupos de menos de 10 no se muestran.")
 
 
+def _explicacion_tema(items):
+    """Qué mide cada indicador del tema, con los mismos textos del selector."""
+    partes = [(i["label"], ayuda_indicador.texto("docentes", col)) for col, i in items]
+    partes = [(e, t) for e, t in partes if t]
+    if not partes:
+        return
+    with st.expander("ℹ️ Qué mide cada indicador de este tema"):
+        for etiqueta, contenido in partes:
+            st.markdown(f"**{etiqueta}**  \n{contenido}")
+
+
 def _por_tema(enr, orden):
     grupos = {t: [] for t in orden}
     for col, info in enr.items():
@@ -532,6 +551,8 @@ def _view_indicators(df, enr, puntajes=None):
     for theme, items in themes.items():
         st.markdown(f"##### {theme}")
         st.plotly_chart(_theme_bar(items, anclado=anclado), width="stretch")
+        if anclado:
+            _explicacion_tema(items)
 
     with st.expander("📋 Tabla completa de indicadores"):
         if anclado:
