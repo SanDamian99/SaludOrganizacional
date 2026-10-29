@@ -71,11 +71,13 @@ def test_lo_que_lee_familia_no_habla_de_hacerse_dano_ni_de_la_muerte():
             assert palabra not in texto.lower(), (palabra, texto[:40])
 
 
-def test_la_ruta_es_la_de_adultos_y_no_inventa_telefonos():
+def test_la_ruta_es_la_de_adultos_y_solo_usa_telefonos_del_catalogo():
+    from src.core import lineas_atencion as la
+    conocidos = {m for x in la.todas() for m in re.findall(r"\d{3,}", x.telefono)}
     for rol in cc.ROLES:
         assert cc.ruta(rol) == cat.ruta_adulto(rol)
         for nombre, detalle in cc.ruta(rol):
-            assert not re.search(r"\d{3,}", nombre + detalle)
+            assert set(re.findall(r"\d{3,}", nombre + detalle)) <= conocidos
 
 
 def test_ningun_texto_trae_numeros_de_telefono():

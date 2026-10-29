@@ -40,7 +40,7 @@ def test_por_defecto_es_completo(con_modo):
 def test_modo_comunidad_solo_deja_la_vista_comunidad(con_modo):
     m = con_modo("comunidad")
     assert m.es_publico()
-    assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
+    assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
     assert m.audiencias_permitidas() == ["comunidad"]
     assert m.audiencia_por_defecto() == "comunidad"
 
@@ -69,7 +69,7 @@ def test_un_valor_desconocido_cae_en_el_modo_mas_restrictivo(con_modo, valor):
     else:
         assert m.modo() == m.COMUNIDAD
         assert m.audiencias_permitidas() == ["comunidad"]
-        assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360"]
+        assert m.paginas_permitidas() == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
 
 
 def test_el_enlace_por_colegio_ignora_codigos_invalidos():

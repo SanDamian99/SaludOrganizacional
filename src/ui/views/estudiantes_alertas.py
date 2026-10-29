@@ -370,6 +370,11 @@ def render_panel(analisis, rol: str, filtros: dict | None = None) -> bool:
                 st.markdown(f"{titulo} {_unir(nombres)}")
             if s.que_hacer:
                 st.markdown(f"**Qué hacer:** {s.que_hacer}")
+            try:
+                from src.ui import lineas as ui_lineas
+                ui_lineas.lineas_de_la_senal(s.alerta)
+            except Exception:                              # noqa: BLE001
+                pass
         if getattr(analisis, "nivel", None) == cat.NIVEL_PRIMARIA:
             st.caption(cat.AVISO_PRIMARIA)
         with st.expander("Qué quiere decir cada estado"):

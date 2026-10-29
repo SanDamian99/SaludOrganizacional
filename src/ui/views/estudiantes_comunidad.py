@@ -1306,13 +1306,17 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     # descargables los conservan.)
 
     # ── 5. ruta de atención, siempre visible
-    with st.container(border=True):
-        st.markdown("#### 🆘 Si un estudiante necesita ayuda")
-        for nombre, detalle in ruta_para_rol(rol):
-            st.markdown(f"- **{nombre}** — {detalle}")
-        aviso = aviso_ruta_pendiente()
-        if aviso:
-            st.caption(f"⚠️ {aviso}")
+    try:
+        from src.ui import lineas as ui_lineas
+        ui_lineas.cuadro_ayuda("estudiante", "🆘 Si un estudiante necesita ayuda", "est")
+    except Exception:                                      # noqa: BLE001
+        with st.container(border=True):
+            st.markdown("#### 🆘 Si un estudiante necesita ayuda")
+            for nombre, detalle in ruta_para_rol(rol):
+                st.markdown(f"- **{nombre}** — {detalle}")
+    aviso = aviso_ruta_pendiente()
+    if aviso:
+        st.caption(f"⚠️ {aviso}")
 
     # ── 6. avisos
     st.warning(cat.AVISO_TAMIZAJE, icon="⚠️")

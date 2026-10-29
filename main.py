@@ -47,6 +47,10 @@ if _PUBLICO:
         # carga del formulario, la vista de investigadores ni la página local.
         from src.ui.views.cuidadores_comunidad import render_publico
         render_publico()
+    elif _pagina_publica == nav.PAGINA_LINEAS:
+        # Directorio de líneas de atención: datos fijos, sin red ni Supabase.
+        from src.ui.lineas import render_lineas
+        render_lineas()
     elif _pagina_publica == nav.PAGINA_TRIANGULACION:
         # Pública por decisión del usuario (10 oct 2026): solo la lectura de la
         # corrida publicada con la clave anon; nunca los archivos locales, la
@@ -136,6 +140,10 @@ elif page == nav.PAGINA_TRIANGULACION:
     # despliegue público se corta arriba y usa solo `render_publico`.
     from src.ui.triangulacion import render_triangulacion
     render_triangulacion()
+
+elif page == nav.PAGINA_LINEAS:
+    from src.ui.lineas import render_lineas
+    render_lineas()
 
 elif page == nav.PAGINA_CHAT:
     from src.ui.chat import render_chat
