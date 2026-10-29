@@ -187,6 +187,17 @@ def test_resumen_trae_ic_alfa_escala_y_direccion():
     assert r["PRPS_Fam"]["zona"] == cat.ZONA_SIN_DATO and r["PRPS_Fam"]["pct_escala"] is None
 
 
+def test_el_aviso_de_version_solo_sale_si_el_archivo_trae_las_dos_olas():
+    """Con una sola versión del formulario no hay nada que comparar entre 2025 y 2026."""
+    dos = scoring.resumen(_archivo_v1(n=40))
+    assert dos["RO"]["aviso_version"] and "2025" in dos["RO"]["nota"]
+
+    solo_2026 = _archivo_v1(n=40).assign(**{cat.COLUMNA_VERSION: cat.VERSION_2026})
+    uno = scoring.resumen(solo_2026)
+    assert not any(i["aviso_version"] for i in uno.values())
+    assert uno["RO"]["nota"] == ""
+
+
 def test_bandas_con_k_minimo_de_3():
     """Un % solo se publica con k ≥ 3 y n − k ≥ 3 (como en Estudiantes y Cuidadores)."""
     d = _con_media("PSS", 10, n=30)

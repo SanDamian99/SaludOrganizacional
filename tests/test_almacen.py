@@ -58,7 +58,7 @@ class _Consulta:
     def execute(self):
         filas = self._tabla.filas
         if self._op == "insert":
-            nueva = {**self._payload, "id": len(filas) + 1,
+            nueva = {"legacy": False, **self._payload, "id": len(filas) + 1,
                      "creada_en": "2026-09-23T10:00:00+00:00"}
             filas.append(nueva)
             return _Resultado([dict(nueva)])
@@ -304,3 +304,14 @@ def test_etiqueta_storage():
     from src.data.loader import etiqueta_storage
     v = {"creada_en": "2026-09-23T10:00:00+00:00", "filas": 412}
     assert etiqueta_storage(v) == "Docentes · versión 23/09/2026 (412 filas)"
+
+
+def test_las_versiones_legacy_no_se_listan_ni_cuentan_como_activas(alm, cliente, df_docentes):
+    vieja = alm.subir_version("docentes", df_docentes, "v1.xlsx")
+    nueva = alm.subir_version("docentes", df_docentes.assign(Edad=[35, 42]), "v2.xlsx")
+    for f in cliente.tablas["conjuntos_versiones"].filas:
+        if f["id"] == vieja["id"]:
+            f["legacy"] = True
+
+    assert [v["id"] for v in alm.versiones("docentes")] == [nueva["id"]]
+    assert alm.version_activa("docentes")["id"] == nueva["id"]
