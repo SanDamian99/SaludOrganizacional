@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from src.cuidadores import catalog as cat
 
 TEXTOS_APROBADOS = False
-RUTAS_VALIDADAS = False
+RUTAS_VALIDADAS = True   # líneas confirmadas por el equipo (29-oct-2026)
 
 ROLES = {
     "colegio": "Rector, docente u orientación escolar",

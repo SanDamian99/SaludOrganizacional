@@ -656,12 +656,16 @@ def render_comunidad(ac) -> None:
     if sin_cifra:
         st.caption(f"Sin cifra: {', '.join(sin_cifra)}. {cc.CIFRAS_PEQUENAS}")
 
-    with st.container(border=True):
-        st.markdown(f"#### 🆘 {cc.TITULO_RUTA}")
-        for nombre, detalle in cc.ruta(rol):
-            st.markdown(f"- **{nombre}** — {detalle}")
-        for aviso in avisos_internos():
-            st.caption(f"⚠️ {aviso}")
+    try:
+        from src.ui import lineas as ui_lineas
+        ui_lineas.cuadro_ayuda("adulto", f"🆘 {cc.TITULO_RUTA}", "cuid")
+    except Exception:                                      # noqa: BLE001
+        with st.container(border=True):
+            st.markdown(f"#### 🆘 {cc.TITULO_RUTA}")
+            for nombre, detalle in cc.ruta(rol):
+                st.markdown(f"- **{nombre}** — {detalle}")
+    for aviso in avisos_internos():
+        st.caption(f"⚠️ {aviso}")
 
     st.warning(cc.AVISO_TAMIZAJE, icon="⚠️")
     with st.expander("Sobre estas cifras"):

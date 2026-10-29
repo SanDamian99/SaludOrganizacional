@@ -77,23 +77,24 @@ def test_los_textos_no_alarman():
     assert f"al menos {supresion.MIN_CASOS} estudiantes" in ac.REGLA_CIFRAS
 
 
-def test_las_rutas_no_inventan_telefonos():
+def test_las_rutas_solo_usan_telefonos_del_catalogo():
+    from src.core import lineas_atencion as la
+    conocidos = {m for x in la.todas() for m in re.findall(r"\d{3,}", x.telefono)}
     numeros = {m for por_tipo in ac.RUTAS.values() for ruta in por_tipo.values()
                for n, d in ruta for m in re.findall(r"\d{3,}", f"{n} {d}")}
-    assert numeros <= {"106"}          # la línea vigente; las de Chía las confirma el equipo
+    assert numeros <= conocidos
+    assert {"106", "123"} <= numeros
     assert set(ac.RUTAS) == set(cat.ROLES)
     for rol in cat.ROLES:
         assert ac.ruta(rol, "estudiante") == list(cat.RUTA_ATENCION)
         assert ac.ruta(rol, "adulto")
 
 
-def test_la_ruta_vigente_no_cambia():
-    assert cat.RUTA_ATENCION == [
-        ("Orientación escolar del colegio", "Primer contacto, siempre."),
-        ("Línea 106", "Atención psicológica gratuita, 24 horas."),
-        ("Secretaría de Salud de Chía", "Ruta de salud mental municipal."),
-        ("Comisaría de Familia", "Si hay riesgo en el hogar."),
-    ]
+def test_la_ruta_vigente_sale_del_catalogo():
+    from src.core import lineas_atencion as la
+    assert cat.RUTA_ATENCION == la.ruta("estudiante")
+    assert [n for n, _ in cat.RUTA_ATENCION][:2] == ["Línea 106", "Línea 123"]
+    assert "Orientación escolar del colegio" in [n for n, _ in cat.RUTA_ATENCION]
 
 
 # ══ Señales por estudiante, desde el texto crudo del formulario ═════════════

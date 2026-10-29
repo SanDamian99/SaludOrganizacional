@@ -10,25 +10,26 @@ from src.core.modo import COMPLETO, COMUNIDAD, INVESTIGADOR
 def test_orden_del_menu_es_el_de_la_spec():
     assert nav.MENU == (
         "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
-        "Chat con IA", "Cargar Datos", "Reportes")
+        "Dónde pedir ayuda", "Chat con IA", "Cargar Datos", "Reportes")
 
 
 def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
     esperado = ["Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
-                "Chat con IA", "Cargar Datos", "Reportes"]
+                "Dónde pedir ayuda", "Chat con IA", "Cargar Datos", "Reportes"]
     assert nav.menu(COMPLETO) == esperado
     assert nav.menu(INVESTIGADOR) == esperado
 
 
 def test_comunidad_solo_ve_paginas_publicas():
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
     assert set(nav.PUBLICAS) == {nav.PAGINA_ESTUDIANTES, nav.PAGINA_CUIDADORES,
-                                 nav.PAGINA_TRIANGULACION}
+                                 nav.PAGINA_TRIANGULACION, nav.PAGINA_LINEAS}
 
 
 def test_triangulacion_sigue_publica_con_cuidadores_aprobada(monkeypatch):
     _aprobar_cuidadores(monkeypatch)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360", "Triangulación 360",
+                                   "Dónde pedir ayuda"]
 
 
 def test_cuidadores_no_es_publica_hasta_la_aprobacion():
@@ -51,16 +52,16 @@ def test_cuando_cuidadores_se_apruebe_comunidad_lo_ve(monkeypatch):
     """Fase 4b: la bandera del equipo Y los textos y la ruta aprobados en el catálogo."""
     monkeypatch.setattr(nav, "DISPONIBLES",
                         nav.DISPONIBLES | {nav.PAGINA_CUIDADORES, nav.PAGINA_TRIANGULACION})
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
     _aprobar_cuidadores(monkeypatch, bandera=True, textos=False, rutas=False)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
     _aprobar_cuidadores(monkeypatch, bandera=True, textos=True, rutas=False)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
     _aprobar_cuidadores(monkeypatch, bandera=False, textos=True, rutas=True)
-    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360"]
+    assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Triangulación 360", "Dónde pedir ayuda"]
     _aprobar_cuidadores(monkeypatch)
     assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360",
-                                  "Triangulación 360"]
+                                  "Triangulación 360", "Dónde pedir ayuda"]
     assert nav.menu(INVESTIGADOR)[:4] == [
         "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
 
@@ -141,7 +142,8 @@ def test_comunidad_con_cuidadores_aprobada_muestra_tres_paginas(monkeypatch):
     at = _main_en_comunidad(monkeypatch).run()
     assert not at.exception
     radio = at.radio(key="nav_pagina")
-    assert list(radio.options) == ["Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
+    assert list(radio.options) == ["Estudiantes 360", "Cuidadores 360", "Triangulación 360",
+                                   "Dónde pedir ayuda"]
     radio.set_value("Cuidadores 360").run()
     assert not at.exception
     assert any(cc.NO_PUBLICADO in i.value for i in at.info)
@@ -166,7 +168,8 @@ def test_comunidad_muestra_el_selector_con_dos_paginas(monkeypatch):
     at = _main_en_comunidad(monkeypatch).run()
     assert not at.exception
     radio = at.radio(key="nav_pagina")
-    assert list(radio.options) == ["Estudiantes 360", "Triangulación 360"]
+    assert list(radio.options) == ["Estudiantes 360", "Triangulación 360",
+                                   "Dónde pedir ayuda"]
     radio.set_value("Triangulación 360").run()
     assert not at.exception
     assert any(cat_tri.AVISO_PUBLICO_SIN_CORRIDA in i.value for i in at.info)

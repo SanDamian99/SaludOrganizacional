@@ -111,8 +111,8 @@ def test_cuidadores_vista_previa_encendida_por_defecto(monkeypatch, tmp_path, ba
     assert not at.exception
     texto = _texto(at)
     assert cc.TITULO_PANEL in texto
-    assert cc.TEXTOS_PENDIENTES in texto and ac_est.RUTA_PENDIENTE in texto
-    assert cc.TEXTOS_APROBADOS is False and cc.RUTAS_VALIDADAS is False
+    assert cc.TEXTOS_PENDIENTES in texto and ac_est.RUTA_PENDIENTE not in texto
+    assert cc.TEXTOS_APROBADOS is False and cc.RUTAS_VALIDADAS is True
 
 
 def test_cuidadores_vista_previa_apagada_muestra_lo_publicado(monkeypatch, tmp_path, base):
@@ -184,7 +184,7 @@ def test_estudiantes_vista_previa_con_alertas(monkeypatch, tmp_path, base):
     at.radio(key="estudiantes_audiencia").set_value("comunidad").run()
     assert not at.exception
     texto = _texto(at)
-    assert ac_est.TITULO_PANEL in texto and ac_est.RUTA_PENDIENTE in texto
+    assert ac_est.TITULO_PANEL in texto and ac_est.RUTA_PENDIENTE not in texto
     for secreto in SECRETOS:
         assert secreto not in texto
 

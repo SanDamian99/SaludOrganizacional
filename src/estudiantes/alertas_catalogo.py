@@ -13,9 +13,8 @@ Reglas:
   · Textos fijos. Nunca los redacta la IA en tiempo de ejecución.
   · Nunca «riesgo de suicidio»: «señales», «no es un diagnóstico», «dónde
     mirar primero».
-  · El código no inventa teléfonos. La «Línea 106» es de Bogotá y se queda
-    hasta que el equipo confirme las líneas de Chía (p. ej. 192 opción 4 o
-    ICBF 141).
+  · Los teléfonos viven solo en `core.lineas_atencion` (documento de la
+    Secretaría de Salud, confirmado por el equipo); aquí no se escribe ninguno.
   · No importa `catalog` (catalog importa este módulo): niveles, roles y el
     texto de cifras pequeñas van como texto, y una prueba comprueba que
     coinciden.
@@ -25,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 TEXTOS_APROBADOS = False
-RUTAS_VALIDADAS = False
+RUTAS_VALIDADAS = True   # líneas confirmadas por el equipo (29-oct-2026)
 
 MALESTAR = "malestar"
 DESESPERANZA = "desesperanza"
@@ -182,18 +181,12 @@ RUTA_PENDIENTE = ("Aviso interno: la ruta de atención está pendiente de valida
                   "completo.")
 
 # ── Rutas por rol y por tipo de persona ──────────────────────────────────────
-# Mientras el equipo no apruebe las de Chía, las tres usan la ruta vigente.
-_RUTA_ESTUDIANTE = (
-    ("Orientación escolar del colegio", "Primer contacto, siempre."),
-    ("Línea 106", "Atención psicológica gratuita, 24 horas."),
-    ("Secretaría de Salud de Chía", "Ruta de salud mental municipal."),
-    ("Comisaría de Familia", "Si hay riesgo en el hogar."),
-)
-# Para adultos (cuidadores, fase 4). Sin teléfonos hasta que el equipo los confirme.
-_RUTA_ADULTO = (
-    ("Secretaría de Salud de Chía", "Ruta de salud mental municipal."),
-    ("Comisaría de Familia", "Si hay riesgo en el hogar."),
-)
+# Salen del catálogo único de líneas (`core.lineas_atencion`): las mismas para los
+# tres roles, con el teléfono en el detalle.
+from src.core import lineas_atencion as _lineas  # noqa: E402
+
+_RUTA_ESTUDIANTE = tuple(_lineas.ruta("estudiante"))
+_RUTA_ADULTO = tuple(_lineas.ruta("adulto"))
 RUTAS: dict[str, dict[str, tuple[tuple[str, str], ...]]] = {
     "colegio": {"estudiante": _RUTA_ESTUDIANTE, "adulto": _RUTA_ADULTO},
     "familia": {"estudiante": _RUTA_ESTUDIANTE, "adulto": _RUTA_ADULTO},

@@ -212,7 +212,15 @@ def test_la_ruta_por_rol_es_la_vigente():
                                      ("investigador", False)])
 def test_el_aviso_de_ruta_pendiente_solo_en_el_modo_completo(monkeypatch, modo, ve):
     monkeypatch.setenv("OBS360_MODO", modo)
+    monkeypatch.setattr(ac, "RUTAS_VALIDADAS", False)
     assert (vc.aviso_ruta_pendiente() == ac.RUTA_PENDIENTE) is ve
+
+
+@pytest.mark.parametrize("modo", ["completo", "comunidad", "investigador"])
+def test_con_las_lineas_confirmadas_no_hay_aviso_de_ruta_pendiente(monkeypatch, modo):
+    monkeypatch.setenv("OBS360_MODO", modo)
+    assert ac.RUTAS_VALIDADAS is True
+    assert vc.aviso_ruta_pendiente() == ""
 
 
 def test_si_el_panel_falla_la_pagina_sigue(monkeypatch, analisis):
