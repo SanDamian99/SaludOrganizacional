@@ -159,6 +159,7 @@ class Dimension:
     aviso_version: bool = False     # escalas de acuerdo: cambió el formulario en 2026
     solo_version: str | None = None  # solo existe en una ola (BLG_Psicoso: 2025)
     nota: str = ""
+    nota_olas: str = ""             # solo se muestra si el archivo reúne las dos versiones del formulario
     en_tablero: bool = True         # False: solo en la vista del investigador
 
     @property
@@ -293,7 +294,7 @@ DIMENSIONES: tuple[Dimension, ...] = (
               "media", (0, 5), MAYOR_MEJOR, FUENTE_PROPIA,
               "Lo que la institución hace por el bienestar del personal. Un valor alto es mejor.",
               aviso_version=True,
-              nota="Sube +0,71 DE entre versiones del formulario (1,03 en 2025; 1,84 en 2026)."),
+              nota_olas="Sube +0,71 DE entre versiones del formulario (1,03 en 2025; 1,84 en 2026)."),
     Dimension(
         "ISTAS_Exig", "Exigencias psicológicas (ISTAS21)", TEMA_RECURSOS,
         _rango("PRPS_CE", 1, 6), "suma", (0, 24), MAYOR_PEOR, FUENTE_ISTAS,

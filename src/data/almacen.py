@@ -278,10 +278,14 @@ class Almacen:
         return guardada
 
     def versiones(self, conjunto: str) -> list[dict]:
-        """Versiones de `conjunto`, la más reciente primero."""
+        """Versiones de `conjunto`, la más reciente primero, sin las marcadas «legacy».
+
+        Una versión legacy sigue en Storage y en la tabla (para poder auditar de
+        dónde salió una cifra), pero ya no se ofrece en la app ni se puede activar.
+        """
         try:
             res = (self._tabla().select("*").eq("conjunto", conjunto)
-                   .order("creada_en", desc=True).execute())
+                   .eq("legacy", False).order("creada_en", desc=True).execute())
         except AlmacenNoDisponible:
             raise
         except Exception as e:                              # noqa: BLE001

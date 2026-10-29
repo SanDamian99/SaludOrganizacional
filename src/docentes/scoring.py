@@ -156,6 +156,10 @@ def resumen(df: pd.DataFrame, solo_tablero: bool = False) -> dict:
     if df is None or len(df) < N_MINIMO:
         return {}
     n = normalizar_codificacion(df)
+    # Los avisos sobre el cambio de formulario solo tienen sentido si el archivo
+    # trae las dos versiones; con una sola no hay nada que comparar.
+    varias_olas = (cat.COLUMNA_VERSION in df.columns
+                   and df[cat.COLUMNA_VERSION].dropna().nunique() > 1)
     out: dict[str, dict] = {}
     for dim in cat.DIMENSIONES:
         if solo_tablero and not dim.en_tablero:
@@ -181,8 +185,8 @@ def resumen(df: pd.DataFrame, solo_tablero: bool = False) -> dict:
             "banda": banda.etiqueta if banda else None,
             "bandas": _bandas(s, dim),
             "cortes_tipo": dim.cortes_tipo, "comprobar_en_manual": dim.comprobar_en_manual,
-            "aviso_version": dim.aviso_version, "solo_version": dim.solo_version,
-            "nota": dim.nota, "fuente": dim.fuente, "frase": dim.frase,
+            "aviso_version": dim.aviso_version and varias_olas, "solo_version": dim.solo_version,
+            "nota": dim.nota or (dim.nota_olas if varias_olas else ""), "fuente": dim.fuente, "frase": dim.frase,
             "en_tablero": dim.en_tablero,
         }
     return out
