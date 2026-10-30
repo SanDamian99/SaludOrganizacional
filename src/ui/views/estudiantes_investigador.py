@@ -383,8 +383,9 @@ def flujo_exclusiones_md(informes: list | None) -> str:
         erq = _erq_invalidado(inf)
         if erq:
             lineas += [f"Además, {erq} respuesta(s) conservan la fila pero pierden el bloque "
-                       "de regulación emocional (ERQ-CA): responder el mínimo en los diez "
-                       "ítems es implausible y se trata como artefacto de aplicación.", ""]
+                       "de regulación emocional (ERQ-CA): esa escala no se aplicó en los "
+                       "formularios físicos y se dejó el mínimo en los diez ítems, así que se "
+                       "trata como dato no aplicado.", ""]
         enmascarados = list(getattr(inf, "colegios_enmascarados", []) or [])
         if enmascarados:
             lineas += [f"Colegios con menos de {cat.MIN_GROUP_N} respuestas, incluidos en el "
@@ -479,9 +480,9 @@ def metodologia_md(analisis, informes: list | None = None) -> str:
                "porque quitar filas puede dejar a otro colegio con una sola.",
                "4. **Duplicados**: por identificador derivado del nombre, dentro de cada "
                "formulario y entre los dos formularios; se conserva el primer envío.",
-               "5. **Invalidación del bloque ERQ-CA**: quien responde el valor mínimo en los "
-               "diez ítems pierde ese bloque (reevaluación y supresión son estrategias "
-               "opuestas: el patrón es un artefacto de aplicación, no un resultado).",
+               "5. **ERQ-CA no aplicado**: quien tiene el valor mínimo en los diez ítems pierde "
+               "ese bloque (la escala no se aplicó en los formularios físicos y se dejó el "
+               "mínimo para registrar el resto: es un dato no aplicado, no un resultado).",
                "6. **Valores fuera del rango de la escala**: se marcan como faltantes.",
                "7. **Edad fuera del rango validado**: se conserva el caso y se declara; "
                "primaria responde SDQ y MSPSS por debajo de la edad validada.",
@@ -731,7 +732,8 @@ def _tab_muestra(a, informe, nivel: str) -> None:
         if erq:
             st.warning(f"{erq} respuesta(s) conservan la fila pero pierden el bloque de "
                        "regulación emocional (ERQ-CA) por responder el mínimo en los diez "
-                       "ítems: artefacto de aplicación, no resultado.")
+                       "ítems: la escala no se aplicó en los formularios físicos, es un dato no "
+                       "aplicado y no un resultado.")
         st.caption("Este es el diagrama de la muestra del artículo: se lee de arriba abajo y "
                    "cada resta corresponde a una regla documentada en metodologia.md.")
 

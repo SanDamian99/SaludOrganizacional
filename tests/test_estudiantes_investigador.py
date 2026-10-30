@@ -134,7 +134,7 @@ def test_metodologia_menciona_las_reglas_de_exclusion(corrida):
     md = vista.metodologia_md(analisis, informes)
     for regla in ("Consentimiento", "Filas de prueba",
                   "Colegios con una sola respuesta", "Duplicados",
-                  "Invalidación del bloque ERQ-CA", "fuera del rango"):
+                  "ERQ-CA no aplicado", "fuera del rango"):
         assert regla in md, regla
     assert "Reglas de exclusión" in md
     assert cat.AVISO_NORMAS in md and cat.AVISO_TAMIZAJE in md

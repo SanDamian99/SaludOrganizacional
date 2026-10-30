@@ -48,6 +48,12 @@ def render_reports_page():
     if df_report is None:
         return
 
+    # Mismo universo que el dashboard: sedes fundidas con su institución y sin Secretaría.
+    from src.docentes import scoring as doc_scoring
+    if doc_scoring.es_archivo_docentes(df_report):
+        from src.docentes import universo
+        df_report = universo.aplicar(df_report)
+
     # --- Optional Filters ---
     try:
         from src.ui.components.filtering import render_filtering_sidebar

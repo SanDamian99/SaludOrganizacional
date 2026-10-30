@@ -434,6 +434,10 @@ AVISO_PRIMARIA = ("Primaria (4.º y 5.º) respondió el SDQ y el MSPSS por debaj
                   "esas escalas están validadas, y no respondió el RCADS. Sus resultados son "
                   "exploratorios y sus bandas, orientativas.")
 
+AVISO_ERQ = ("La regulación emocional (ERQ-CA) no se aplicó en los formularios físicos: en esos "
+             "grupos no hay dato y no se muestra. Se publica solo donde sí se aplicó; las cifras "
+             "del municipio no incluyen a los grupos sin esa escala.")
+
 AVISO_NORMAS = ("Ninguno de los puntos de corte es colombiano: el SDQ es británico, el RCADS "
                 "estadounidense y el ARI proviene de muestras clínicas. Se presentan como "
                 "referencia externa y se acompañan de los percentiles de esta muestra.")

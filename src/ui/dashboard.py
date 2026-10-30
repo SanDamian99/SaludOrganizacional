@@ -358,28 +358,11 @@ def _universo(df):
 
 @st.cache_data(show_spinner=False)
 def _resumen_docentes(df):
-    """Resumen anclado del archivo de docentes (src/docentes/scoring) y puntajes por docente.
+    """Resumen anclado del archivo de docentes y puntajes por docente.
 
-    Devuelve el resumen con las claves que esperan las vistas genéricas (label, theme,
-    mean, oriented, level, color…) para tocar lo mínimo de la vista en la fase 1:
-    `oriented` es el % de la escala teórica (no la posición en la muestra), `level`
-    la zona anclada al corte publicado o al tercio de la escala, y `min`/`max` la
-    escala teórica.
+    Es `doc_scoring.para_vistas`, la misma preparación que usa el informe PDF.
     """
-    res = doc_scoring.resumen(df, solo_tablero=True)
-    enr = {}
-    for clave, i in res.items():
-        enr[clave] = {
-            "label": i["nombre"], "theme": i["tema"], "mean": i["media"], "std": i["de"],
-            "min": i["escala"][0], "max": i["escala"][1], "n": i["n"],
-            "oriented": i["pct_escala"] if i["pct_escala"] is not None else 50.0,
-            "pct": i["pct_escala"], "level": i["zona_etiqueta"], "color": i["color"],
-            "higher_is_better": i["mayor_mejor"], "ic_inf": i["ic_inf"], "ic_sup": i["ic_sup"],
-            "alfa": i["alfa"], "banda": i["banda"], "nota": i["nota"],
-            "aviso_version": i["aviso_version"], "comprobar": i["comprobar_en_manual"],
-        }
-    puntajes = doc_scoring.puntuar(df)[list(enr.keys())] if enr else pd.DataFrame(index=df.index)
-    return enr, puntajes
+    return doc_scoring.para_vistas(df)
 
 
 def _nota_indicador(i) -> str:
