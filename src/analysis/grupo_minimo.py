@@ -8,8 +8,9 @@ no importan Streamlit.
 
 Supresión secundaria: si en una variable solo una categoría queda escondida y
 el total se ve en otra parte (siempre se ve), su cifra se deduce restando. Por
-eso, cuando hay exactamente una categoría «<10», también se esconde la siguiente
-más pequeña, que se muestra como «≥10 (oculto)».
+eso, cuando hay exactamente una categoría «<10», la siguiente más pequeña no
+muestra su cifra sino un rango («entre 66 y 74»). El rango es justo lo que ya
+se deduciría restando con «<10» a la vista: no revela nada más.
 """
 from __future__ import annotations
 
@@ -19,10 +20,10 @@ import pandas as pd
 
 N_MINIMO = 10
 MENOS_DE = "<10"
-OCULTO = "≥10 (oculto)"
 MENSAJE_GRUPO_PEQUENO = "Grupo demasiado pequeño para mostrarse (menos de 10)"
-NOTA_OCULTOS = ("Las categorías con menos de 10 docentes no muestran su cifra; si solo "
-                "una quedaba oculta, se oculta otra más para que no se deduzca restando.")
+NOTA_OCULTOS = ("Nota de privacidad: las categorías con menos de 10 docentes no muestran su "
+                "cifra (<10). Si solo había una, la categoría siguiente se da como rango, no como "
+                "cifra exacta, para que la pequeña no se pueda deducir restando del total.")
 
 
 class GrupoPequeno(ValueError):
@@ -51,6 +52,16 @@ def texto_n(n) -> str:
     return f"{int(n):,}" if grupo_suficiente(n) else MENOS_DE
 
 
+def _rango(n_visible: int, n_pequena: int) -> str:
+    """«entre 66 y 74»: lo que cabe deducir de la categoría oculta restando.
+
+    Entre las dos suman R; la pequeña vale de 1 a 9, así que la otra va de R-9 a R-1
+    (nunca menos de 10). Es exactamente lo que ya se sabe con «<10» y el total.
+    """
+    r = n_visible + n_pequena
+    return f"entre {max(N_MINIMO, r - 9):,} y {r - 1:,}"
+
+
 def conteos_protegidos(serie: pd.Series) -> pd.DataFrame:
     """Conteo por categoría sin cifras pequeñas ni deducibles.
 
@@ -63,15 +74,15 @@ def conteos_protegidos(serie: pd.Series) -> pd.DataFrame:
     t["visible"] = t["n"] >= N_MINIMO
     t["texto"] = [f"{n:,}" if v else MENOS_DE for n, v in zip(t["n"], t["visible"])]
     if (~t["visible"]).sum() == 1 and t["visible"].sum() >= 1:
-        # La visible más pequeña también se esconde: si no, la oculta sale por resta.
+        # La visible más pequeña pasa a rango: si no, la pequeña sale por resta.
         i = t[t["visible"]]["n"].idxmin()
         t.loc[i, "visible"] = False
-        t.loc[i, "texto"] = OCULTO
+        t.loc[i, "texto"] = _rango(int(t.loc[i, "n"]), int(t.loc[~t["visible"] & (t.index != i), "n"].iloc[0]))
     return t.reset_index(drop=True)
 
 
 def texto_conteos(serie: pd.Series) -> str:
-    """«Mujer: 40, Hombre: ≥10 (oculto), No binario: <10» para un PDF o un pie."""
+    """«Mujer: 40, Hombre: entre 16 y 24, No binario: <10» para un PDF o un pie."""
     t = conteos_protegidos(serie)
     return ", ".join(f"{c}: {x}" for c, x in zip(t["categoria"], t["texto"]))
 

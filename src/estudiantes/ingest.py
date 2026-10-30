@@ -284,7 +284,9 @@ def cargar(ruta_o_df, nivel: str | None = None, clave_nino: bytes | None = None
     inf.duplicados_eliminados = int(dup.sum())
     d = d[~dup].copy()
 
-    # ── invalidación del ERQ-CA (artefacto de aplicación)
+    # ── ERQ-CA no aplicado: en los formularios físicos no se aplicó y se dejó el mínimo
+    # en los diez ítems para poder registrar el resto (confirmado por el equipo de campo,
+    # 30-oct-2026). Es un dato no aplicado, no una respuesta.
     if "ERQ" in bloques:
         cols_erq = cat.ERQ.columnas
         todos_min = (d[cols_erq] == cat.ERQ.valor_min).all(axis=1)
@@ -293,9 +295,9 @@ def cargar(ruta_o_df, nivel: str | None = None, clave_nino: bytes | None = None
             d.loc[todos_min, cols_erq] = np.nan
             inf.avisos.append(
                 f"ERQ-CA: {inf.erq_invalidado} respuestas con «{cat.ERQ.valor_min}» en los 10 "
-                "ítems se marcan como faltantes. Reevaluación y supresión son estrategias "
-                "opuestas, así que responder el mínimo en todo es implausible; es un artefacto "
-                "de aplicación, no un resultado.")
+                "ítems se marcan como faltantes: la escala no se aplicó en los formularios "
+                "físicos y se dejó el mínimo para poder registrar el resto. Es un dato no "
+                "aplicado, no una respuesta.")
 
     # ── edad fuera del rango validado
     for key in inf.escalas_detectadas:

@@ -53,7 +53,7 @@ def test_una_sola_categoria_pequena_obliga_a_ocultar_otra():
     fila = dict(zip(t["categoria"], t["texto"]))
     assert fila["A"] == "40"
     assert fila["C"] == gm.MENOS_DE
-    assert fila["B"] == gm.OCULTO and "22" not in fila["B"]
+    assert fila["B"] == "entre 16 y 24" and "22" not in fila["B"]
     assert list(t["visible"]) == [True, False, False]
     # Nunca aparece una cifra exacta menor de 10.
     for texto in t["texto"]:
@@ -184,7 +184,7 @@ def test_pdf_docentes_enmascara_el_sexo(monkeypatch):
     ir.IndicatorReportBuilder(sint.docentes())._demographics(_PDF())
     texto = " ".join(parrafos)
     assert "No binario: <10" in texto
-    assert "Hombre: " + gm.OCULTO in texto
+    assert "Hombre: entre " in texto
     assert "No binario: 3" not in texto and "Hombre: 22" not in texto
 
 
@@ -204,7 +204,7 @@ def test_pdf_de_bienestar_sin_barras_de_menos_de_10():
     df = sint.docentes()
     t = an.conteos_para_grafica(df, sint.COL_SEXO)
     fila = dict(zip(t["categoria"], t["texto"]))
-    assert fila["No binario"] == gm.MENOS_DE and fila["Hombre"] == gm.OCULTO
+    assert fila["No binario"] == gm.MENOS_DE and fila["Hombre"].startswith("entre ")
     edad = an.conteos_para_grafica(df, sint.COL_EDAD)
     for texto in edad["texto"]:
         assert not (texto.isdigit() and int(texto) < 10)

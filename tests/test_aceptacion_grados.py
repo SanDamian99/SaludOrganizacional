@@ -10,7 +10,9 @@ from src.estudiantes import pipeline, publicar, privacidad
 from src.ui.views import estudiantes_comunidad as vc
 
 LISTA = {
-    "secundaria": {"LaBalsa": {"Sexto": 24, "Séptimo": 52, "Noveno": 29, "Décimo": 32},
+    # La Balsa: lista del 6-oct, actualizada el 30-oct con la exportación final de secundaria
+    # (antes Sexto 24, Noveno 29, Décimo 32): llegaron respuestas nuevas de esos grados.
+    "secundaria": {"LaBalsa": {"Sexto": 67, "Séptimo": 52, "Noveno": 32, "Décimo": 59},
                    "LauV": {"Sexto": 95, "Séptimo": 69, "Octavo": 93, "Noveno": 90,
                             "Décimo": 90}},
     "primaria": {"LauV": {"Cuarto": 86, "Quinto": 98}},

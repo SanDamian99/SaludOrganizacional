@@ -353,6 +353,8 @@ def _avisos(niveles: list[str], notas: list[str] | None = None) -> str:
     textos = [cat.AVISO_TAMIZAJE, NOTA_COMPARACION, *[n for n in (notas or []) if n]]
     if cat.NIVEL_PRIMARIA in niveles:
         textos.append(cat.AVISO_PRIMARIA)
+    if cat.NIVEL_SECUNDARIA in niveles:
+        textos.append(cat.AVISO_ERQ)
     textos.append(cat.AVISO_NORMAS)
     return '<footer class="avisos">' + "".join(f"<p>{_e(t)}</p>" for t in textos) + "</footer>"
 
@@ -727,6 +729,8 @@ def informe_una_pagina_html(analisis, rol: str, filtros: dict | None = None,
         avisos.append(NOTA_COMPARACION)
     if analisis.nivel == cat.NIVEL_PRIMARIA:
         avisos.append(cat.AVISO_PRIMARIA)
+    else:
+        avisos.append(cat.AVISO_ERQ)
     cuerpo = ('<div class="banda"><div class="marca">Observatorio 360 · Estudiantes · '
               f'Resumen de una página</div><h1>{_e(titulo)}</h1>'
               f'<div class="meta">{_e(" · ".join(partes_meta))}</div></div>'

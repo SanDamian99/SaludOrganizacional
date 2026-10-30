@@ -1090,6 +1090,8 @@ def informe_markdown(analisis, rol: str, filtros: dict | None = None) -> str:
     if analisis.nivel == cat.NIVEL_PRIMARIA:
         lineas.append("")
         lineas.append(cat.AVISO_PRIMARIA)
+    if analisis.nivel == cat.NIVEL_SECUNDARIA:
+        lineas += ["", cat.AVISO_ERQ]
     lineas += ["", cat.AVISO_NORMAS, ""]
     return "\n".join(lineas)
 
@@ -1322,10 +1324,12 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
     st.warning(cat.AVISO_TAMIZAJE, icon="⚠️")
     if nivel == cat.NIVEL_PRIMARIA:
         st.warning(cat.AVISO_PRIMARIA, icon="⚠️")
+    else:
+        st.info(cat.AVISO_ERQ, icon="ℹ️")
     with st.expander("De dónde vienen los puntos de corte"):
         st.markdown(cat.AVISO_NORMAS)
         for aviso in getattr(a, "avisos", []) or []:
-            if aviso not in (cat.AVISO_PRIMARIA, cat.AVISO_NORMAS, cat.AVISO_TAMIZAJE):
+            if aviso not in (cat.AVISO_PRIMARIA, cat.AVISO_NORMAS, cat.AVISO_TAMIZAJE, cat.AVISO_ERQ):
                 st.caption(f"· {aviso}")
         for inf in informes or []:
             for aviso in getattr(inf, "avisos", []) or []:

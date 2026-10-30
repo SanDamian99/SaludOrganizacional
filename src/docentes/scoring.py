@@ -198,3 +198,28 @@ def por_tema(res: dict) -> dict:
     for clave, info in res.items():
         grupos.setdefault(info["tema"], []).append((clave, info))
     return {t: v for t, v in grupos.items() if v}
+
+
+def para_vistas(df: pd.DataFrame) -> tuple[dict, pd.DataFrame]:
+    """(indicadores, puntajes por docente) tal como los leen el tablero y el informe PDF.
+
+    ÚNICA preparación compartida: el dashboard y el PDF parten de aquí, así que no
+    pueden decir cosas distintas. `oriented` es el % de la escala teórica (no la
+    posición en la muestra), `level` la zona anclada al corte publicado o al tercio
+    de la escala, y `min`/`max` la escala teórica.
+    """
+    res = resumen(df, solo_tablero=True)
+    enr = {}
+    for clave, i in res.items():
+        enr[clave] = {
+            "label": i["nombre"], "theme": i["tema"], "mean": i["media"], "std": i["de"],
+            "min": i["escala"][0], "max": i["escala"][1], "n": i["n"],
+            "oriented": i["pct_escala"] if i["pct_escala"] is not None else 50.0,
+            "pct": i["pct_escala"], "level": i["zona_etiqueta"], "color": i["color"],
+            "zona": i["zona"],
+            "higher_is_better": i["mayor_mejor"], "ic_inf": i["ic_inf"], "ic_sup": i["ic_sup"],
+            "alfa": i["alfa"], "banda": i["banda"], "nota": i["nota"],
+            "aviso_version": i["aviso_version"], "comprobar": i["comprobar_en_manual"],
+        }
+    puntajes = puntuar(df)[list(enr.keys())] if enr else pd.DataFrame(index=df.index)
+    return enr, puntajes
