@@ -59,6 +59,7 @@ def test_con_datos_muestra_las_pestanas_sin_nada_individual(monkeypatch, tmp_pat
         assert titulo in bloques
     assert "Dónde coinciden" not in bloques
     assert any(hc.ESTADO_TEXTOS in w.value for w in at.warning)
+    at.radio(key="tri_vista_inv").set_value("Acuerdo SDQ").run()
     at.selectbox(key="tri_ba").set_value("SDQ_Emo").run()
     assert not at.exception
     pantalla = " ".join(str(e.value) for e in at.markdown) + \
@@ -176,12 +177,14 @@ def test_sin_archivos_muestra_la_corrida_publicada(monkeypatch, tmp_path):
     assert not at.toggle                                   # nada en revisión
     texto = _texto(at)
     assert f"corrida {resumen['corrida_id']}" in texto
+    at.radio(key="tri_vista_inv").set_value("Acuerdo SDQ").run()
     at.selectbox(key="tri_ba").set_value("SDQ_Emo").run()
     assert not at.exception
     texto = _texto(at)
     for prohibido in ts.textos_prohibidos():
         assert prohibido not in texto
     assert CREDENCIALES_CARGADOR["password"] not in texto
+    at.radio(key="tri_vista_inv").set_value("Exportar").run()
     assert at.get("download_button")                       # el ZIP de agregados
 
 

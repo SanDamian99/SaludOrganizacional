@@ -206,7 +206,9 @@ def test_la_pagina_publica_muestra_todas_las_pestanas(monkeypatch):
     assert any(lectura.AVISO_PUBLICO in i.value for i in at.info)
     for prohibido in ts.textos_prohibidos():
         assert prohibido not in texto
+    at.radio(key="tri_vista_inv").set_value("Exportar").run()
     assert at.get("download_button")                       # el ZIP de agregados
+    at.radio(key="tri_vista_inv").set_value("Acuerdo SDQ").run()
     at.selectbox(key="tri_ba").set_value("SDQ_Emo").run()
     assert not at.exception
 

@@ -108,8 +108,12 @@ def test_agrupar_por_otro_criterio_y_filtrar_no_rompe():
 
 def test_los_textos_nuevos_estan_en_la_pagina():
     at = _app()
-    textos = " ".join([m.value for m in at.markdown] + [c.value for c in at.caption]
-                      + [i.value for i in at.info])
+    partes = []
+    for nombre in list(at.radio(key="doc_vista_ind").options):
+        at.radio(key="doc_vista_ind").set_value(nombre).run()
+        partes += [m.value for m in at.markdown] + [c.value for c in at.caption] \
+            + [i.value for i in at.info]
+    textos = " ".join(partes)
     assert "va de 0 a 100" in textos
     assert "Zona favorable" in textos and "Zona a vigilar" in textos  # leyenda de colores
     assert "IC 95 %: rango donde probablemente" in textos

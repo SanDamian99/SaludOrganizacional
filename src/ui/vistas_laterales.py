@@ -12,7 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 
-def elegir_vista(nombres: list[str], clave: str, titulo: str = "Vista") -> int:
+def elegir_vista(nombres: list[str], clave: str, titulo: str = "Sección") -> int:
     """Dibuja el selector de vistas en el panel lateral; devuelve el índice elegido."""
     with st.sidebar:
         st.markdown("---")
