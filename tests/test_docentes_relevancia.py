@@ -61,7 +61,7 @@ def test_no_se_muestra_el_tema_otros_indicadores(app):
 
 
 def test_no_hay_pestana_de_correlaciones(app):
-    etiquetas = [t.label for t in app.tabs]
+    etiquetas = list(app.radio(key="doc_vista_ind").options)
     # Las del perfil («Sociodemográficas», «Laborales») van anidadas.
     assert etiquetas[:2] == ["🧠 Salud mental e indicadores", "👥 Perfil"]
     assert not [e for e in etiquetas if "Correlaciones" in e]

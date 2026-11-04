@@ -9,12 +9,12 @@ from src.core.modo import COMPLETO, COMUNIDAD, INVESTIGADOR
 
 def test_orden_del_menu_es_el_de_la_spec():
     assert nav.MENU == (
-        "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
+        "Docentes 360", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
         "Dónde pedir ayuda", "Chat con IA", "Cargar Datos", "Reportes")
 
 
 def test_completo_e_investigador_ven_todas_las_disponibles_en_orden():
-    esperado = ["Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
+    esperado = ["Docentes 360", "Estudiantes 360", "Cuidadores 360", "Triangulación 360",
                 "Dónde pedir ayuda", "Chat con IA", "Cargar Datos", "Reportes"]
     assert nav.menu(COMPLETO) == esperado
     assert nav.menu(INVESTIGADOR) == esperado
@@ -63,11 +63,11 @@ def test_cuando_cuidadores_se_apruebe_comunidad_lo_ve(monkeypatch):
     assert nav.menu(COMUNIDAD) == ["Estudiantes 360", "Cuidadores 360",
                                   "Triangulación 360", "Dónde pedir ayuda"]
     assert nav.menu(INVESTIGADOR)[:4] == [
-        "Docentes", "Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
+        "Docentes 360", "Estudiantes 360", "Cuidadores 360", "Triangulación 360"]
 
 
 def test_pagina_inicial_por_modo():
-    assert nav.pagina_inicial(COMPLETO) == "Docentes"
+    assert nav.pagina_inicial(COMPLETO) == "Docentes 360"
     assert nav.pagina_inicial(INVESTIGADOR) == "Estudiantes 360"
     assert nav.pagina_inicial(COMUNIDAD) == "Estudiantes 360"
 
@@ -187,7 +187,7 @@ def test_comunidad_muestra_la_triangulacion_publicada(monkeypatch):
     at = _main_en_comunidad(monkeypatch).run()
     at.radio(key="nav_pagina").set_value("Triangulación 360").run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
     assert not at.toggle
     for m in PROHIBIDOS_EN_COMUNIDAD:
         assert m not in sys.modules, f"{m} se importó en modo comunidad"
@@ -269,5 +269,5 @@ def test_main_en_investigador_muestra_la_triangulacion_publicada(monkeypatch, tm
     at = AppTest.from_file(os.path.join(raiz, "main.py"), default_timeout=180).run()
     at.radio(key="nav_pagina").set_value("Triangulación 360").run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
     assert any(lectura.AVISO_PUBLICADO in i.value for i in at.info)

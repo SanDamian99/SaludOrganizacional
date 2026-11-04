@@ -482,7 +482,7 @@ def _tab_exportar(ac) -> None:
 
 def render_investigador(ac) -> None:
     st.title("Cuidadores 360 · vista investigador")
-    marco = st.radio("Marco", list(cat.NOMBRES_MARCO), horizontal=True,
+    marco = st.sidebar.radio("Marco", list(cat.NOMBRES_MARCO),
                      format_func=lambda m: cat.NOMBRES_MARCO[m], key="cuid_marco")
     a = ac.marcos[marco]
     if ac.ola:
@@ -490,22 +490,15 @@ def render_investigador(ac) -> None:
     claves = ([*cat.CLAVES_CUIDADOR, "APQ_Fisico", "APQ_Grito"] if marco == cat.MARCO_CUIDADOR
               else cat.CLAVES_NINO)
     ayuda_escalas.mostrar("cuidadores", claves)
-    tabs = st.tabs(PESTANAS)
-    with tabs[0]:
-        _tab_muestra(ac, a, marco)
-    with tabs[1]:
-        _tab_tabla1(ac, marco)
-    with tabs[2]:
-        _tab_cortes(a, marco)
-    with tabs[3]:
-        _tab_correlaciones(a)
-    with tabs[4]:
-        _tab_por_grupo(ac, a, marco)
-    with tabs[5]:
-        _tab_senales(ac)
-    with tabs[6]:
-        _tab_items(ac)
-    with tabs[7]:
-        _tab_calidad(ac, a)
-    with tabs[8]:
-        _tab_exportar(ac)
+    from src.ui.vistas_laterales import elegir_vista
+    i = elegir_vista(PESTANAS, "cuid_vista_inv")
+    st.subheader(PESTANAS[i])
+    (lambda: _tab_muestra(ac, a, marco),
+     lambda: _tab_tabla1(ac, marco),
+     lambda: _tab_cortes(a, marco),
+     lambda: _tab_correlaciones(a),
+     lambda: _tab_por_grupo(ac, a, marco),
+     lambda: _tab_senales(ac),
+     lambda: _tab_items(ac),
+     lambda: _tab_calidad(ac, a),
+     lambda: _tab_exportar(ac))[i]()

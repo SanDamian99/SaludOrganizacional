@@ -191,7 +191,7 @@ def test_la_pagina_publica_muestra_todas_las_pestanas(monkeypatch):
     pub.publicar(datos.analisis(), publicar_ya=False, cliente=base.cliente())  # oculta
     at = _publica(monkeypatch, lambda: base.cliente(anonimo=True)).run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
     assert not at.toggle                                   # sin vista previa
     texto = _texto(at)
     assert cat.AVISO_TEXTOS in texto
@@ -239,7 +239,7 @@ def test_el_parametro_colegio_no_rompe_la_pagina(monkeypatch):
     _, base = datos.publicado(publicar_ya=True)
     at = _publica(monkeypatch, lambda: base.cliente(anonimo=True), consulta="LauV").run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
 
 
 def test_la_pagina_publica_no_importa_lo_local(monkeypatch):

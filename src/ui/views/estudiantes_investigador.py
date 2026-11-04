@@ -1185,7 +1185,7 @@ def render_investigador(analisis: dict, informes: list | None = None) -> None:
 
     niveles = _niveles(analisis)
     if len(niveles) > 1:
-        nivel = st.radio("Nivel educativo", niveles, horizontal=True,
+        nivel = st.sidebar.radio("Nivel educativo", niveles,
                          format_func=lambda n: NOMBRES_NIVEL.get(n, n),
                          key="inv_nivel")
     else:
@@ -1200,24 +1200,17 @@ def render_investigador(analisis: dict, informes: list | None = None) -> None:
     claves = [*cat.ORDEN_TABLA1, "SDQ_Int", "SDQ_Ext", "SIN_ADULTO", "ALERTA_malestar"]
     ayuda_escalas.mostrar("estudiantes", [k for k in claves if not (
         nivel == cat.NIVEL_PRIMARIA and k.startswith("RCADS"))])
-    tabs = st.tabs(PESTANAS)
-    with tabs[0]:
-        _tab_muestra(a, informe, nivel)
-    with tabs[1]:
-        _tab_tabla1(a, nivel)
-    with tabs[2]:
-        _tab_cortes(a)
-    with tabs[3]:
-        _tab_correlaciones(a)
-    with tabs[4]:
-        _tab_por_grupo(a)
-    with tabs[5]:
-        _tab_alertas(a)
-    with tabs[6]:
-        _tab_modelos(a)
-    with tabs[7]:
-        _tab_calidad(a, informe)
-    with tabs[8]:
-        _tab_exportar(analisis, informes)
+    from src.ui.vistas_laterales import elegir_vista
+    i = elegir_vista(PESTANAS, "est_vista_inv")
+    st.subheader(PESTANAS[i])
+    (lambda: _tab_muestra(a, informe, nivel),
+     lambda: _tab_tabla1(a, nivel),
+     lambda: _tab_cortes(a),
+     lambda: _tab_correlaciones(a),
+     lambda: _tab_por_grupo(a),
+     lambda: _tab_alertas(a),
+     lambda: _tab_modelos(a),
+     lambda: _tab_calidad(a, informe),
+     lambda: _tab_exportar(analisis, informes))[i]()
 
     st.caption(cat.AVISO_TAMIZAJE)

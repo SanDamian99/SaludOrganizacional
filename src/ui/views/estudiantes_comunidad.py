@@ -1212,8 +1212,8 @@ def render_comunidad(analisis: dict, informes: list | None = None) -> None:
         return
 
     estado.sembrar("est_com_rol", estado.ROL, list(cat.ROLES))
-    rol = st.radio("Estoy viendo esto como", list(cat.ROLES),
-                   format_func=lambda r: cat.ROLES[r], horizontal=True,
+    rol = st.sidebar.radio("Estoy viendo esto como", list(cat.ROLES),
+                   format_func=lambda r: cat.ROLES[r],
                    key="est_com_rol",
                    on_change=estado.al_cambiar("est_com_rol", estado.ROL))
     estado.guardar(estado.ROL, rol)

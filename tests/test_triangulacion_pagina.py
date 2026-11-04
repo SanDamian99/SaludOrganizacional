@@ -53,7 +53,7 @@ def test_con_datos_muestra_las_pestanas_sin_nada_individual(monkeypatch, tmp_pat
     ts.escribir(tmp_path)
     at = _pagina(monkeypatch, str(tmp_path), ts.CLAVE_PRUEBA).run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
     bloques = _bloques(at)
     for titulo in (hc.TITULO_PERFIL, hc.TITULO_PATRONES, hc.TITULO_TENSION, hc.TITULO_HIPOTESIS):
         assert titulo in bloques
@@ -170,7 +170,7 @@ def test_sin_archivos_muestra_la_corrida_publicada(monkeypatch, tmp_path):
     resumen, base = datos.publicado(publicar_ya=True)
     at = _equipo(monkeypatch, tmp_path, base).run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
     assert any(lectura.AVISO_PUBLICADO in i.value for i in at.info)
     assert not any(cat.AVISO_DESPLIEGUE in i.value for i in at.info)
     assert not at.toggle                                   # nada en revisión
@@ -198,7 +198,7 @@ def test_la_corrida_en_revision_con_su_franja(monkeypatch, tmp_path):
     assert "Vista previa para el equipo" in texto
     assert f"Fuente: corrida en revisión ({oculta['corrida_id']})" in texto
     assert "El público no ve esta corrida" in " ".join(str(m.value) for m in at.markdown)
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
     at.toggle(key="vista_previa_triangulacion").set_value(False).run()
     assert not at.exception
     assert "Vista previa para el equipo" not in _texto(at)
@@ -233,7 +233,7 @@ def test_un_vista_previa_rancio_igual_lee_la_publicada(monkeypatch, tmp_path):
     monkeypatch.delattr(vp, "marcar_en_uso")
     at.run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="tri_vista_inv").options) == vi.PESTANAS
 
 
 def test_si_la_lectura_falla_no_muestra_el_detalle(monkeypatch, tmp_path):
