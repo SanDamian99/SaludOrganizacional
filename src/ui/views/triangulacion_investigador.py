@@ -248,9 +248,8 @@ def render_investigador(t, titulo: str | None = None) -> None:
     if glosario:
         with st.expander("📖 Qué mide cada indicador"):
             st.markdown(glosario)
-    tabs = st.tabs(PESTANAS)
-    for tab, fn in zip(tabs, (_tab_resumen, _tab_colegio, _tab_grado, _tab_enlace,
-                              _tab_acuerdo, _tab_no_visto, _tab_apoyo, _tab_asociaciones,
-                              _tab_metodologia, _tab_exportar)):
-        with tab:
-            fn(t)
+    from src.ui.vistas_laterales import elegir_vista
+    i = elegir_vista(PESTANAS, "tri_vista_inv")
+    st.subheader(PESTANAS[i])
+    (_tab_resumen, _tab_colegio, _tab_grado, _tab_enlace, _tab_acuerdo, _tab_no_visto,
+     _tab_apoyo, _tab_asociaciones, _tab_metodologia, _tab_exportar)[i](t)

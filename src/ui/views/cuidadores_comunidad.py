@@ -609,8 +609,8 @@ def render_comunidad(ac) -> None:
         st.info(cc.NO_PUBLICADO, icon="⏳")
         return
     estado.sembrar("cuid_com_rol", estado.ROL, list(cc.ROLES))
-    rol = st.radio("Estoy viendo esto como", list(cc.ROLES), format_func=lambda r: cc.ROLES[r],
-                   horizontal=True, key="cuid_com_rol",
+    rol = st.sidebar.radio("Estoy viendo esto como", list(cc.ROLES), format_func=lambda r: cc.ROLES[r],
+                   key="cuid_com_rol",
                    on_change=estado.al_cambiar("cuid_com_rol", estado.ROL))
     estado.guardar(estado.ROL, rol)
     st.sidebar.markdown("### Cuidadores · vista comunidad")

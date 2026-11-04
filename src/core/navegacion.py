@@ -18,7 +18,7 @@ pero no en `DISPONIBLES`: no aparecen hasta que su fase las añada.
 """
 from __future__ import annotations
 
-PAGINA_DOCENTES = "Docentes"
+PAGINA_DOCENTES = "Docentes 360"
 PAGINA_ESTUDIANTES = "Estudiantes 360"
 PAGINA_CUIDADORES = "Cuidadores 360"
 PAGINA_TRIANGULACION = "Triangulación 360"

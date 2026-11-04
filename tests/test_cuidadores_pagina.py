@@ -42,7 +42,7 @@ def test_con_datos_muestra_las_pestanas_y_el_filtro_de_ola(monkeypatch, tmp_path
     cs.escribir(tmp_path / "cuidadores" / "Cuidando al Cuidador (respuestas).xlsx")
     at = _pagina(monkeypatch, str(tmp_path), cs.CLAVE_PRUEBA).run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="cuid_vista_inv").options) == vi.PESTANAS
     ola = at.selectbox(key="cuid_ola")
     assert list(ola.options) == ["Todas", "2025", "2026"]
     ola.set_value("2026").run()
@@ -79,7 +79,7 @@ def test_en_completo_abre_la_vista_de_comunidad(monkeypatch, tmp_path):
     assert cc.TEXTOS_PENDIENTES in _texto(at)          # aviso interno del modo completo
     vista.set_value("investigador").run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="cuid_vista_inv").options) == vi.PESTANAS
 
 
 def test_en_investigador_abre_la_vista_de_investigadores(monkeypatch, tmp_path):
@@ -99,7 +99,7 @@ def test_sin_archivo_lee_la_corrida_publicada(monkeypatch, tmp_path):
     at.run()
     assert not at.exception
     assert any(lectura.AVISO_PUBLICADO in i.value for i in at.info)
-    assert [t.label for t in at.tabs] == vi.PESTANAS
+    assert list(at.radio(key="cuid_vista_inv").options) == vi.PESTANAS
     assert not [s for s in at.selectbox if s.key == "cuid_ola"]
     at.radio(key="cuid_audiencia").set_value("comunidad").run()
     assert not at.exception

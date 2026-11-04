@@ -709,17 +709,13 @@ def render_dashboard():
 
     if wellbeing:
         scores = _scores(df_view)
-        tab_exec, tab_dim, tab_perfil, tab_acad = st.tabs(
-            ["🏢 Resumen ejecutivo", "🧠 Dimensiones", "👥 Perfil", "🎓 Vista académica"]
-        )
-        with tab_exec:
-            _view_executive(df_view, scores)
-        with tab_dim:
-            _view_dimension(df_view, scores)
-        with tab_perfil:
-            _view_profile(df_view)
-        with tab_acad:
-            _view_academic(df_view, scores)
+        from src.ui.vistas_laterales import elegir_vista
+        nombres = ["🏢 Resumen ejecutivo", "🧠 Dimensiones", "👥 Perfil", "🎓 Vista académica"]
+        i = elegir_vista(nombres, "doc_vista")
+        (lambda: _view_executive(df_view, scores),
+         lambda: _view_dimension(df_view, scores),
+         lambda: _view_profile(df_view),
+         lambda: _view_academic(df_view, scores))[i]()
     else:
         puntajes = None
         if doc_scoring.es_archivo_docentes(df_view):
@@ -729,11 +725,12 @@ def render_dashboard():
         else:
             inds = indicators.detect_indicators(df_view)
             enr = _enriched(df_view, inds) if inds else {}
-        tab_ind, tab_perfil = st.tabs(["🧠 Salud mental e indicadores", "👥 Perfil"])
-        with tab_ind:
+        from src.ui.vistas_laterales import elegir_vista
+        nombres = ["🧠 Salud mental e indicadores", "👥 Perfil"]
+        if elegir_vista(nombres, "doc_vista_ind") == 0:
             if enr:
                 _view_indicators(df_view, enr, puntajes)
             else:
                 st.warning("No se detectaron indicadores numéricos en este dataset.")
-        with tab_perfil:
+        else:
             _view_profile(df_view)
